@@ -1,5 +1,0 @@
-[console_scripts]
-crazyflie = crtp_driver.crazyflie_node:main
-crazyradio = crtp_driver.crazyradio_node:main
-radiolistener = crtp_driver.radio_listener:main
-

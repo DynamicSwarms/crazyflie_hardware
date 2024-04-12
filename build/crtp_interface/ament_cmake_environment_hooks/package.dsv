@@ -1,4 +1,0 @@
-source;share/crtp_interface/local_setup.bash
-source;share/crtp_interface/local_setup.dsv
-source;share/crtp_interface/local_setup.sh
-source;share/crtp_interface/local_setup.zsh

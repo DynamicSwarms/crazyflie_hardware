@@ -1,2 +1,0 @@
-/home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver/crazyradio_node.py:244: SyntaxWarning: "is" with a literal. Did you mean "=="?
-  if channel is 0 and (len(data) > 0):
