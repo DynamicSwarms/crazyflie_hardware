@@ -1,0 +1,9 @@
+{
+  "package_name": "crtp_interface",
+  "non_idl_tuples": [
+    "/home/winni/rumstochern/isse_crtpdriver_ros/src/crtp_interface:msg/CrtpPacket.msg",
+    "/home/winni/rumstochern/isse_crtpdriver_ros/src/crtp_interface:msg/CrtpResponse.msg",
+    "/home/winni/rumstochern/isse_crtpdriver_ros/src/crtp_interface:msg/SetAutoping.msg",
+    "/home/winni/rumstochern/isse_crtpdriver_ros/src/crtp_interface:srv/CrtpPacketSend.srv"
+  ]
+}

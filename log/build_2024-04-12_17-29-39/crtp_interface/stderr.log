@@ -1,0 +1,9 @@
+CMake Error at /home/winni/ros2_humble/install/rosidl_cmake/share/rosidl_cmake/cmake/rosidl_generate_interfaces.cmake:93 (message):
+  rosidl_generate_interfaces() the passed file 'msg/SetAutping.msg' doesn't
+  exist relative to the CMAKE_CURRENT_SOURCE_DIR
+  '/home/winni/rumstochern/isse_crtpdriver_ros/src/crtp_interface'
+Call Stack (most recent call first):
+  CMakeLists.txt:18 (rosidl_generate_interfaces)
+
+
+make: *** [Makefile:1256: cmake_check_build_system] Error 1

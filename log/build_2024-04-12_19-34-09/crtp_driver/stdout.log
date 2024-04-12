@@ -1,0 +1,27 @@
+running egg_info
+writing ../../build/crtp_driver/crtp_driver.egg-info/PKG-INFO
+writing dependency_links to ../../build/crtp_driver/crtp_driver.egg-info/dependency_links.txt
+writing entry points to ../../build/crtp_driver/crtp_driver.egg-info/entry_points.txt
+writing requirements to ../../build/crtp_driver/crtp_driver.egg-info/requires.txt
+writing top-level names to ../../build/crtp_driver/crtp_driver.egg-info/top_level.txt
+reading manifest file '../../build/crtp_driver/crtp_driver.egg-info/SOURCES.txt'
+writing manifest file '../../build/crtp_driver/crtp_driver.egg-info/SOURCES.txt'
+running build
+running build_py
+copying crtp_driver/crazyflie_node.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver
+copying crtp_driver/crazyradio_node.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver
+running install
+running install_lib
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver/crazyflie_node.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver/crazyradio_node.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver/crazyflie_node.py to crazyflie_node.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver/crazyradio_node.py to crazyradio_node.cpython-38.pyc
+running install_data
+running install_egg_info
+removing '/home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver-0.0.0-py3.8.egg-info' (and everything under it)
+Copying ../../build/crtp_driver/crtp_driver.egg-info to /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver-0.0.0-py3.8.egg-info
+running install_scripts
+Installing crazyflie script to /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/crtp_driver
+Installing crazyradio script to /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/crtp_driver
+Installing radiolistener script to /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/crtp_driver
+writing list of installed files to '/home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/install.log'

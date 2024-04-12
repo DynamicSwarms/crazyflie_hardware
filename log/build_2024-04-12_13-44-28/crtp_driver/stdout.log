@@ -1,0 +1,76 @@
+running egg_info
+writing ../../build/crtp_driver/crtp_driver.egg-info/PKG-INFO
+writing dependency_links to ../../build/crtp_driver/crtp_driver.egg-info/dependency_links.txt
+writing entry points to ../../build/crtp_driver/crtp_driver.egg-info/entry_points.txt
+writing requirements to ../../build/crtp_driver/crtp_driver.egg-info/requires.txt
+writing top-level names to ../../build/crtp_driver/crtp_driver.egg-info/top_level.txt
+reading manifest file '../../build/crtp_driver/crtp_driver.egg-info/SOURCES.txt'
+writing manifest file '../../build/crtp_driver/crtp_driver.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib
+copying cflib/__init__.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib
+creating /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/drivers
+copying cflib/drivers/cfusb.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/drivers
+copying cflib/drivers/__init__.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/drivers
+copying cflib/drivers/crazyradio.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/drivers
+creating /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/prrtdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/pcap.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/tcpdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/cflinkcppdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/usbdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/crtpdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/radiodriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/__init__.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/serialdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/isseradiodriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/udpdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/exceptions.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+copying cflib/crtp/crtpstack.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp
+running install
+running install_lib
+creating /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib
+creating /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/drivers
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/drivers/cfusb.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/drivers
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/drivers/__init__.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/drivers
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/drivers/crazyradio.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/drivers
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/__init__.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib
+creating /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/prrtdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/pcap.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/tcpdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/cflinkcppdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/usbdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/crtpdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/radiodriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/__init__.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/serialdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/isseradiodriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/udpdriver.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/exceptions.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/cflib/crtp/crtpstack.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/drivers/cfusb.py to cfusb.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/drivers/__init__.py to __init__.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/drivers/crazyradio.py to crazyradio.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/__init__.py to __init__.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/prrtdriver.py to prrtdriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/pcap.py to pcap.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/tcpdriver.py to tcpdriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/cflinkcppdriver.py to cflinkcppdriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/usbdriver.py to usbdriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/crtpdriver.py to crtpdriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/radiodriver.py to radiodriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/__init__.py to __init__.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/serialdriver.py to serialdriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/isseradiodriver.py to isseradiodriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/udpdriver.py to udpdriver.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/exceptions.py to exceptions.cpython-38.pyc
+byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/cflib/crtp/crtpstack.py to crtpstack.cpython-38.pyc
+running install_data
+running install_egg_info
+removing '/home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver-0.0.0-py3.8.egg-info' (and everything under it)
+Copying ../../build/crtp_driver/crtp_driver.egg-info to /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver-0.0.0-py3.8.egg-info
+running install_scripts
+Installing crazyradio script to /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/crtp_driver
+writing list of installed files to '/home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/install.log'

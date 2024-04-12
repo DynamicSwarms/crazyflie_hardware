@@ -1,0 +1,23 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from crtp_interface/srv/CrtpPacketSend.srv
+// generated code does not contain a copyright notice
+
+#include "crtp_interface/msg/CrtpPacket.idl"
+
+module crtp_interface {
+  module srv {
+    typedef uint8 uint8__5[5];
+    struct CrtpPacketSend_Request {
+      uint8 channel;
+
+      uint8__5 address;
+
+      uint8 datarate;
+
+      crtp_interface::msg::CrtpPacket packet;
+    };
+    struct CrtpPacketSend_Response {
+      boolean success;
+    };
+  };
+};

@@ -1,0 +1,19 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from crtp_interface/msg/CrtpPacket.msg
+// generated code does not contain a copyright notice
+
+
+module crtp_interface {
+  module msg {
+    typedef uint8 uint8__31[31];
+    struct CrtpPacket {
+      uint8 port;
+
+      uint8 channel;
+
+      uint8__31 data;
+
+      uint8 data_length;
+    };
+  };
+};

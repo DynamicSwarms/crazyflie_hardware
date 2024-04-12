@@ -1,0 +1,39 @@
+[1.371s] Invoking command in '/home/winni/rumstochern/isse_crtpdriver_ros/src/crtp_driver': PYTHONPATH=/home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/prefix_override:/home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated setup.py egg_info --egg-base ../../build/crtp_driver build --build-base /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build install --record /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/install.log --single-version-externally-managed install_data
+[1.926s] running egg_info
+[1.926s] creating ../../build/crtp_driver/crtp_driver.egg-info
+[1.926s] writing ../../build/crtp_driver/crtp_driver.egg-info/PKG-INFO
+[1.926s] writing dependency_links to ../../build/crtp_driver/crtp_driver.egg-info/dependency_links.txt
+[1.926s] writing entry points to ../../build/crtp_driver/crtp_driver.egg-info/entry_points.txt
+[1.926s] writing requirements to ../../build/crtp_driver/crtp_driver.egg-info/requires.txt
+[1.927s] writing top-level names to ../../build/crtp_driver/crtp_driver.egg-info/top_level.txt
+[1.929s] writing manifest file '../../build/crtp_driver/crtp_driver.egg-info/SOURCES.txt'
+[1.955s] reading manifest file '../../build/crtp_driver/crtp_driver.egg-info/SOURCES.txt'
+[1.955s] writing manifest file '../../build/crtp_driver/crtp_driver.egg-info/SOURCES.txt'
+[1.955s] running build
+[1.955s] running build_py
+[1.955s] creating /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build
+[1.955s] creating /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib
+[1.955s] creating /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver
+[1.955s] copying crtp_driver/__init__.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver
+[1.956s] copying crtp_driver/crazyradio_node.py -> /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver
+[1.956s] running install
+[1.957s] running install_lib
+[1.958s] creating /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver
+[1.958s] copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver/__init__.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver
+[1.958s] copying /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build/lib/crtp_driver/crazyradio_node.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver
+[1.960s] byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver/__init__.py to __init__.cpython-38.pyc
+[1.960s] byte-compiling /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver/crazyradio_node.py to crazyradio_node.cpython-38.pyc
+[1.961s] running install_data
+[1.961s] copying package.xml -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/share/crtp_driver
+[1.961s] creating /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/share/ament_index
+[1.961s] creating /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/share/ament_index/resource_index
+[1.961s] creating /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/share/ament_index/resource_index/packages
+[1.961s] copying resource/crtp_driver -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/share/ament_index/resource_index/packages
+[1.961s] creating /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/share/crtp_driver/launch
+[1.961s] copying launch/crazyradio.launch.py -> /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/share/crtp_driver/launch
+[1.961s] running install_egg_info
+[1.963s] Copying ../../build/crtp_driver/crtp_driver.egg-info to /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages/crtp_driver-0.0.0-py3.8.egg-info
+[1.964s] running install_scripts
+[1.983s] Installing crazyradio script to /home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/crtp_driver
+[1.983s] writing list of installed files to '/home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/install.log'
+[1.995s] Invoked command in '/home/winni/rumstochern/isse_crtpdriver_ros/src/crtp_driver' returned '0': PYTHONPATH=/home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/prefix_override:/home/winni/rumstochern/isse_crtpdriver_ros/install/crtp_driver/lib/python3.8/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated setup.py egg_info --egg-base ../../build/crtp_driver build --build-base /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/build install --record /home/winni/rumstochern/isse_crtpdriver_ros/build/crtp_driver/install.log --single-version-externally-managed install_data
