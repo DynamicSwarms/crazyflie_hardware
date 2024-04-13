@@ -5,6 +5,8 @@ data_files = []
 data_files.append(('share/' + package_name, ['package.xml']))
 data_files.append(('share/ament_index/resource_index/packages', ['resource/' + package_name]))
 data_files.append(('share/' + package_name + '/launch', ['launch/crazyradio.launch.py']))
+data_files.append(('share/' + package_name + '/launch', ['launch/crazyradio_sim.launch.py']))
+
 
 
 
@@ -23,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'crazyradio = crtp_driver.crazyradio_node:main',
+            'crazyradio_sim = crtp_driver.crazyradio_node_sim:main',
             'radiolistener = crtp_driver.radio_listener:main',
             "crazyflie =  crtp_driver.crazyflie_node:main"
         ],

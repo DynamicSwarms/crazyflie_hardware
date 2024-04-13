@@ -36,7 +36,10 @@ from crtp_interface.msg import CrtpResponse
 from crtp_interface.msg import SetAutoping
 from crtp_interface.srv import CrtpPacketSend
 
-from std_msgs.msg import Int16 
+from std_msgs.msg import Int16
+
+from crtp_driver.HighLevelCommander import HighLevelCommander
+
 class Crazyflie(Node):
     COMMAND_TAKEOFF = 7
     COMMAND_LAND = 8
@@ -49,6 +52,8 @@ class Crazyflie(Node):
 
         self.cf_prefix = 'cf16'
 
+        self.hl_commander = HighLevelCommander()
+
         self.send_packet_service = self.create_client(CrtpPacketSend, "crazyradio/send_crtp_packet")
         while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Send CRTP Packet Service not available, waiting again...")
@@ -58,57 +63,43 @@ class Crazyflie(Node):
         self.create_subscription(Int16, self.cf_prefix + "/takeoff", self.takeoff, 10)
         self.create_subscription(Int16, self.cf_prefix + "/land", self.land, 10)
 
+        self.create_subscription(Int16, self.cf_prefix + "/set_group_mask", self.set_group_mask, 10)
+
 
     def __del__(self):
         self.destroy_node()
+    
+    def _prepare_send_request(self):
+        req = CrtpPacketSend.Request()
+        req.channel = self.channel
+        req.address = self.address
+        req.datarate = self.datarate
+        return req
+
+    def set_group_mask(self, msg):
+        group = msg.data
+        req = self._prepare_send_request()
+        req.packet = self.hl_commander.set_group_mask(group)
+        self.send_packet_service.call_async(req)
+
 
     def land(self, msg):
-        pk = CrtpPacketSend.Request()
-        pk.channel = self.channel
-        pk.address = self.address
-        pk.datarate = self.datarate
-        pk.packet.port = self.SETPOINT_HL
-        pk.packet.channel = 0
         group_mask = 0
         absolute_height_m = 0.0
-        target_yaw = 0
-        useCurrentYaw = False
+        yaw=0.0
         duration_s = 5.0
-        pack =  struct.pack('<BBff?f', 
-                        self.COMMAND_LAND,
-                        group_mask,
-                        absolute_height_m,
-                        target_yaw,
-                        useCurrentYaw,
-                        duration_s)
-        for i, p in enumerate(pack):
-            pk.packet.data[i] = p
-        pk.packet.data_length = len(pack)
-        self.send_packet_service.call_async(pk)
+        req = self._prepare_send_request()
+        req.packet = self.hl_commander.land(absolute_height_m, duration_s, group_mask, yaw)
+        self.send_packet_service.call_async(req)
 
     def takeoff(self, msg):
-        pk = CrtpPacketSend.Request()
-        pk.channel = self.channel
-        pk.address = self.address
-        pk.datarate = self.datarate
-        pk.packet.port = self.SETPOINT_HL
-        pk.packet.channel = 0
         group_mask = 0
         absolute_height_m = 1.0
-        target_yaw = 0
-        useCurrentYaw = False
+        yaw = 0
         duration_s = 5.0
-        pack =  struct.pack('<BBff?f', 
-                        self.COMMAND_TAKEOFF,
-                        group_mask,
-                        absolute_height_m,
-                        target_yaw,
-                        useCurrentYaw,
-                        duration_s)
-        for i, p in enumerate(pack):
-            pk.packet.data[i] = p
-        pk.packet.data_length = len(pack)
-        self.send_packet_service.call_async(pk)
+        req = self._prepare_send_request()
+        req.packet = self.hl_commander.takeoff(absolute_height_m, duration_s, group_mask, yaw)
+        self.send_packet_service.call_async(req)
 
 
     def set_color(self, msg):
