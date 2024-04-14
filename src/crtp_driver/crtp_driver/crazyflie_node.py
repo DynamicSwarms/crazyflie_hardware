@@ -38,7 +38,8 @@ from crtp_interface.srv import CrtpPacketSend
 
 from std_msgs.msg import Int16
 
-from crtp_driver.HighLevelCommander import HighLevelCommander
+from crtp_driver.high_level_commander import HighLevelCommander
+from crtp_driver.commander import Commander
 
 class Crazyflie(Node):
     COMMAND_TAKEOFF = 7
@@ -53,6 +54,7 @@ class Crazyflie(Node):
         self.cf_prefix = 'cf16'
 
         self.hl_commander = HighLevelCommander()
+        self.commander = Commander()
 
         self.send_packet_service = self.create_client(CrtpPacketSend, "crazyradio/send_crtp_packet")
         while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
@@ -62,8 +64,9 @@ class Crazyflie(Node):
         self.create_subscription(Int16, self.cf_prefix + "/set_color", self.set_color,  10)
         self.create_subscription(Int16, self.cf_prefix + "/takeoff", self.takeoff, 10)
         self.create_subscription(Int16, self.cf_prefix + "/land", self.land, 10)
-
         self.create_subscription(Int16, self.cf_prefix + "/set_group_mask", self.set_group_mask, 10)
+
+        self.create_subscription(Int16, self.cf_prefix + "/cmd_position", self.cmd_position, 10)
 
 
     def __del__(self):
@@ -99,6 +102,11 @@ class Crazyflie(Node):
         duration_s = 5.0
         req = self._prepare_send_request()
         req.packet = self.hl_commander.takeoff(absolute_height_m, duration_s, group_mask, yaw)
+        self.send_packet_service.call_async(req)
+
+    def cmd_position(self, msg):
+        req = self._prepare_send_request()
+        req.packet = self.commander.send_position_setpoint(1, 1, 1, 1.0)
         self.send_packet_service.call_async(req)
 
 
