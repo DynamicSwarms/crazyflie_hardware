@@ -41,17 +41,24 @@ from std_msgs.msg import Int16
 from crtp_driver.high_level_commander import HighLevelCommander
 from crtp_driver.commander import Commander
 
+from crazyflie_interface.msg import SetGroupMask, Takeoff, Land, Stop, GoTo, StartTrajectory, UploadTrajectory # HL_Commander
+from crazyflie_interface.msg import NotifySetpointsStop, VelocityWorld, Hover, FullState, Position # (Generic)Commander
+
 class Crazyflie(Node):
     COMMAND_TAKEOFF = 7
     COMMAND_LAND = 8
     SETPOINT_HL = 0x08
     def __init__(self):
-        super().__init__("listener")
-        self.channel = 101
-        self.address = (0xE7, 0xE7,0xE7,0xE7, 0x10)
-        self.datarate = 2
+        super().__init__("cf_no_id_set")
+        self.declare_parameter('id', 0x0)
+        self.declare_parameter('channel', 100)
+        self.declare_parameter('datarate', 2)
+        self.id = self.get_parameter('id').get_parameter_value().integer_value
+        self.channel = self.get_parameter('channel').get_parameter_value().integer_value
+        self.datarate = self.get_parameter('datarate').get_parameter_value().integer_value
+        self.address = (0xE7, 0xE7,0xE7,0xE7, self.id)
+        self.cf_prefix = 'cf' + str(self.id)
 
-        self.cf_prefix = 'cf16'
 
         self.hl_commander = HighLevelCommander()
         self.commander = Commander()
@@ -60,13 +67,18 @@ class Crazyflie(Node):
         while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Send CRTP Packet Service not available, waiting again...")
 
-
         self.create_subscription(Int16, self.cf_prefix + "/set_color", self.set_color,  10)
-        self.create_subscription(Int16, self.cf_prefix + "/takeoff", self.takeoff, 10)
-        self.create_subscription(Int16, self.cf_prefix + "/land", self.land, 10)
-        self.create_subscription(Int16, self.cf_prefix + "/set_group_mask", self.set_group_mask, 10)
 
-        self.create_subscription(Int16, self.cf_prefix + "/cmd_position", self.cmd_position, 10)
+        self.create_subscription(Takeoff, self.cf_prefix + "/takeoff", self.takeoff, 10)
+        self.create_subscription(Land, self.cf_prefix + "/land", self.land, 10)
+        self.create_subscription(GoTo, self.cf_prefix + "/go_to", self.go_to, 10)
+        self.create_subscription(SetGroupMask, self.cf_prefix + "/set_group_mask", self.set_group_mask, 10)
+
+        self.create_subscription(NotifySetpointsStop, self.cf_prefix + "/notify_setpoints_stop", self.notify_setpoints_stop, 10) 
+        self.create_subscription(VelocityWorld, self.cf_prefix + "/cmd_vel", self.cmd_vel, 10)
+        self.create_subscription(Hover, self.cf_prefix + "/cmd_hover", self.cmd_hover, 10)
+        self.create_subscription(FullState, self.cf_prefix + "/cmd_full_state", self.cmd_full_state, 10)
+        self.create_subscription(Position, self.cf_prefix + "/cmd_position", self.cmd_position, 10)
 
 
     def __del__(self):
@@ -78,35 +90,62 @@ class Crazyflie(Node):
         req.address = self.address
         req.datarate = self.datarate
         return req
+    
+    def takeoff(self, msg):
+        req = self._prepare_send_request()
+        duration = msg.duration.sec + msg.duration.nanosec * 1e-9
+        req.packet = self.hl_commander.takeoff(msg.height, duration, msg.group_mask, msg.yaw)
+        self.send_packet_service.call_async(req)
+    
+    def land(self, msg):
+        req = self._prepare_send_request()
+        duration = msg.duration.sec + msg.duration.nanosec * 1e-9
+        req.packet = self.hl_commander.land(msg.height, duration, msg.group_mask, msg.yaw)
+        self.send_packet_service.call_async(req)
+
+    def go_to(self, msg):
+        req = self._prepare_send_request()
+        duration = msg.duration.sec + msg.duration.nanosec * 1e-9
+        req.packet = self.hl_commander.go_to(msg.Point.x, msg.Point.y, msg.Point.z, msg.yaw, duration, msg.relative, msg.group_mask)
+        self.send_packet_service.call_async(req)
 
     def set_group_mask(self, msg):
-        group = msg.data
         req = self._prepare_send_request()
-        req.packet = self.hl_commander.set_group_mask(group)
+        req.packet = self.hl_commander.set_group_mask(msg.group_mask)
+        self.send_packet_service.call_async(req)
+    
+    def notify_setpoints_stop(self, msg):
+        req = self._prepare_send_request()
+        #TODO: check if group mask might be used
+        req.packet = self.commander.send_notify_setpoint_stop(msg.remain_valid_millisecs)
         self.send_packet_service.call_async(req)
 
-
-    def land(self, msg):
-        group_mask = 0
-        absolute_height_m = 0.0
-        yaw=0.0
-        duration_s = 5.0
+    def cmd_vel(self, msg):
         req = self._prepare_send_request()
-        req.packet = self.hl_commander.land(absolute_height_m, duration_s, group_mask, yaw)
+        req.packet = self.commander.send_velocity_world_setpoint(msg.vel.x, msg.vel.y, msg.vel.z, msg.yaw_rate)
         self.send_packet_service.call_async(req)
 
-    def takeoff(self, msg):
-        group_mask = 0
-        absolute_height_m = 1.0
-        yaw = 0
-        duration_s = 5.0
+    def cmd_hover(self, msg):
         req = self._prepare_send_request()
-        req.packet = self.hl_commander.takeoff(absolute_height_m, duration_s, group_mask, yaw)
+        req.packet = self.commander.send_hover_setpoint(msg.vx, msg.vy, msg.yawrate, msg.z_distance)
         self.send_packet_service.call_async(req)
+
+    def cmd_full_state(self, msg):
+        req = self._prepare_send_request()
+        pos = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+        vel = [msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z]
+        acc = [msg.acc.x, msg.acc.y, msg.acc.z]
+        orientation = [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w ]
+        rollRate = msg.twist.angular.x
+        pitchRate = msg.twist.angular.y
+        yawRate = msg.twist.angular.z
+        req.packet = self.commander.send_full_state_setpoint(pos, vel, acc, orientation, rollRate, pitchRate, yawRate)
+        self.send_packet_service.call_async(req)
+
 
     def cmd_position(self, msg):
         req = self._prepare_send_request()
-        req.packet = self.commander.send_position_setpoint(1, 1, 1, 1.0)
+        req.packet = self.commander.send_position_setpoint(msg.x, msg.y, msg.z, msg.yaw)
         self.send_packet_service.call_async(req)
 
 

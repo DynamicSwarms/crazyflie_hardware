@@ -241,7 +241,7 @@ class Commander():
         pk.data = self._struct_to_data(data)
         pk.data_length = len(data)   
 
-    def _prepare_packet(self, port, channel, data):
+    def _prepare_packet(self, port, channel=0, data=struct.pack('<')):
         pk = CrtpPacket()
         pk.port = port
         pk.channel = channel

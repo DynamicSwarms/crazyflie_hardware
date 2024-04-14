@@ -23,7 +23,12 @@ def generate_launch_description():
 
     cf = Node(
         package="crtp_driver",
-        executable="crazyflie"
+        executable="crazyflie",
+        parameters=[
+            {"id": 0x10},
+            {"channel": 101},
+            {"datarate": 2}
+        ]
     )
 
     return LaunchDescription([
