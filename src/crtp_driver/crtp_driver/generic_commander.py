@@ -29,7 +29,7 @@ import struct
 import numpy as np
 
 from crtp_interface.msg import CrtpPacket
-
+from crtp_driver.crtp_packer import CrtpPacker
 
 from cflib.utils.encoding import compress_quaternion
 
@@ -39,7 +39,7 @@ __all__ = ['Commander']
 
 
 
-class Commander():
+class GenericCommander(CrtpPacker):
     """
     Used for sending control setpoints to the Crazyflie
     """
@@ -56,43 +56,10 @@ class Commander():
 
     TYPE_META_COMMAND_NOTIFY_SETPOINT_STOP = 0
 
-    PORT_COMMANDER = 0x03
     PORT_COMMANDER_GENERIC = 0x07
 
-    def __init__(self, crazyflie=None):
-        """
-        Initialize the commander object. By default the commander is in
-        +-mode (not x-mode).
-        """
-        self._x_mode = False
-
-    def set_client_xmode(self, enabled):
-        """
-        Enable/disable the client side X-mode. When enabled this recalculates
-        the setpoints before sending them to the Crazyflie.
-        """
-        self._x_mode = enabled
-
-    def send_setpoint(self, roll, pitch, yawrate, thrust):
-        """
-        Send a new control setpoint for roll/pitch/yaw_Rate/thrust to the copter.
-
-        The meaning of these values is depended on the mode of the RPYT commander in the firmware
-        Default settings are Roll, pitch, yawrate and thrust
-
-        roll,  pitch are in degrees
-        yawrate is in degrees/s
-        thrust is an integer value ranging from 10001 (next to no power) to 60000 (full power)
-        """
-        if thrust > 0xFFFF or thrust < 0:
-            raise ValueError('Thrust must be between 0 and 0xFFFF')
-
-        if self._x_mode:
-            roll, pitch = 0.707 * (roll - pitch), 0.707 * (roll + pitch)
-
-        data = struct.pack('<fffH', roll, -pitch, yawrate, thrust)
-        return self._prepare_packet(port=self.PORT_COMMANDER,
-                                    data=data)
+    def __init__(self):
+        super().__init__(self.PORT_COMMANDER_GENERIC)
 
     def send_notify_setpoint_stop(self, remain_valid_milliseconds=0):
         """
@@ -101,8 +68,7 @@ class Commander():
         """
         data = struct.pack('<BI', self.TYPE_META_COMMAND_NOTIFY_SETPOINT_STOP,
                               remain_valid_milliseconds)
-        return self._prepare_packet(port=self.PORT_COMMANDER_GENERIC,
-                                    channel=self.META_COMMAND_CHANNEL,
+        return self._prepare_packet(channel=self.META_COMMAND_CHANNEL,
                                     data=data)
 
     def send_stop_setpoint(self):
@@ -110,8 +76,7 @@ class Commander():
         Send STOP setpoing, stopping the motors and (potentially) falling.
         """
         data = struct.pack('<B', self.TYPE_STOP)
-        return self._prepare_packet(port=self.PORT_COMMANDER_GENERIC,
-                                    data=data)
+        return self._prepare_packet(data=data)
 
     def send_velocity_world_setpoint(self, vx, vy, vz, yawrate):
         """
@@ -122,8 +87,7 @@ class Commander():
         """
         data = struct.pack('<Bffff', self.TYPE_VELOCITY_WORLD,
                               vx, vy, vz, yawrate)
-        return self._prepare_packet(port=self.PORT_COMMANDER_GENERIC,
-                                    channel=self.SET_SETPOINT_CHANNEL,
+        return self._prepare_packet(channel=self.SET_SETPOINT_CHANNEL,
                                     data=data)
 
     def send_zdistance_setpoint(self, roll, pitch, yawrate, zdistance):
@@ -138,8 +102,7 @@ class Commander():
         """
         data = struct.pack('<Bffff', self.TYPE_ZDISTANCE,
                               roll, pitch, yawrate, zdistance)
-        self._prepare_packet(port=self.PORT_COMMANDER_GENERIC,
-                             channel=self.SET_SETPOINT_CHANNEL,
+        self._prepare_packet(channel=self.SET_SETPOINT_CHANNEL,
                              data=data)
 
     def send_hover_setpoint(self, vx, vy, yawrate, zdistance):
@@ -154,8 +117,7 @@ class Commander():
         """
         data = struct.pack('<Bffff', self.TYPE_HOVER,
                               vx, vy, yawrate, zdistance)
-        self._prepare_packet(port=self.PORT_COMMANDER_GENERIC,
-                             channel=self.SET_SETPOINT_CHANNEL,
+        self._prepare_packet(channel=self.SET_SETPOINT_CHANNEL,
                              data=data)
 
     def send_full_state_setpoint(self, pos, vel, acc, orientation, rollrate, pitchrate, yawrate):
@@ -184,8 +146,7 @@ class Commander():
                             ax, ay, az,
                             orient_comp,
                             rr, pr, yr)
-        return self._prepare_packet(port=self.PORT_COMMANDER_GENERIC,
-                             data=data)
+        return self._prepare_packet(data=data)
 
     def send_position_setpoint(self, x, y, z, yaw):
         """
@@ -197,8 +158,7 @@ class Commander():
         """
         data = struct.pack('<Bffff', self.TYPE_POSITION,
                             x, y, z, yaw)
-        return self._prepare_packet(port=self.PORT_COMMANDER_GENERIC,
-                                    channel=self.SET_SETPOINT_CHANNEL,
+        return self._prepare_packet(channel=self.SET_SETPOINT_CHANNEL,
                                     data=data)
 
     def compress_quaternion(quat):
@@ -231,19 +191,3 @@ class Commander():
                 comp = (comp << 10) | (negbit << 9) | mag
 
         return comp    
-        
-    def _struct_to_data(self, data):
-        """the data field must be an array of size 31"""
-        np_array =  np.array([p for p in data], dtype=np.uint8)
-        return np.pad(np_array, (0, len(CrtpPacket().data) - len(data)), mode='constant')
-
-    def _fill_packet_data(self, pk, data):
-        pk.data = self._struct_to_data(data)
-        pk.data_length = len(data)   
-
-    def _prepare_packet(self, port, channel=0, data=struct.pack('<')):
-        pk = CrtpPacket()
-        pk.port = port
-        pk.channel = channel
-        self._fill_packet_data(pk, data)
-        return pk  

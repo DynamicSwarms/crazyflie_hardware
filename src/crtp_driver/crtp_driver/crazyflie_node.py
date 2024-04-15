@@ -39,7 +39,9 @@ from crtp_interface.srv import CrtpPacketSend
 from std_msgs.msg import Int16
 
 from crtp_driver.high_level_commander import HighLevelCommander
-from crtp_driver.commander import Commander
+from crtp_driver.basic_commander import BasicCommander
+from crtp_driver.generic_commander import GenericCommander
+from crtp_driver.hardware_commander import HardwareCommander
 
 from crazyflie_interface.msg import SetGroupMask, Takeoff, Land, Stop, GoTo, StartTrajectory, UploadTrajectory # HL_Commander
 from crazyflie_interface.msg import NotifySetpointsStop, VelocityWorld, Hover, FullState, Position # (Generic)Commander
@@ -61,7 +63,9 @@ class Crazyflie(Node):
 
 
         self.hl_commander = HighLevelCommander()
-        self.commander = Commander()
+        self.basic_commander = BasicCommander()
+        self.generic_commander = GenericCommander()
+        self.hardware_commander = HardwareCommander()
 
         self.send_packet_service = self.create_client(CrtpPacketSend, "crazyradio/send_crtp_packet")
         while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
@@ -79,6 +83,9 @@ class Crazyflie(Node):
         self.create_subscription(Hover, self.cf_prefix + "/cmd_hover", self.cmd_hover, 10)
         self.create_subscription(FullState, self.cf_prefix + "/cmd_full_state", self.cmd_full_state, 10)
         self.create_subscription(Position, self.cf_prefix + "/cmd_position", self.cmd_position, 10)
+
+        self.create_subscription(Int16, self.cf_prefix + "/platform_power_down", self.platform_power_down,  10)
+        self.create_subscription(Int16, self.cf_prefix + "/reboot_to_fw", self.reboot_to_fw,  10)
 
 
     def __del__(self):
@@ -117,17 +124,17 @@ class Crazyflie(Node):
     def notify_setpoints_stop(self, msg):
         req = self._prepare_send_request()
         #TODO: check if group mask might be used
-        req.packet = self.commander.send_notify_setpoint_stop(msg.remain_valid_millisecs)
+        req.packet = self.generic_commander.send_notify_setpoint_stop(msg.remain_valid_millisecs)
         self.send_packet_service.call_async(req)
 
     def cmd_vel(self, msg):
         req = self._prepare_send_request()
-        req.packet = self.commander.send_velocity_world_setpoint(msg.vel.x, msg.vel.y, msg.vel.z, msg.yaw_rate)
+        req.packet = self.generic_commander.send_velocity_world_setpoint(msg.vel.x, msg.vel.y, msg.vel.z, msg.yaw_rate)
         self.send_packet_service.call_async(req)
 
     def cmd_hover(self, msg):
         req = self._prepare_send_request()
-        req.packet = self.commander.send_hover_setpoint(msg.vx, msg.vy, msg.yawrate, msg.z_distance)
+        req.packet = self.generic_commander.send_hover_setpoint(msg.vx, msg.vy, msg.yawrate, msg.z_distance)
         self.send_packet_service.call_async(req)
 
     def cmd_full_state(self, msg):
@@ -139,13 +146,13 @@ class Crazyflie(Node):
         rollRate = msg.twist.angular.x
         pitchRate = msg.twist.angular.y
         yawRate = msg.twist.angular.z
-        req.packet = self.commander.send_full_state_setpoint(pos, vel, acc, orientation, rollRate, pitchRate, yawRate)
+        req.packet = self.generic_commander.send_full_state_setpoint(pos, vel, acc, orientation, rollRate, pitchRate, yawRate)
         self.send_packet_service.call_async(req)
 
 
     def cmd_position(self, msg):
         req = self._prepare_send_request()
-        req.packet = self.commander.send_position_setpoint(msg.x, msg.y, msg.z, msg.yaw)
+        req.packet = self.generic_commander.send_position_setpoint(msg.x, msg.y, msg.z, msg.yaw)
         self.send_packet_service.call_async(req)
 
 
@@ -162,6 +169,18 @@ class Crazyflie(Node):
         pk.packet.data[2] = color
         pk.packet.data_length = 3
         self.send_packet_service.call_async(pk)
+
+    def platform_power_down(self, msg):
+        req = self._prepare_send_request()
+        req.packet = self.hardware_commander.platform_power_down()
+        self.send_packet_service.call_async(req)
+
+    def reboot_to_fw(self, msg):
+        req = self._prepare_send_request()
+        req.packet = self.hardware_commander.reset_init()
+        self.send_packet_service.call_async(req)
+        req.packet = self.hardware_commander.reset_to_bootloader()
+        self.send_packet_service.call_async(req)
 
 
 

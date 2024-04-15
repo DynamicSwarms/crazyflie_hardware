@@ -2,10 +2,11 @@ import struct
 import numpy as np
 
 from crtp_interface.msg import CrtpPacket
+from crtp_driver.crtp_packer import CrtpPacker
 
-
-class HighLevelCommander():
+class HighLevelCommander(CrtpPacker):
     PORT_HL_COMMANDER = 0x08
+    CHANNEL_HL_COMMANDER = 0
 
     COMMAND_SET_GROUP_MASK = 0
     COMMAND_STOP = 3
@@ -23,8 +24,11 @@ class HighLevelCommander():
     TRAJECTORY_TYPE_POLY4D_COMPRESSED = 1
 
     def __init__(self):
-        pass
+        super().__init__(self.PORT_HL_COMMANDER)
 
+    def _prepare_packet(self, data):
+        return super()._prepare_packet(channel=self.CHANNEL_HL_COMMANDER,
+                                      data=data)
 
     def set_group_mask(self, group_mask=ALL_GROUPS):
         """
@@ -139,7 +143,7 @@ class HighLevelCommander():
         """
         data = struct.pack('<BBBBBf',
                                       self.COMMAND_START_TRAJECTORY,
-                                      group_mask,
+                                      gsrc/crtp_driver/crtp_driver/commander.pyroup_mask,
                                       relative,
                                       reversed,
                                       trajectory_id,
@@ -164,19 +168,3 @@ class HighLevelCommander():
                                       offset,
                                       n_pieces)
         return self._prepare_packet(data)
-    
-    def _struct_to_data(self, data):
-        """the data field must be an array of size 31"""
-        np_array =  np.array([p for p in data], dtype=np.uint8)
-        return np.pad(np_array, (0, len(CrtpPacket().data) - len(data)), mode='constant')
-
-    def _fill_packet_data(self, pk, data):
-        pk.data = self._struct_to_data(data)
-        pk.data_length = len(data)   
-
-    def _prepare_packet(self, data):
-        pk = CrtpPacket()
-        pk.port = self.PORT_HL_COMMANDER
-        pk.channel = 0
-        self._fill_packet_data(pk, data)
-        return pk  
