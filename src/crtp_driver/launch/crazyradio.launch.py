@@ -25,8 +25,8 @@ def generate_launch_description():
         package="crtp_driver",
         executable="crazyflie",
         parameters=[
-            {"id": 0x10},
-            {"channel": 101},
+            {"id": 0x00},
+            {"channel": 100},
             {"datarate": 2}
         ]
     )

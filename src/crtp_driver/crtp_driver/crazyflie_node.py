@@ -42,6 +42,7 @@ from crtp_driver.high_level_commander import HighLevelCommander
 from crtp_driver.basic_commander import BasicCommander
 from crtp_driver.generic_commander import GenericCommander
 from crtp_driver.hardware_commander import HardwareCommander
+from crtp_driver.param import ParamReader
 
 from crazyflie_interface.msg import SetGroupMask, Takeoff, Land, Stop, GoTo, StartTrajectory, UploadTrajectory # HL_Commander
 from crazyflie_interface.msg import NotifySetpointsStop, VelocityWorld, Hover, FullState, Position # (Generic)Commander
@@ -67,6 +68,8 @@ class Crazyflie(Node):
         self.generic_commander = GenericCommander()
         self.hardware_commander = HardwareCommander()
 
+        self.param_reader = ParamReader(self)
+
         self.send_packet_service = self.create_client(CrtpPacketSend, "crazyradio/send_crtp_packet")
         while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Send CRTP Packet Service not available, waiting again...")
@@ -87,6 +90,8 @@ class Crazyflie(Node):
         self.create_subscription(Int16, self.cf_prefix + "/platform_power_down", self.platform_power_down,  10)
         self.create_subscription(Int16, self.cf_prefix + "/reboot_to_fw", self.reboot_to_fw,  10)
 
+        self.create_subscription(Int16, self.cf_prefix + "/get_loc_toc", self.get_loc_toc, 10)
+        self.create_subscription(Int16, self.cf_prefix + "/send_nullpacket", self.send_null_packet, 10)
 
     def __del__(self):
         self.destroy_node()
@@ -98,6 +103,37 @@ class Crazyflie(Node):
         req.datarate = self.datarate
         return req
     
+    def send_null_packet(self, msg):
+        req = self._prepare_send_request()
+
+        req.packet.port = 15
+        req.packet.channel = 3 # 0xff
+        self.send_packet_service.call_async(req)
+
+    def get_loc_toc(self, msg):
+        req = self._prepare_send_request()
+
+#        req.packet.port = 2 # log
+#        req.packet.channel = 0 # access
+#        req.packet.data[0] = 0x00 # reset toc pointer
+#        req.data_length = 1
+#        self.send_packet_service.call_async(req) # send the toc pointer reset
+        CMD_TOC_ITEM_V2 = 2  # version 2: up to 16k entries
+        CMD_TOC_INFO_V2 = 3  # version 2: up to 16k entries
+
+        req.packet.port = 2 # log
+        req.packet.channel = 0 # access
+        req.packet.data[0] = CMD_TOC_INFO_V2 # v2#0x01 # assuming this is message id then this is "get next toc element"
+        req.packet.data_length = 2
+
+        self.send_packet_service.call_async(req)
+        req.packet.data[0] = CMD_TOC_ITEM_V2
+        req.packet.data[1] = 1
+        self.send_packet_service.call_async(req)
+
+        self.param_reader.set_count(msg.data)
+
+  
     def takeoff(self, msg):
         req = self._prepare_send_request()
         duration = msg.duration.sec + msg.duration.nanosec * 1e-9
@@ -164,7 +200,7 @@ class Crazyflie(Node):
         pk.datarate = self.datarate
         pk.packet.port = 2
         pk.packet.channel = 2
-        pk.packet.data[0] = 0x16
+        pk.packet.data[0] = 23 ####0x16 in old
         pk.packet.data[1] = 0x00
         pk.packet.data[2] = color
         pk.packet.data_length = 3

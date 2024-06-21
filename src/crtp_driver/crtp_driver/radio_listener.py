@@ -50,9 +50,16 @@ class ResponseListener(Node):
         channel = response.packet.channel
         port = response.packet.port
         string = "[" + str(port) + ":" + str(channel) + "] "
-        if channel == 0 and data_length: 
+        if port == 0 and channel == 0 and data_length: 
             for i in range(data_length):
                 string = string + chr(data[i])
+        elif port == 2 and channel == 0 and data_length: ## log to ask
+            string = string + "see cf"
+            #for i in range(data_length):
+            #    if data[i] >= 65 and data[i] <= 122: #only allow chars
+            #        string = string + chr(data[i])
+            #    else:
+            #        string = string + '{:02x} '.format(data[i]) 
         else:
             string = string + "[" +  ''.join('{:02x} '.format(x) for x in data[:data_length])    + "]"
         
