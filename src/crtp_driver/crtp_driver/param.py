@@ -11,13 +11,17 @@ CMD_TOC_INFO_V2 = 3
 class ParamReader():
 
     def __init__(self, node):
-        node.create_subscription(CrtpResponse, "crazyradio/crtp_response",self.handle_response,  10)
+        node.create_subscription(CrtpResponse, "crazyradio/crtp_response",self.handle_response,  500)
         self.node = node
         self.count = 0
 
         self.state = IDLE
 
     def get_loc_toc(self):
+        if self.state == REQ_ITEM:
+            self.node.get_logger().info(str(self.params))
+            self.state = IDLE
+            return
         self.params = []
         req = self.node._prepare_send_request()
 
@@ -58,42 +62,51 @@ class ParamReader():
             self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
             #self.node.get_logger().info(str(self._crc))
 
-            self.count = 0
-            self.get_next()
+            #self.count = 0
+            #self.get_next()
 
+
+            for i in range(self.nbr_of_items):
+                self.get_idx(i)
             self.state = REQ_ITEM
 
-            self.node.send_null_packet("")
-            self.node.send_null_packet("")
+            #self.node.send_null_packet("")
+            #self.node.send_null_packet("")
         elif self.state == REQ_ITEM and data[0] == CMD_TOC_ITEM_V2:
             name = data[4:data_length]
-            if len(name): 
-                string = "New log_toc entry: '"
-                for ch in name[:-1]:
-                    if ch == 0: string = string + " " 
-                    else: string = string + chr(ch)
-                string = string + "'"
+            string = "New log_toc entry: '"
+            string = string + " " + str(data[0]) + " " +str(data[1]) +  " " +str(data[2]) + " " + str(data[3]) + " "
+            str_name = ""
 
-                self.params.append(string)
-                self.node.get_logger().info(str(string + " " + str(self.count)))
-                self.count = self.count + 1
-            if (self.count < self.nbr_of_items): 
-                self.get_next()
-            else: 
-                self.state = IDLE
-                self.node.get_logger().info(str(self.params))
+            if len(name): 
+                for ch in name[:-1]:
+                    if ch == 0: str_name = str_name + " " 
+                    else: str_name = str_name + chr(ch)
+                str_name = str_name + "'"
+
+                self.params.append(str_name)
+            self.node.get_logger().info(str(string + " " + str(str_name)))
+
+            #if (self.count < self.nbr_of_items): 
+            #    self.get_next()
+            #else: 
+            #    self.state = IDLE
+            #    self.node.get_logger().info(str(self.params))
         else:
             pass
         
        
-    def get_next(self):
+    def get_idx(self, idx):
         req = self.node._prepare_send_request()
         req.packet.port = 2 # log
         req.packet.channel = 0 # access
-        req.packet.data_length = 2
 
+        req.packet.data_length = 3
         req.packet.data[0] = CMD_TOC_ITEM_V2
-        req.packet.data[1] = self.count
+        req.packet.data[1] = idx & 0x0ff
+        req.packet.data[2] = (idx >> 8) & 0x0ff
         self.node.send_packet_service.call_async(req)
-        #self.node.get_logger().info("requesting")
+        self.node.send_null_packet("")
+        self.node.send_null_packet("")
+        #self.node.get_logger().info(str("requesting" + str(idx)))
      

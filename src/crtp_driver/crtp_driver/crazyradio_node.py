@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy, QoSDurabilityPolicy
 
 from cflib.utils import uri_helper
 from cflib.crtp.crtpstack import CRTPPacket
@@ -24,6 +25,9 @@ import array
 from cflib.drivers import crazyradio
 import logging
 from std_srvs.srv import Trigger
+
+import time
+
 def keyboard_thread(cf):
     pass
    # while not keyboard.is_pressed('a'): 
@@ -65,11 +69,16 @@ class Crazyradio(Node):
 
         self.autopings = {}
         self.create_service(Trigger, "crazyradio/send_packet_default", self.send_packet_default)
-        self.create_service(CrtpPacketSend, "crazyradio/send_crtp_packet", self.send_crtp_packet)
+
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history= QoSHistoryPolicy.KEEP_ALL,
+            durability=QoSDurabilityPolicy.VOLATILE)
+        self.create_service(CrtpPacketSend, "crazyradio/send_crtp_packet", self.send_crtp_packet, qos_profile =qos_profile )
 
         self.create_subscription(SetAutoping, "crazyradio/set_autoping", self.set_autoping,10)
 
-        self.crtp_response = self.create_publisher(CrtpResponse, "crazyradio/crtp_response", 10)
+        self.crtp_response = self.create_publisher(CrtpResponse, "crazyradio/crtp_response", qos_profile=qos_profile)
         logging.basicConfig(
             format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s',
             level=logging.DEBUG,
@@ -92,7 +101,7 @@ class Crazyradio(Node):
         self.radio.set_data_rate(datarate)
         self.get_logger().info(str(data))
         ack, orack = self.radio.send_packet(data) 
-        self.get_logger().info(str(orack))
+        #self.get_logger().info(str(orack))
          
         self.radio_semaphore.release()
         if ack is None or ack.ack is False or not len(ack.data) > 0:

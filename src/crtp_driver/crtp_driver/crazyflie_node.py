@@ -2,6 +2,8 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy, QoSDurabilityPolicy
+
 
 from cflib.utils import uri_helper
 from cflib.crtp.crtpstack import CRTPPacket
@@ -70,7 +72,11 @@ class Crazyflie(Node):
 
         self.param_reader = ParamReader(self)
 
-        self.send_packet_service = self.create_client(CrtpPacketSend, "crazyradio/send_crtp_packet")
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history= QoSHistoryPolicy.KEEP_ALL,
+            durability=QoSDurabilityPolicy.VOLATILE)
+        self.send_packet_service = self.create_client(CrtpPacketSend, "crazyradio/send_crtp_packet", qos_profile=qos_profile)
         while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Send CRTP Packet Service not available, waiting again...")
 

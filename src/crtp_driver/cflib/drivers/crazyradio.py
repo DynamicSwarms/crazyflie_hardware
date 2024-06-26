@@ -285,8 +285,9 @@ class Crazyradio:
         data = None
         try:
             self.handle.write(endpoint=1, data=dataOut, timeout=1000)
+            logger.info(''.join('{:02x} '.format(x) for x in dataOut))
             data = self.handle.read(0x81, 64, timeout=1000)
-            #logger.info(''.join('{:02x} '.format(x) for x in data))
+            logger.info(''.join('{:02x} '.format(x) for x in data))
 
             self._log_packet(
                 False,
