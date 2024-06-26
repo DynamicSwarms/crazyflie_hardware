@@ -105,34 +105,12 @@ class Crazyflie(Node):
     
     def send_null_packet(self, msg):
         req = self._prepare_send_request()
-
         req.packet.port = 15
         req.packet.channel = 3 # 0xff
         self.send_packet_service.call_async(req)
 
     def get_loc_toc(self, msg):
-        req = self._prepare_send_request()
-
-#        req.packet.port = 2 # log
-#        req.packet.channel = 0 # access
-#        req.packet.data[0] = 0x00 # reset toc pointer
-#        req.data_length = 1
-#        self.send_packet_service.call_async(req) # send the toc pointer reset
-        CMD_TOC_ITEM_V2 = 2  # version 2: up to 16k entries
-        CMD_TOC_INFO_V2 = 3  # version 2: up to 16k entries
-
-        req.packet.port = 2 # log
-        req.packet.channel = 0 # access
-        req.packet.data[0] = CMD_TOC_INFO_V2 # v2#0x01 # assuming this is message id then this is "get next toc element"
-        req.packet.data_length = 2
-
-        self.send_packet_service.call_async(req)
-        req.packet.data[0] = CMD_TOC_ITEM_V2
-        req.packet.data[1] = 1
-        self.send_packet_service.call_async(req)
-
-        self.param_reader.set_count(msg.data)
-
+        self.param_reader.get_loc_toc()
   
     def takeoff(self, msg):
         req = self._prepare_send_request()

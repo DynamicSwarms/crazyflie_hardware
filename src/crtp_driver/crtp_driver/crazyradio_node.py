@@ -91,10 +91,13 @@ class Crazyradio(Node):
         self.radio.set_address(address)
         self.radio.set_data_rate(datarate)
         self.get_logger().info(str(data))
-        ack = self.radio.send_packet(data) 
+        ack, orack = self.radio.send_packet(data) 
+        self.get_logger().info(str(orack))
+         
         self.radio_semaphore.release()
         if ack is None or ack.ack is False or not len(ack.data) > 0:
             self.get_logger().info("No acknowledgement")
+            self.get_logger().warn(str(ack.ack) +  str(ack.powerDet) + str(ack.retry) + str(ack.data))
             return 
         response = CrtpResponse()
         response.channel = channel

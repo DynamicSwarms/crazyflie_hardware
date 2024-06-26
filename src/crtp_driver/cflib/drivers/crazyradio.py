@@ -317,7 +317,7 @@ class Crazyradio:
                     ackIn.data
                 )
 
-        return ackIn
+        return ackIn, data
 
 
 # Private utility functions
