@@ -21,6 +21,7 @@ import keyboard
 ping = CRTPPacket(0xFF)
 import array
 
+from crtp_driver.connection_watchdog import ConnectionWatchdog
 
 from cflib.drivers import crazyradio
 import logging
@@ -67,6 +68,9 @@ class Crazyradio(Node):
         self.radio = crazyradio.Crazyradio(devid=radio_id)
         self.radio_semaphore = Semaphore(1)
 
+        self.watchdog = ConnectionWatchdog(self.send_packet)
+        self.watchdog_timer = self.create_timer(callback=self.watchdog.resend_lost_packages, timer_period_sec=0.01) # 10 ms
+
         self.autopings = {}
         self.create_service(Trigger, "crazyradio/send_packet_default", self.send_packet_default)
 
@@ -99,14 +103,17 @@ class Crazyradio(Node):
         self.radio.set_channel(channel)
         self.radio.set_address(address)
         self.radio.set_data_rate(datarate)
-        self.get_logger().info(str(data))
+        #self.get_logger().info(str(data))
         ack, orack = self.radio.send_packet(data) 
         #self.get_logger().info(str(orack))
          
         self.radio_semaphore.release()
-        if ack is None or ack.ack is False or not len(ack.data) > 0:
+        if ack is None or ack.ack is False:
             self.get_logger().info("No acknowledgement")
-            self.get_logger().warn(str(ack.ack) +  str(ack.powerDet) + str(ack.retry) + str(ack.data))
+            #self.get_logger().warn(str(ack.ack) +  str(ack.powerDet) + str(ack.retry) + str(ack.data))
+            return 
+        if not len(ack.data) > 0:
+            self.get_logger().info("Empty Response: FirmwareIssue: #703")
             return 
         response = CrtpResponse()
         response.channel = channel
@@ -116,18 +123,23 @@ class Crazyradio(Node):
         for i, byte in enumerate(ack.data[1:]):
             response.packet.data[i] = byte
         response.packet.data_length = len(ack.data[1:])
+        self.watchdog.free_packet(channel, address, datarate, ack.data)
         self.crtp_response.publish(response)
-    
+   
     def send_crtp_packet(self, msg, response):
         pk = msg.packet
         data = array.array('B')
         data.append(pk.port << 4 | pk.channel)
         for i in range(pk.data_length): 
             data.append(pk.data[i])
+        if msg.response_bytes:
+            self.watchdog.add_packet_to_guard(msg.channel, tuple(msg.address.tolist()), msg.datarate, data, msg.response_bytes)
         self.send_packet(msg.channel, tuple(msg.address.tolist()), msg.datarate, data)
         return response
 
     def set_autoping(self, msg):
+        self.watchdog.log_lost_packets()
+        return 
         ident = (msg.channel, msg.address, msg.datarate)
         if ident in self.autopings:
             self.autopings[ident].set_rate(msg.rate)
