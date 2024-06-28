@@ -104,8 +104,7 @@ class Crazyradio(Node):
         self.radio.set_address(address)
         self.radio.set_data_rate(datarate)
         #self.get_logger().info(str(data))
-        ack, orack = self.radio.send_packet(data) 
-        #self.get_logger().info(str(orack))
+        ack = self.radio.send_packet(data) 
          
         self.radio_semaphore.release()
         if ack is None or ack.ack is False:
