@@ -44,7 +44,7 @@ from crtp_driver.high_level_commander import HighLevelCommander
 from crtp_driver.basic_commander import BasicCommander
 from crtp_driver.generic_commander import GenericCommander
 from crtp_driver.hardware_commander import HardwareCommander
-from crtp_driver.param import ParamReader
+from crtp_driver.param_reader import ParamReader
 
 from crazyflie_interface.msg import SetGroupMask, Takeoff, Land, Stop, GoTo, StartTrajectory, UploadTrajectory # HL_Commander
 from crazyflie_interface.msg import NotifySetpointsStop, VelocityWorld, Hover, FullState, Position # (Generic)Commander

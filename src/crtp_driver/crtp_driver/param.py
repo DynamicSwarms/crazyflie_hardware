@@ -1,12 +1,71 @@
-
-from crtp_interface.msg import CrtpResponse
 import struct 
-import time
-IDLE = 0
-REQ_INFO = 1
-REQ_ITEM = 2
-CMD_TOC_ITEM_V2 = 2 
-CMD_TOC_INFO_V2 = 3 
+import logging
+logger = logging.getLogger(__name__)
+
+
+class Toc:
+    """Container for TocElements."""
+
+    def __init__(self):
+        self.toc = {}
+
+    def clear(self):
+        """Clear the TOC"""
+        self.toc = {}
+
+    def add_element(self, element):
+        """Add a new TocElement to the TOC container."""
+        try:
+            self.toc[element.group][element.name] = element
+        except KeyError:
+            self.toc[element.group] = {}
+            self.toc[element.group][element.name] = element
+
+    def get_element_by_complete_name(self, complete_name):
+        """Get a TocElement element identified by complete name from the
+        container."""
+        try:
+            return self.get_element_by_id(self.get_element_id(complete_name))
+        except ValueError:
+            # Item not found
+            return None
+
+    def get_element_id(self, complete_name):
+        """Get the TocElement element id-number of the element with the
+        supplied name."""
+        [group, name] = complete_name.split('.')
+        element = self.get_element(group, name)
+        if element:
+            return element.ident
+        else:
+            logger.warning('Unable to find variable [%s]', complete_name)
+            return None
+
+    def get_element(self, group, name):
+        """Get a TocElement element identified by name and group from the
+        container."""
+        try:
+            return self.toc[group][name]
+        except KeyError:
+            return None
+
+    def get_element_by_id(self, ident):
+        """Get a TocElement element identified by index number from the
+        container."""
+        for group in list(self.toc.keys()):
+            for name in list(self.toc[group].keys()):
+                if self.toc[group][name].ident == ident:
+                    return self.toc[group][name]
+        return None
+
+
+
+
+
+
+
+
+
 
 
 class ParamTocElement:
@@ -71,107 +130,3 @@ class ParamTocElement:
 
     def is_persistent(self):
         return self.persistent
-
-class ParamReader():
-
-    def __init__(self, node):
-        node.create_subscription(CrtpResponse, "crazyradio/crtp_response",self.handle_response,  500)
-        self.node = node
-        self.count = 0
-
-        self.state = IDLE
-
-    def get_loc_toc(self):
-        if self.state == REQ_ITEM:
-            self.node.get_logger().info(str(len(self.params)))
-            self.node.get_logger().info(str(self.params))
-            self.state = IDLE
-            return
-        self.params = []
-        req = self.node._prepare_send_request()
-
-#        req.packet.port = 2 # log
-#        req.packet.channel = 0 # access
-#        req.packet.data[0] = 0x00 # reset toc pointer
-#        req.data_length = 1
-#        self.send_packet_service.call_async(req) # send the toc pointer reset
-       
-
-        req.packet.port = 2 # log
-        req.packet.channel = 0 # access
-        req.packet.data[0] = CMD_TOC_INFO_V2 # v2#0x01 # assuming this is message id then this is "get next toc element"
-        req.packet.data_length = 2
-
-        self.state = REQ_INFO
-        self.node.send_packet_service.call_async(req)
-        self.node.send_null_packet("")
-        self.node.send_null_packet("")
-
-        #req.packet.data[0] = CMD_TOC_ITEM_V2
-        #req.packet.data[1] = 1
-        #self.send_packet_service.call_async(req)
-#
-        #self.param_reader.set_count(msg.data)
-    
-    def handle_response(self, response):
-        data = response.packet.data
-        data_length = response.packet.data_length
-        channel = response.packet.channel
-        port = response.packet.port
-
-        if port != 2 or channel != 0 or not data_length: return # not us 
-        #self.node.get_logger().info("Received in ParamReader" + str(self.state) +str(data[0]) )
-        #self.node.get_logger().info(str(response.packet))
-        if self.state == REQ_INFO and data[0] == CMD_TOC_INFO_V2:
-            [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
-            self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
-            #self.node.get_logger().info(str(self._crc))
-
-            #self.count = 0
-            #self.get_next()
-
-
-            for i in range(self.nbr_of_items):
-                self.get_idx(i)
-            
-            self.node.send_null_packet("")
-            self.node.send_null_packet("")
-
-            self.state = REQ_ITEM
-
-            #self.node.send_null_packet("")
-            #self.node.send_null_packet("")
-        elif self.state == REQ_ITEM and data[0] == CMD_TOC_ITEM_V2:
-            #data: cmd, ident, group, name
-            self.node.get_logger().info(str(data))
-            ident = struct.unpack('<H', data[1:3])[0]
-            data_ = bytearray(data[3:])
-            element = ParamTocElement(ident, data_)
-
-            self.node.get_logger().info("New Element: '" + element.group + "' '" + element.name + "'")
-
-
-            self.params.append(element)
-
-            if len(self.params) == self.nbr_of_items:
-                for param in self.params:
-                    self.node.get_logger().info(str(param.ident) + ": "  + param.group + " " + param.name)
-        else:
-            pass
-        
-       
-    def get_idx(self, idx):
-        req = self.node._prepare_send_request()
-        req.packet.port = 2 # log
-        req.packet.channel = 0 # access
-
-        req.packet.data_length = 3
-        req.packet.data[0] = CMD_TOC_ITEM_V2
-        req.packet.data[1] = idx & 0x0ff
-        req.packet.data[2] = (idx >> 8) & 0x0ff
-        req.response_bytes = 3 # Watchdog shall Guard these messages
-        self.node.send_packet_service.call_async(req)
-        #self.node.send_null_packet("")
-        #self.node.send_null_packet("")
-        self.node.get_logger().info(str("requesting" + str(idx)))
-     
