@@ -84,7 +84,7 @@ class ParamReader():
             if False: # self.toc_cache.fetch(self._crc) is not None:
                 self.state = IDLE
             else:   # retrieve
-                for i in range(19): #range(self.nbr_of_items):
+                for i in range(self.nbr_of_items):
                     self.get_idx(i)
                 
                 self.node.send_null_packet("")

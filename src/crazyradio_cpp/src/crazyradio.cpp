@@ -5,6 +5,7 @@
 
 //Ros2
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/qos.hpp"
 
 #include "libcrazyradio/Crazyradio.hpp"
 #include "crtp_interface/srv/crtp_packet_send.hpp"
@@ -22,8 +23,12 @@ class CrazyradioNode : public rclcpp::Node
             m_radio(libcrazyradio::Crazyradio(0))
 
         {
+            auto qos = rclcpp::QoS(500);
+            qos.reliable();
+            qos.keep_all();
+            qos.durability_volatile();
 
-            send_crtp_packet_service = this->create_service<crtp_interface::srv::CrtpPacketSend>("crazyradio/send_crtp_packet", std::bind(&CrazyradioNode::sendCrtpPacketCallback, this, _1, _2));
+            send_crtp_packet_service = this->create_service<crtp_interface::srv::CrtpPacketSend>("crazyradio/send_crtp_packet", std::bind(&CrazyradioNode::sendCrtpPacketCallback, this, _1, _2), qos.get_rmw_qos_profile());
             send_response_pub = this->create_publisher<crtp_interface::msg::CrtpResponse>("crazyradio/crtp_response", 10);
             /*
             m_radio.setChannel(100);
