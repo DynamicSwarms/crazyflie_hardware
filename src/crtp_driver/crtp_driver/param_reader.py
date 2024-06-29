@@ -81,10 +81,10 @@ class ParamReader():
             #self.count = 0
             #self.get_next()
 
-            if self.toc_cache.fetch(self._crc) is not None:
+            if False: # self.toc_cache.fetch(self._crc) is not None:
                 self.state = IDLE
             else:   # retrieve
-                for i in range(self.nbr_of_items):
+                for i in range(19): #range(self.nbr_of_items):
                     self.get_idx(i)
                 
                 self.node.send_null_packet("")
@@ -107,6 +107,7 @@ class ParamReader():
             self.params.append(element)
             self.toc.add_element(element)
 
+            self.node.get_logger().info("Recv: " + str(len(self.params)))
             if len(self.params) == self.nbr_of_items:
                 self.state = IDLE
                 

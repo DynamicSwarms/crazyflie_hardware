@@ -16,6 +16,12 @@ def generate_launch_description():
         package="crtp_driver",
         executable="crazyradio"
     )
+
+    crazyradio_cpp = Node(
+        package="crazyradio_cpp",
+        executable="crazyradio"
+    )
+
     radiolistener = Node(
         package="crtp_driver",
         executable="radiolistener"
@@ -32,7 +38,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        crazyradio,
+        #crazyradio,
+        crazyradio_cpp,
         radiolistener,
         cf
         ])
