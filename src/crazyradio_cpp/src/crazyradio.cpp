@@ -10,10 +10,13 @@
 #include "libcrazyradio/Crazyradio.hpp"
 #include "crtp_interface/srv/crtp_packet_send.hpp"
 #include "crtp_interface/msg/crtp_response.hpp"
-
+#include <condition_variable>
+#include <mutex>
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 using std::placeholders::_2;
+using std::placeholders::_3;
+
 
 class CrazyradioNode : public rclcpp::Node
 {
@@ -28,7 +31,9 @@ class CrazyradioNode : public rclcpp::Node
             qos.keep_all();
             qos.durability_volatile();
 
-            send_crtp_packet_service = this->create_service<crtp_interface::srv::CrtpPacketSend>("crazyradio/send_crtp_packet", std::bind(&CrazyradioNode::sendCrtpPacketCallback, this, _1, _2), qos.get_rmw_qos_profile());
+
+            crtp_send_callback_group = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+            send_crtp_packet_service = this->create_service<crtp_interface::srv::CrtpPacketSend>("crazyradio/send_crtp_packet", std::bind(&CrazyradioNode::sendCrtpPacketCallback, this, _1, _2,_3), qos.get_rmw_qos_profile(), crtp_send_callback_group);
             send_response_pub = this->create_publisher<crtp_interface::msg::CrtpResponse>("crazyradio/crtp_response", 10);
             /*
             m_radio.setChannel(100);
@@ -56,9 +61,14 @@ class CrazyradioNode : public rclcpp::Node
             RCLCPP_WARN(this->get_logger(),"I am alive");
         }
     private: 
+        //void sendCrtpPacketCallback(
+        //    const std::shared_ptr<crtp_interface::srv::CrtpPacketSend::Request> request,
+        //            std::shared_ptr<crtp_interface::srv::CrtpPacketSend::Response> response)
+        //{
         void sendCrtpPacketCallback(
-            const std::shared_ptr<crtp_interface::srv::CrtpPacketSend::Request> request,
-                    std::shared_ptr<crtp_interface::srv::CrtpPacketSend::Response> response)
+            const std::shared_ptr<rclcpp::Service<crtp_interface::srv::CrtpPacketSend>> service_handle,
+            const std::shared_ptr<rmw_request_id_t> header,
+            const std::shared_ptr<crtp_interface::srv::CrtpPacketSend::Request> request)
         {
             libcrazyradio::Crazyradio::Ack ack;
             uint8_t data[32];
@@ -101,6 +111,17 @@ class CrazyradioNode : public rclcpp::Node
                 send_response_pub->publish(resp);
             }           
 
+      
+            std::thread t([=](){
+                /* ** takes a long time to respond ** */
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(10s);
+                auto response = crtp_interface::srv::CrtpPacketSend::Response();
+                service_handle->send_response(*header, response);
+                });
+
+            t.detach();
+
             //RCLCPP_WARN(this->get_logger(),"Address %lX", address );
             //    for (int i = 0; i < ack.size; i++) {
             //        RCLCPP_WARN(this->get_logger(),"%x", ack.data[i]);    
@@ -109,6 +130,8 @@ class CrazyradioNode : public rclcpp::Node
         }
     private:    
         libcrazyradio::Crazyradio m_radio;
+
+        rclcpp::CallbackGroup::SharedPtr crtp_send_callback_group;
 
         rclcpp::Service<crtp_interface::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_service;
         rclcpp::Publisher<crtp_interface::msg::CrtpResponse>::SharedPtr send_response_pub;
@@ -122,7 +145,11 @@ int main(int argc, char ** argv)
 
     rclcpp::init(argc, argv);
     rclcpp::NodeOptions options;
-    rclcpp::spin(std::make_shared<CrazyradioNode>(options));
+    auto node = std::make_shared<CrazyradioNode>(options);
+
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(node);
+    executor.spin();
     rclcpp::shutdown();
     return 0;
 }
