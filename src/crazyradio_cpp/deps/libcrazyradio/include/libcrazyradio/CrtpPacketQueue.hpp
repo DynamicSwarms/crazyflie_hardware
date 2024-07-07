@@ -1,26 +1,26 @@
 #pragma once
 
+#include <stdint.h>
 #include <queue>
 
 #include "CrtpPacket.hpp"
+
+namespace libcrtp {
 
 class CrtpPacketQueue
 {
 
     public: 
-        PacketQueue(
-            uint8_t crtp_channel
-        );
+        CrtpPacketQueue();
 
-        virtual ~PacketQueue();
+        virtual ~CrtpPacketQueue();
 
-        void addPacket(CrtpPacket packet);
+        void addPacket(CrtpPacket * packet);
 
-        bool getPacket();
-
+        bool getPacket(CrtpPacket * packet);
 
     private: 
-        uint8_t m_crtp_channel;
-        std::queue<CrtpPacket> queue;
-        
+        std::queue<CrtpPacket> m_queue;
 };
+
+}; // namespace libcrtp

@@ -8,8 +8,13 @@
 #include "rclcpp/qos.hpp"
 
 #include "libcrazyradio/Crazyradio.hpp"
+#include "libcrazyradio/CrtpLink.hpp"
+
+
 #include "crtp_interface/srv/crtp_packet_send.hpp"
 #include "crtp_interface/msg/crtp_response.hpp"
+
+
 #include <condition_variable>
 #include <mutex>
 using namespace std::chrono_literals;
@@ -59,6 +64,31 @@ class CrazyradioNode : public rclcpp::Node
             }
             */
             RCLCPP_WARN(this->get_logger(),"I am alive");
+
+
+            std::cerr << "Starting Test: \n";
+            libcrtp::CrtpLink linkA = libcrtp::CrtpLink(10, 10, 2);
+            libcrtp::CrtpLink linkB = libcrtp::CrtpLink(10, 10, 2);
+
+            uint8_t data[] = {4, 3, 2, 1}; 
+            libcrtp::CrtpPacket exPacket = {2, 3, {}, 3}; // port, channel, data, length
+            memcpy(exPacket.data, data, 3);
+
+            std::cerr << "Added: \n";
+            linkA.addPacket(&exPacket);
+
+            exPacket.channel = 7; // change channel which shall not be copied
+            std::cerr << "Changed: \n";
+            libcrtp::CrtpPacket  newPacket;
+            bool success = linkA.getPacket(2, &newPacket);
+            std::cerr << "Success??" << success << "\n";
+            if (success) 
+            {
+                std::cerr << "Packet Channel: " << (int)newPacket.channel << "\n";
+                std::cerr << "Packet first Data: " << (int)newPacket.data[0] << "\n";
+            }
+            
+            RCLCPP_WARN(this->get_logger(),"Done Testing");
         }
     private: 
         //void sendCrtpPacketCallback(
