@@ -1,7 +1,7 @@
 #define BOOST_BIND_NO_PLACEHOLDERS
 #include <chrono>
 #include <string.h>
-
+#include <sstream>
 #include <map>
 //Ros2
 #include "rclcpp/rclcpp.hpp"
@@ -103,8 +103,10 @@ class CrazyradioNode : public rclcpp::Node
                     bool success = link_it->second.getPacket(highestPriorityPort, &pkt);
 
                     if (success) 
-                    {
-                        std::cerr <<  "Link:" << (int)link_it->first.second <<"Packet:" << (int)pkt.port << (int)pkt.channel << " D: " << (int)pkt.data[0] << "\n";
+                    {   
+                        std::stringstream ss;
+                        ss <<  "Link:" << (int)link_it->first.second <<"Packet:" << (int)pkt.port << (int)pkt.channel << " D: " << (int)pkt.data[0];// << "\n";
+                        RCLCPP_WARN(this->get_logger(),ss.str().c_str());
                     }
                 }
             } while (highestPriorityPort != libcrtp::CrtpPort::NO_PORT);
