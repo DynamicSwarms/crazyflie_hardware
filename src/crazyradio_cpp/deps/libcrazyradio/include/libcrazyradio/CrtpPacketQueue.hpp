@@ -19,6 +19,8 @@ class CrtpPacketQueue
 
         bool getPacket(CrtpPacket * packet);
 
+        bool isEmtpy() const;
+
     private: 
         std::queue<CrtpPacket> m_queue;
 };

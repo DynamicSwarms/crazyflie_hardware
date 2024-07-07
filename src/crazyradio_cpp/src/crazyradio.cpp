@@ -71,16 +71,20 @@ class CrazyradioNode : public rclcpp::Node
             libcrtp::CrtpLink linkB = libcrtp::CrtpLink(10, 10, 2);
 
             uint8_t data[] = {4, 3, 2, 1}; 
-            libcrtp::CrtpPacket exPacket = {2, 3, {}, 3}; // port, channel, data, length
+            libcrtp::CrtpPacket exPacket = {2, 3, {}, 3, false, 0, true}; // port, channel, data, length
             memcpy(exPacket.data, data, 3);
 
-            std::cerr << "Added: \n";
             linkA.addPacket(&exPacket);
-
+            
+            std::cerr << "A Priority:" << (int)linkA.getHighestAvailablePriority() << "\n";
+            
             exPacket.channel = 7; // change channel which shall not be copied
-            std::cerr << "Changed: \n";
             libcrtp::CrtpPacket  newPacket;
             bool success = linkA.getPacket(2, &newPacket);
+
+            std::cerr << "A Priority:" << (int)linkA.getHighestAvailablePriority() << "\n";
+
+
             std::cerr << "Success??" << success << "\n";
             if (success) 
             {

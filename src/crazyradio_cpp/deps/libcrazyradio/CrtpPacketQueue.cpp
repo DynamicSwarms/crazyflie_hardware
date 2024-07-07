@@ -32,4 +32,9 @@ bool CrtpPacketQueue::getPacket(
     return true;
 }
 
+bool CrtpPacketQueue::isEmtpy() const
+{
+    return m_queue.empty();
+}
+
 }; // namespace libcrtp

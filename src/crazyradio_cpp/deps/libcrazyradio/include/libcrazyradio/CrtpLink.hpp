@@ -42,6 +42,12 @@ class CrtpLink
         */
         bool releasePacket(CrtpPacket * packet);
 
+        /**
+         * Returns the port with highest priority with a packet to send inside.
+         * Returns CrtpPort::NO_PORT if completely empty
+         */
+        uint8_t getPriorityPort();
+
     private: 
         uint8_t m_channel;
         uint64_t m_address;
