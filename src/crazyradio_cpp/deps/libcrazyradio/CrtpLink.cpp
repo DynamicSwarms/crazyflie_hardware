@@ -4,20 +4,6 @@
 
 namespace libcrtp {
 
-enum CrtpPort {
-    CONSOLE             = 0,
-    PARAMETERS          = 2,
-    COMMANDER           = 3,
-    MEMORY_ACCESS       = 4,
-    DATA_LOGGING        = 5,
-    LOCALIZATION        = 6,
-    GENERIC_SETPOINT    = 7,
-    PLATFORM            = 13,
-    CLIENT_SIDE_DEBUG   = 14,
-    LINK_LAYER          = 15,
-    NO_PORT             = 0xFF
-};
-
 CrtpLink::CrtpLink(
     uint8_t channel, 
     uint64_t address,
@@ -69,7 +55,7 @@ void CrtpLink::addPacket(
     m_crtpPortQueues[packet->port].addPacket(packet);
 }
 
-bool CrtpLink::getPacket(uint8_t port, CrtpPacket * packet)
+bool CrtpLink::getPacket(CrtpPort port, CrtpPacket * packet)
 {
     return m_crtpPortQueues[port].getPacket(packet);
 }
@@ -80,14 +66,28 @@ bool CrtpLink::releasePacket(
     return true;
 }
 
-uint8_t CrtpLink::getPriorityPort() 
+CrtpPort CrtpLink::getPriorityPort() const
 {
-    for (auto const& portQueue : m_crtpPortQueues) 
+    for (const auto& [port, queue] : m_crtpPortQueues) 
     {
-        // portQueue is tuple of [key: port, val: crtp_queue]
-        if (! portQueue.second.isEmtpy()) return portQueue.first; 
+        if (! queue.isEmtpy()) return port; 
     }
     return CrtpPort::NO_PORT;
+}
+
+uint8_t CrtpLink::getChannel() const
+{
+    return m_channel;
+}
+
+uint64_t CrtpLink::getAddress() const
+{
+    return m_address;
+}
+
+uint8_t CrtpLink::getDatarate() const
+{
+    return m_datarate;
 }
 
 }; // namespace libcrtp

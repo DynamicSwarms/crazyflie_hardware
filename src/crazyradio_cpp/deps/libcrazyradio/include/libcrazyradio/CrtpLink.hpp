@@ -34,7 +34,7 @@ class CrtpLink
         */
         void addPacket(CrtpPacket * packet);
 
-        bool getPacket(uint8_t port, CrtpPacket * packet);
+        bool getPacket(CrtpPort port, CrtpPacket * packet);
 
         /**
         *  Gets a crazyflies response, which should be crossreferenced to an yet unacknowledged request which excpected a response. 
@@ -46,14 +46,19 @@ class CrtpLink
          * Returns the port with highest priority with a packet to send inside.
          * Returns CrtpPort::NO_PORT if completely empty
          */
-        uint8_t getPriorityPort();
+        CrtpPort getPriorityPort() const;
+
+
+        uint8_t getChannel() const;
+        uint64_t getAddress() const;
+        uint8_t getDatarate() const;
 
     private: 
         uint8_t m_channel;
         uint64_t m_address;
         uint8_t m_datarate; 
 
-        std::map<uint8_t, CrtpPacketQueue> m_crtpPortQueues;
+        std::map<CrtpPort, CrtpPacketQueue> m_crtpPortQueues;
 };
 
 }; // namespace libcrtp
