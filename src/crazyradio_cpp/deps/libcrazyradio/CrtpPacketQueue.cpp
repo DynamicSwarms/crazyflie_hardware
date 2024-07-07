@@ -19,7 +19,6 @@ void CrtpPacketQueue::addPacket(
     CrtpPacket * packet
 )
 {
-    std::cerr << "Adding packet\n";
     m_queue.push(*packet);
 }
 

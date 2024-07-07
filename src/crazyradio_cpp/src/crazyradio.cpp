@@ -70,11 +70,14 @@ class CrazyradioNode : public rclcpp::Node
             libcrtp::CrtpLink linkA = libcrtp::CrtpLink(100, 0xF0, 2);
             libcrtp::CrtpLink linkB = libcrtp::CrtpLink(100, 0xF1, 2);
             
-            libcrtp::CrtpPacket exPacket = {libcrtp::CrtpPort::PARAMETERS, 3, {3, 3, 3}, 3, false, 0, true}; // port, channel, data, length
+            libcrtp::CrtpPacket exPacket = {libcrtp::CrtpPort::COMMANDER, 3, {3,3,3}, 3, false, 0, true}; // port, channel, data, length
             linkA.addPacket(&exPacket);
 
-            libcrtp::CrtpPacket pkt2 = {libcrtp::CrtpPort::CONSOLE, 3, {1,1,1}, 3, false, 0, true}; // port, channel, data, length
+            libcrtp::CrtpPacket pkt2 = {libcrtp::CrtpPort::CONSOLE, 0, {0,0,0}, 3, false, 0, true}; // port, channel, data, length
             linkB.addPacket(&pkt2);
+
+            libcrtp::CrtpPacket pkt3 = {libcrtp::CrtpPort::PARAMETERS, 2, {2,2,2}, 3, false, 0, true}; // port, channel, data, length
+            linkA.addPacket(&pkt3);
 
             std::map<std::pair<uint8_t, uint8_t>, libcrtp::CrtpLink> links;
             links.insert({{linkA.getChannel(), linkA.getAddress()}, linkA});
@@ -88,7 +91,6 @@ class CrazyradioNode : public rclcpp::Node
                 for (const auto& [key, link] : links) 
                 {       
                     libcrtp::CrtpPort port = link.getPriorityPort();
-                    std::cerr << "Link address: " << (int)link.getAddress() << "port" << (int)port << "\n";
                     if (port < highestPriorityPort) {
                         highestPriorityPort = port;
                         bestKey = key;
@@ -97,14 +99,12 @@ class CrazyradioNode : public rclcpp::Node
 
                 auto link_it = links.find(bestKey);
                 if (highestPriorityPort != libcrtp::CrtpPort::NO_PORT && link_it != links.end()) {
-                    libcrtp::CrtpPacket  newPacket;
-                    bool success = link_it->second.getPacket(highestPriorityPort, &newPacket);
+                    libcrtp::CrtpPacket  pkt;
+                    bool success = link_it->second.getPacket(highestPriorityPort, &pkt);
 
-                    std::cerr << "Success??" << success << "\n";
                     if (success) 
                     {
-                        std::cerr << "Packet Channel: " << (int)newPacket.channel << "\n";
-                        std::cerr << "Packet first Data: " << (int)newPacket.data[0] << "\n";
+                        std::cerr <<  "Link:" << (int)link_it->first.second <<"Packet:" << (int)pkt.port << (int)pkt.channel << " D: " << (int)pkt.data[0] << "\n";
                     }
                 }
             } while (highestPriorityPort != libcrtp::CrtpPort::NO_PORT);
