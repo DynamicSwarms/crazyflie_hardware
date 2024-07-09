@@ -128,7 +128,8 @@ class ParamReader():
         req.packet.data[0] = CMD_TOC_ITEM_V2
         req.packet.data[1] = idx & 0x0ff
         req.packet.data[2] = (idx >> 8) & 0x0ff
-        req.response_bytes = 3 # Watchdog shall Guard these messages
+        req.expects_response = True
+        req.matching_bytes = 3 # Watchdog shall Guard these messages
         self.node.send_packet_service.call_async(req)
         #self.node.send_null_packet("")
         #self.node.send_null_packet("")

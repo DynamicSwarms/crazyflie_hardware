@@ -136,7 +136,8 @@ class CrazyradioNode : public rclcpp::Node
                         if (sendSuccess) {
                             libcrtp::CrtpResponseCallback callback; 
                             if (link_it->second.releasePacket(&responsePacket, callback)) {
-                                RCLCPP_INFO(this->get_logger(), "Calling callback");
+                                //RCLCPP_INFO(this->get_logger(), "Calling callback");
+                                sendCrtpUnresponded(&responsePacket, &link_it->second); 
                                 callback(&responsePacket); // This callback needs to be used at some point
                             } else {
                                 sendCrtpUnresponded(&responsePacket, &link_it->second); 
@@ -168,7 +169,7 @@ class CrazyradioNode : public rclcpp::Node
         {
             std::stringstream ss;
             ss <<  "Link:" << (int)link->getAddress()  <<"Packet:" << (int)packet->port << (int)packet->channel << " D: " << (int)packet->data[0];// << "\n";
-            RCLCPP_WARN(this->get_logger(),ss.str().c_str());
+            //RCLCPP_WARN(this->get_logger(),ss.str().c_str());
 
 
             link->setRadio(&m_radio); // Sets Channel/Address/Datarate of radio to link-specific settings
@@ -187,7 +188,7 @@ class CrazyradioNode : public rclcpp::Node
                 for (int i = 0; i < ack.size; i++) responsePacket->data[i] = ack.data[i+1];
                 responsePacket->dataLength = ack.size -1;
                 
-                RCLCPP_WARN(this->get_logger(),"Succesfull Response");
+                //RCLCPP_WARN(this->get_logger(),"Succesfull Response");
                 return true;
             }       
             return false;  
@@ -226,7 +227,7 @@ class CrazyradioNode : public rclcpp::Node
                 {
                     auto response = crtp_interface::srv::CrtpPacketSend::Response();
                     service_handle->send_response(*header, response);
-                                        std::cerr << "Inside function \n";
+                    //std::cerr << "Inside function \n";
 
                     // RCLCPP_WARN(this->get_logger(),"Nested Callback Response");
                     callback_called = true;
@@ -241,7 +242,7 @@ class CrazyradioNode : public rclcpp::Node
                 }
 
                 while (!callback_called) std::this_thread::sleep_for(10ms);
-                std::cerr << "Thread going down\n";              
+                //std::cerr << "Thread going down\n";              
                 });
             t.detach();
             
