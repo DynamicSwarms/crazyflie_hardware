@@ -2,6 +2,7 @@
 from crtp_interface.msg import CrtpResponse
 import struct 
 import time
+import rclpy
 
 from .toccache import TocCache
 from .param import ParamTocElement, Toc
@@ -53,10 +54,52 @@ class ParamReader():
         req.packet.data[0] = CMD_TOC_INFO_V2 # v2#0x01 # assuming this is message id then this is "get next toc element"
         req.packet.data_length = 2
 
+        req.expects_response = True
+        req.matching_bytes = 1
+
         self.state = REQ_INFO
-        self.node.send_packet_service.call_async(req)
+        response = self.node.send_packet_service.call_async(req)
         self.node.send_null_packet("")
         self.node.send_null_packet("")
+        self.node.get_logger().info("Sending some more")
+        self.node.send_null_packet("")
+        self.node.send_null_packet("")
+        
+
+        rclpy.spin_until_future_complete(self.node, response)
+        result =  response.result()
+        
+        data = result.packet.data
+        data_length = result.packet.data_length
+        channel = result.packet.channel
+        port = result.packet.port
+
+        if port != 2 or channel != 0 or not data_length: return # not us 
+        
+        [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
+        self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
+
+        futures = []
+        for i in range(self.nbr_of_items):
+                ret = self.get_idx(i) 
+                futures.append(ret)
+
+        responses = []
+
+        self.node.send_null_packet("")
+        self.node.send_null_packet("")
+        self.node.send_null_packet("")
+        self.node.send_null_packet("")
+        for fut in futures:
+            rclpy.spin_until_future_complete(self.node, fut)
+            result =  fut.result()
+            responses.append(result)
+
+        for result in responses: 
+            self.to_loc_item(result.packet.data)
+
+
+
 
         #req.packet.data[0] = CMD_TOC_ITEM_V2
         #req.packet.data[1] = 1
@@ -97,28 +140,31 @@ class ParamReader():
         elif self.state == REQ_ITEM and data[0] == CMD_TOC_ITEM_V2:
             #data: cmd, ident, group, name
             #self.node.get_logger().info(str(data))
-            ident = struct.unpack('<H', data[1:3])[0]
-            data_ = bytearray(data[3:])
-            element = ParamTocElement(ident, data_)
-
-            self.node.get_logger().info("New Element: '" + str(element.ident) + "' '" + element.group + "' '" + element.name + "'")
-
-
-            self.params.append(element)
-            self.toc.add_element(element)
-
-            self.node.get_logger().info("Recv: " + str(len(self.params)))
-            if len(self.params) == self.nbr_of_items:
-                self.state = IDLE
-                
-                self.toc_cache.insert(self._crc,self.toc.toc )
-                self.node.get_logger().info("Received all Params, Writing to cache")
-                #for param in self.params:
-                #    self.node.get_logger().info(str(param.ident) + ": "  + param.group + " " + param.name)
+            self.to_loc_item(data)
+            
         else:
             pass
-        
-       
+    def to_loc_item(self, data):
+        ident = struct.unpack('<H', data[1:3])[0]
+        data_ = bytearray(data[3:])
+        element = ParamTocElement(ident, data_)
+
+        self.node.get_logger().info("New Element: '" + str(element.ident) + "' '" + element.group + "' '" + element.name + "'")
+
+
+        self.params.append(element)
+        self.toc.add_element(element)
+
+        self.node.get_logger().info("Recv: " + str(len(self.params)))
+        if len(self.params) == self.nbr_of_items:
+            self.state = IDLE
+            
+            self.toc_cache.insert(self._crc,self.toc.toc )
+            self.node.get_logger().info("Received all Params, Writing to cache")
+            #for param in self.params:
+            #    self.node.get_logger().info(str(param.ident) + ": "  + param.group + " " + param.name)
+
+
     def get_idx(self, idx):
         req = self.node._prepare_send_request()
         req.packet.port = 2 # log
@@ -130,8 +176,9 @@ class ParamReader():
         req.packet.data[2] = (idx >> 8) & 0x0ff
         req.expects_response = True
         req.matching_bytes = 3 # Watchdog shall Guard these messages
-        self.node.send_packet_service.call_async(req)
+        response = self.node.send_packet_service.call_async(req)
         #self.node.send_null_packet("")
         #self.node.send_null_packet("")
         self.node.get_logger().info(str("requesting" + str(idx)))
+        return response
      

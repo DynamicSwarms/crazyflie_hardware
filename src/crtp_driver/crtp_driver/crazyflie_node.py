@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy, QoSDurabilityPolicy
-
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from cflib.utils import uri_helper
 from cflib.crtp.crtpstack import CRTPPacket
@@ -96,8 +96,10 @@ class Crazyflie(Node):
         self.create_subscription(Int16, self.cf_prefix + "/platform_power_down", self.platform_power_down,  10)
         self.create_subscription(Int16, self.cf_prefix + "/reboot_to_fw", self.reboot_to_fw,  10)
 
-        self.create_subscription(Int16, self.cf_prefix + "/get_loc_toc", self.get_loc_toc, 10)
         self.create_subscription(Int16, self.cf_prefix + "/send_nullpacket", self.send_null_packet, 10)
+
+        second_cb_group = MutuallyExclusiveCallbackGroup()
+        self.create_subscription(Int16, self.cf_prefix + "/get_loc_toc", self.get_loc_toc, 10, callback_group=second_cb_group)
 
     def __del__(self):
         self.destroy_node()
@@ -207,7 +209,9 @@ class Crazyflie(Node):
 def main():
     rclpy.init()
     cf = Crazyflie()
-    rclpy.spin(cf)
+    while rclpy.ok():
+        rclpy.spin_once(cf)
+    
     rclpy.shutdown()
 
 if __name__ == '__main__':

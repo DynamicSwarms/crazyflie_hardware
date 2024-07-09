@@ -137,7 +137,7 @@ class CrazyradioNode : public rclcpp::Node
                             libcrtp::CrtpResponseCallback callback; 
                             if (link_it->second.releasePacket(&responsePacket, callback)) {
                                 //RCLCPP_INFO(this->get_logger(), "Calling callback");
-                                sendCrtpUnresponded(&responsePacket, &link_it->second); 
+                                //sendCrtpUnresponded(&responsePacket, &link_it->second); 
                                 callback(&responsePacket); // This callback needs to be used at some point
                             } else {
                                 sendCrtpUnresponded(&responsePacket, &link_it->second); 
@@ -226,6 +226,10 @@ class CrazyradioNode : public rclcpp::Node
                 auto response_callback = [service_handle, header, &callback_called] (libcrtp::CrtpPacket * pkt) 
                 {
                     auto response = crtp_interface::srv::CrtpPacketSend::Response();
+                    response.packet.port = (uint8_t)pkt->port;
+                    response.packet.channel = pkt->channel;
+                    response.packet.data_length = pkt->dataLength;
+                    for (int i = 0; i < pkt->dataLength; i++) response.packet.data[i] = pkt->data[i];
                     service_handle->send_response(*header, response);
                     //std::cerr << "Inside function \n";
 
