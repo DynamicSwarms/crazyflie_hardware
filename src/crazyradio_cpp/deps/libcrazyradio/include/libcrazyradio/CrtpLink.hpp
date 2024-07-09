@@ -35,13 +35,13 @@ class CrtpLink
         */
         void addPacket(CrtpPacket * packet,  CrtpResponseCallback  callback);
 
-        bool getPacket(CrtpPort port, CrtpPacket * packet,  CrtpResponseCallback & callback);
+        bool getPacket(CrtpPort port, CrtpPacket * packet);
 
         /**
         *  Gets a crazyflies response, which should be crossreferenced to an yet unacknowledged request which excpected a response. 
         *  Returns False if nobody listened for a response.
         */
-        bool releasePacket(CrtpPacket * packet);
+        bool releasePacket(CrtpPacket * packet, CrtpResponseCallback & callback);
 
         /**
          * Returns the port with highest priority with a packet to send inside.

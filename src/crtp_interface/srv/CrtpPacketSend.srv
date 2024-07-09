@@ -2,6 +2,8 @@ uint8 channel
 uint8[5] address
 uint8 datarate 
 crtp_interface/CrtpPacket packet
-uint8 response_bytes
+bool expects_response
+uint8 matching_bytes
+bool obeys_ordering
 ---
-bool success
+crtp_interface/CrtpPacket packet

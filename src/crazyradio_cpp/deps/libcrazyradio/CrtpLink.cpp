@@ -58,16 +58,16 @@ void CrtpLink::addPacket(
 
 bool CrtpLink::getPacket(
     CrtpPort port, 
-    CrtpPacket * packet,
-    CrtpResponseCallback &  callback)
+    CrtpPacket * packet)
 {
-    return m_crtpPortQueues[port].getPacket(packet, callback);
+    return m_crtpPortQueues[port].getPacket(packet);
 }
 
 bool CrtpLink::releasePacket(
-    CrtpPacket * packet)
+    CrtpPacket * packet,
+    CrtpResponseCallback &  callback)
 {   
-    return true;
+    return m_crtpPortQueues[packet->port].releasePacket(packet, callback);
 }
 
 CrtpPort CrtpLink::getPriorityPort() const

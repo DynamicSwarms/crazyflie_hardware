@@ -19,12 +19,18 @@ class CrtpPacketQueue
 
         void addPacket(CrtpPacket * packet, CrtpResponseCallback  callback);
 
-        bool getPacket(CrtpPacket * packet, CrtpResponseCallback  & callback);
+        bool getPacket(CrtpPacket * packet);
+
+        bool releasePacket(CrtpPacket * packet, CrtpResponseCallback &  callback);
 
         bool isEmtpy() const;
 
     private: 
-        std::queue<std::pair<CrtpPacket, CrtpResponseCallback>> m_queue;
+        bool packetsMatch(CrtpPacket * packet, CrtpPacket * response);
+
+        std::queue<CrtpPacket> m_out_queue;
+        std::queue<std::pair<CrtpPacket, CrtpResponseCallback>> m_release_queue;
+
 };
 
 }; // namespace libcrtp
