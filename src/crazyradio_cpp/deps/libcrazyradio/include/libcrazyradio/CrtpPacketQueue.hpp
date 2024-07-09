@@ -2,10 +2,12 @@
 
 #include <stdint.h>
 #include <queue>
+#include <functional>
 
 #include "CrtpPacket.hpp"
 
 namespace libcrtp {
+
 
 class CrtpPacketQueue
 {
@@ -15,14 +17,14 @@ class CrtpPacketQueue
 
         virtual ~CrtpPacketQueue();
 
-        void addPacket(CrtpPacket * packet);
+        void addPacket(CrtpPacket * packet, CrtpResponseCallback  callback);
 
-        bool getPacket(CrtpPacket * packet);
+        bool getPacket(CrtpPacket * packet, CrtpResponseCallback  & callback);
 
         bool isEmtpy() const;
 
     private: 
-        std::queue<CrtpPacket> m_queue;
+        std::queue<std::pair<CrtpPacket, CrtpResponseCallback>> m_queue;
 };
 
 }; // namespace libcrtp

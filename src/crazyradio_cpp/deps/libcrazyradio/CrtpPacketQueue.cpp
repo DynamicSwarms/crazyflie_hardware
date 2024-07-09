@@ -16,18 +16,21 @@ CrtpPacketQueue::~CrtpPacketQueue()
 }
 
 void CrtpPacketQueue::addPacket(
-    CrtpPacket * packet
+    CrtpPacket * packet,
+    CrtpResponseCallback  callback
 )
 {
-    m_queue.push(*packet);
+    m_queue.push(std::make_pair(*packet, callback));
 }
 
 bool CrtpPacketQueue::getPacket(
-    CrtpPacket * packet)
+    CrtpPacket * packet,
+    CrtpResponseCallback  & callback)
 {
     if (m_queue.empty()) return false;
-    
-    *packet = m_queue.front();
+    auto pair = m_queue.front();
+    *packet = pair.first;
+    callback = pair.second; 
     m_queue.pop();
     return true;
 }

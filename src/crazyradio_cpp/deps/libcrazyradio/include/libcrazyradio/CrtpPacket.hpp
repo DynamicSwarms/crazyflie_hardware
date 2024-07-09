@@ -3,7 +3,6 @@
 #include <stdint.h>
 
 namespace libcrtp {
-
     enum CrtpPort {
         CONSOLE             = 0,
         PARAMETERS          = 2,
@@ -29,4 +28,6 @@ namespace libcrtp {
         uint8_t matchingBytes;
         bool obeysOrdering;
     };
+
+    using CrtpResponseCallback = std::function<void(CrtpPacket*)>;
 }; // namespace libcrtp

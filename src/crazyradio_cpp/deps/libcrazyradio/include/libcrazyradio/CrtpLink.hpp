@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include <map>
+#include <functional>
 
 #include "libcrazyradio/Crazyradio.hpp"
 #include "libcrazyradio/CrtpPacketQueue.hpp"
@@ -32,9 +33,9 @@ class CrtpLink
         /**
         *  Adds a to be sent out Packet to the link. 
         */
-        void addPacket(CrtpPacket * packet);
+        void addPacket(CrtpPacket * packet,  CrtpResponseCallback  callback);
 
-        bool getPacket(CrtpPort port, CrtpPacket * packet);
+        bool getPacket(CrtpPort port, CrtpPacket * packet,  CrtpResponseCallback & callback);
 
         /**
         *  Gets a crazyflies response, which should be crossreferenced to an yet unacknowledged request which excpected a response. 

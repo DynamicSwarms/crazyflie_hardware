@@ -50,14 +50,18 @@ void CrtpLink::setRadio(
 
 
 void CrtpLink::addPacket(
-    CrtpPacket * packet)
+    CrtpPacket * packet,
+    CrtpResponseCallback  callback)
 {
-    m_crtpPortQueues[packet->port].addPacket(packet);
+    m_crtpPortQueues[packet->port].addPacket(packet, callback);
 }
 
-bool CrtpLink::getPacket(CrtpPort port, CrtpPacket * packet)
+bool CrtpLink::getPacket(
+    CrtpPort port, 
+    CrtpPacket * packet,
+    CrtpResponseCallback &  callback)
 {
-    return m_crtpPortQueues[port].getPacket(packet);
+    return m_crtpPortQueues[port].getPacket(packet, callback);
 }
 
 bool CrtpLink::releasePacket(
