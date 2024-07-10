@@ -3,9 +3,7 @@
 #include <stdint.h>
 
 #include <map>
-#include <functional>
 
-#include "libcrazyradio/Crazyradio.hpp"
 #include "libcrazyradio/CrtpPacketQueue.hpp"
 #include "libcrazyradio/CrtpPacket.hpp"
 
@@ -25,11 +23,6 @@ class CrtpLink
 
         virtual ~CrtpLink(); 
 
-        /** 
-        *   Sets radio to the link's specific channel, address and datarate 
-        */
-        void setRadio(libcrazyradio::Crazyradio * radio);
-    
         /**
         *  Adds a to be sent out Packet to the link. 
         */

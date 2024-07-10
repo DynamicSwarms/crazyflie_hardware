@@ -30,25 +30,6 @@ CrtpLink::~CrtpLink()
 {
 }
 
-void CrtpLink::setRadio(
-    libcrazyradio::Crazyradio * radio)
-{
-    radio->setChannel(m_channel);
-    radio->setAddress(m_address);
-    switch (m_datarate) 
-    {
-        case 2: 
-            radio->setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_2MPS);
-            break;
-        case 1: 
-            radio->setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_1MPS);
-            break;
-        default: 
-            radio->setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_250KPS);
-    }
-}
-
-
 void CrtpLink::addPacket(
     CrtpPacket * packet,
     CrtpResponseCallback  callback)

@@ -58,38 +58,20 @@ class ParamReader():
         req.matching_bytes = 1
 
         self.state = REQ_INFO
-        response = self.node.send_packet_service.call_async(req)
-        self.node.send_null_packet("")
-        self.node.send_null_packet("")
-        self.node.get_logger().info("Sending some more")
-        self.node.send_null_packet("")
-        self.node.send_null_packet("")
+        fut = self.node.send_packet_service.call_async(req)
+        rclpy.spin_until_future_complete(self.node, fut)   
         
-
-        rclpy.spin_until_future_complete(self.node, response)
-        result =  response.result()
-        
-        data = result.packet.data
-        data_length = result.packet.data_length
-        channel = result.packet.channel
-        port = result.packet.port
-
-        if port != 2 or channel != 0 or not data_length: return # not us 
+        data = fut.result().packet.data
         
         [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
         self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
 
         futures = []
         for i in range(self.nbr_of_items):
-                ret = self.get_idx(i) 
-                futures.append(ret)
+            ret = self.get_idx(i) 
+            futures.append(ret)
 
         responses = []
-
-        self.node.send_null_packet("")
-        self.node.send_null_packet("")
-        self.node.send_null_packet("")
-        self.node.send_null_packet("")
         for fut in futures:
             rclpy.spin_until_future_complete(self.node, fut)
             result =  fut.result()

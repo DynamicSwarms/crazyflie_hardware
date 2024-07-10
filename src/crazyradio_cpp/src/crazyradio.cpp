@@ -41,7 +41,7 @@ class CrazyradioNode : public rclcpp::Node
             send_crtp_packet_service = this->create_service<crtp_interface::srv::CrtpPacketSend>("crazyradio/send_crtp_packet", std::bind(&CrazyradioNode::sendCrtpPacketCallback, this, _1, _2,_3), qos.get_rmw_qos_profile(), crtp_send_callback_group);
             send_response_pub = this->create_publisher<crtp_interface::msg::CrtpResponse>("crazyradio/crtp_response", 10);
             
-            antenna_timer = this->create_wall_timer(std::chrono::milliseconds(1000), std::bind(&CrazyradioNode::antennaCallback, this));
+            antenna_timer = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&CrazyradioNode::antennaCallback, this));
             /*
             m_radio.setChannel(100);
             m_radio.setAddress(0xE7E7E7E700);
@@ -109,6 +109,7 @@ class CrazyradioNode : public rclcpp::Node
 
         void antennaCallback()
         {   
+            std::unique_lock<std::mutex> mlock(m_linksMutex);
             libcrtp::CrtpPort highestPriorityPort = libcrtp::CrtpPort::NO_PORT;
             do {
                 // gets highest priority link
@@ -134,20 +135,27 @@ class CrazyradioNode : public rclcpp::Node
                         libcrtp::CrtpPacket  responsePacket; 
                         bool sendSuccess = sendCrtpPacket(&pkt, &responsePacket,&link_it->second);
                         if (sendSuccess) {
+                            //RCLCPP_INFO(this->get_logger(), "sendSuccess") ;
                             libcrtp::CrtpResponseCallback callback; 
                             if (link_it->second.releasePacket(&responsePacket, callback)) {
                                 //RCLCPP_INFO(this->get_logger(), "Calling callback");
                                 //sendCrtpUnresponded(&responsePacket, &link_it->second); 
                                 callback(&responsePacket); // This callback needs to be used at some point
                             } else {
-                                sendCrtpUnresponded(&responsePacket, &link_it->second); 
                                 //RCLCPP_INFO(this->get_logger(), "Received Packet which wasnt to be responded to");
+                                sendCrtpUnresponded(&responsePacket, &link_it->second); 
                             }
                         }
                     }
                 }
             } while (highestPriorityPort != libcrtp::CrtpPort::NO_PORT);
-            //RCLCPP_INFO(this->get_logger(), "Hello from ROS2");
+            if (m_links.size()) {
+            auto it = m_links.begin();
+            std::advance(it, rand() % m_links.size());
+            libcrtp::CrtpPacket packet = libcrtp::nullPacket;
+            it->second.addPacket(&packet, NULL);
+            }
+            //RCLCPP_INFO(this->get_logger(), "This");
         }
 
         void sendCrtpUnresponded(libcrtp::CrtpPacket * packet, libcrtp::CrtpLink * link)
@@ -172,7 +180,7 @@ class CrazyradioNode : public rclcpp::Node
             //RCLCPP_WARN(this->get_logger(),ss.str().c_str());
 
 
-            link->setRadio(&m_radio); // Sets Channel/Address/Datarate of radio to link-specific settings
+            m_radio.setToCrtpLink(link); // Sets Channel/Address/Datarate of radio to link-specific settings
             libcrazyradio::Crazyradio::Ack ack;
             uint8_t data[32];
             data[0] = packet->port << 4 | packet->channel;
@@ -183,7 +191,7 @@ class CrazyradioNode : public rclcpp::Node
             if (!ack.ack) RCLCPP_WARN(this->get_logger(),"Not succesfull");
             else if (!ack.size) RCLCPP_WARN(this->get_logger(),"Empty response #703");
             else {               
-                responsePacket->port = (libcrtp::CrtpPort)((ack.data[0] & 0b11111100) >> 4);
+                responsePacket->port = (libcrtp::CrtpPort)((ack.data[0] >> 4) & 0xF);
                 responsePacket->channel = ack.data[0] & 0b11;
                 for (int i = 0; i < ack.size; i++) responsePacket->data[i] = ack.data[i+1];
                 responsePacket->dataLength = ack.size -1;
@@ -200,6 +208,8 @@ class CrazyradioNode : public rclcpp::Node
             const std::shared_ptr<rmw_request_id_t> header,
             const std::shared_ptr<crtp_interface::srv::CrtpPacketSend::Request> request)
         {
+            std::unique_lock<std::mutex> mlock(m_linksMutex);
+
             // Choose/Insert Link
             uint8_t channel = request->channel;
             uint64_t address = 0;
@@ -217,7 +227,7 @@ class CrazyradioNode : public rclcpp::Node
             for (int i = 0; i < dataLength; i++) packet.data[i] = request->packet.data[i];          
 
             // Start thread which puts it onto the queue and waits for response            
-            std::thread t([this, packet, linkKey,service_handle, header]() mutable {
+            std::thread t([this, packet, linkKey,service_handle, header,  mlock = std::move(mlock)]() mutable {
                 /* ** takes a long time to respond ** */
                 using namespace std::chrono_literals;
 
@@ -244,6 +254,7 @@ class CrazyradioNode : public rclcpp::Node
                     if (link != this->m_links.end()) link->second.addPacket(&packet, NULL);
                     response_callback(&packet);
                 }
+                mlock.unlock();
 
                 while (!callback_called) std::this_thread::sleep_for(10ms);
                 //std::cerr << "Thread going down\n";              
@@ -315,6 +326,9 @@ class CrazyradioNode : public rclcpp::Node
 
         rclcpp::Service<crtp_interface::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_service;
         rclcpp::Publisher<crtp_interface::msg::CrtpResponse>::SharedPtr send_response_pub;
+
+        std::mutex m_radioMutex;
+        std::mutex m_linksMutex;
 };
 
 

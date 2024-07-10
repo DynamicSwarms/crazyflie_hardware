@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include "USBDevice.hpp"
 
+
+#include "libcrazyradio/CrtpPacket.hpp"
+#include "libcrazyradio/CrtpLink.hpp"
+
 namespace libcrazyradio {
 class Crazyradio : public USBDevice
 {
@@ -42,6 +46,15 @@ public:
 
     virtual ~Crazyradio();
 
+    void setToCrtpLink(libcrtp::CrtpLink * link);
+
+    void sendPacket(
+        const uint8_t* data,
+        uint32_t length, 
+        Ack& result
+    );
+private:
+
     void setChannel(uint8_t channel);
 
     void setAddress(uint64_t address);
@@ -59,14 +72,7 @@ public:
     void setAckEnable(bool enable);
 
     void setContCarrier(bool active);
-
-    void sendPacket(
-        const uint8_t* data,
-        uint32_t length, 
-        Ack& result
-    );
-
-    
+       
 private: 
     uint8_t m_channel;
     uint64_t m_address;

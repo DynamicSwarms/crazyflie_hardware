@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <functional>
 
 namespace libcrtp {
     enum CrtpPort {
@@ -28,6 +29,17 @@ namespace libcrtp {
         uint8_t matchingBytes;
         bool obeysOrdering;
     };
+
+    inline const CrtpPacket nullPacket = {
+        .port = CrtpPort::LINK_LAYER,
+        .channel = 3,
+        .data = {},
+        .dataLength = 0,
+        .expectsResponse = false,
+        .matchingBytes = 0,
+        .obeysOrdering = false
+    };
+
 
     using CrtpResponseCallback = std::function<void(CrtpPacket*)>;
 }; // namespace libcrtp

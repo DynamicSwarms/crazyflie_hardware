@@ -63,6 +63,7 @@ class ResponseListener(Node):
         else:
             string = string + "[" +  ''.join('{:02x} '.format(x) for x in data[:data_length])    + "]"
         
+        if port == 15 and channel == 3: return
         self.get_logger().info(string)
         #self.get_logger().info(str(ack))
 

@@ -1,5 +1,6 @@
 #include "libcrazyradio/Crazyradio.hpp"
 
+
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
@@ -40,6 +41,23 @@ Crazyradio::Crazyradio(uint32_t device_id)
 
 Crazyradio::~Crazyradio()
 {
+}
+
+void Crazyradio::setToCrtpLink(libcrtp::CrtpLink * link)
+{
+    setChannel(link->getChannel());
+    setAddress(link->getAddress());
+    switch (link->getDatarate()) 
+    {
+        case 2: 
+            setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_2MPS);
+            break;
+        case 1: 
+            setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_1MPS);
+            break;
+        default: 
+            setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_250KPS);
+    }  
 }
 
 void Crazyradio::setChannel(uint8_t channel)
