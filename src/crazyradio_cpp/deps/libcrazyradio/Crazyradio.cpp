@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
+#include <cstring>
 
 #include <libusb-1.0/libusb.h>
 namespace libcrazyradio {
@@ -59,6 +60,17 @@ void Crazyradio::setToCrtpLink(libcrtp::CrtpLink * link)
             setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_250KPS);
     }  
 }
+
+void Crazyradio::sendCrtpPacket(
+        libcrtp::CrtpPacket * packet,
+        Ack & result)
+{
+    uint8_t data[32];
+    data[0] = packet->port << 4 | packet->channel;
+    memcpy(&data[1], &packet->data, packet->dataLength);
+    sendPacket(data, 1 + packet->dataLength , result);
+}
+
 
 void Crazyradio::setChannel(uint8_t channel)
 {
@@ -209,5 +221,18 @@ void Crazyradio::sendPacket(
     //    logAck(result);
     //}
 }
+
+
+void Crazyradio::ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet)
+{
+    packet->port = (libcrtp::CrtpPort)((ack->data[0] >> 4) & 0xF);
+    packet->channel = ack->data[0] & 0b11;
+    for (int i = 0; i < ack->size; i++) 
+        packet->data[i] = ack->data[i+1];
+    packet->dataLength = ack->size -1;
+}
+
+
+
 
 } // namepsace libcrazyradio

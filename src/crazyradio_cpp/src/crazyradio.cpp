@@ -174,28 +174,15 @@ class CrazyradioNode : public rclcpp::Node
         }
 
         bool sendCrtpPacket(libcrtp::CrtpPacket * packet, libcrtp::CrtpPacket * responsePacket, libcrtp::CrtpLink * link)
-        {
-            std::stringstream ss;
-            ss <<  "Link:" << (int)link->getAddress()  <<"Packet:" << (int)packet->port << (int)packet->channel << " D: " << (int)packet->data[0];// << "\n";
-            //RCLCPP_WARN(this->get_logger(),ss.str().c_str());
-
-
-            m_radio.setToCrtpLink(link); // Sets Channel/Address/Datarate of radio to link-specific settings
+        {  
             libcrazyradio::Crazyradio::Ack ack;
-            uint8_t data[32];
-            data[0] = packet->port << 4 | packet->channel;
-            memcpy(&data[1], &packet->data, packet->dataLength);
-            m_radio.sendPacket(data, 1 + packet->dataLength , ack);
+            m_radio.setToCrtpLink(link); // Sets Channel/Address/Datarate of radio to link-specific settings
+            m_radio.sendCrtpPacket(packet, ack);
 
-            //libcrtp::CrtpPacket responsePacket;
             if (!ack.ack) RCLCPP_WARN(this->get_logger(),"Not succesfull");
             else if (!ack.size) RCLCPP_WARN(this->get_logger(),"Empty response #703");
             else {               
-                responsePacket->port = (libcrtp::CrtpPort)((ack.data[0] >> 4) & 0xF);
-                responsePacket->channel = ack.data[0] & 0b11;
-                for (int i = 0; i < ack.size; i++) responsePacket->data[i] = ack.data[i+1];
-                responsePacket->dataLength = ack.size -1;
-                
+                libcrazyradio::Crazyradio::ackToCrtpPacket(&ack, responsePacket);
                 //RCLCPP_WARN(this->get_logger(),"Succesfull Response");
                 return true;
             }       

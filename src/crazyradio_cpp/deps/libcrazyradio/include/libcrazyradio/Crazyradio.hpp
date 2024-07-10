@@ -48,11 +48,17 @@ public:
 
     void setToCrtpLink(libcrtp::CrtpLink * link);
 
+    void sendCrtpPacket(
+        libcrtp::CrtpPacket * packet,
+        Ack & result);
+
     void sendPacket(
         const uint8_t* data,
         uint32_t length, 
         Ack& result
     );
+
+    static void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
 private:
 
     void setChannel(uint8_t channel);
@@ -80,4 +86,7 @@ private:
     bool m_ackEnable;
 
 };
+
+
+
 } // namespace libcrazyradio
