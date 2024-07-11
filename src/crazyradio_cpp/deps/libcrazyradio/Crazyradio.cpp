@@ -44,6 +44,21 @@ Crazyradio::~Crazyradio()
 {
 }
 
+
+
+void Crazyradio::sendCrtpPacket(
+        libcrtp::CrtpLink * link,
+        libcrtp::CrtpPacket * packet,
+        Ack & result)
+{
+    uint8_t data[32];
+    data[0] = packet->port << 4 | packet->channel;
+    memcpy(&data[1], &packet->data, packet->dataLength);
+
+    setToCrtpLink(link);
+    sendPacket(data, 1 + packet->dataLength , result);
+}
+
 void Crazyradio::setToCrtpLink(libcrtp::CrtpLink * link)
 {
     setChannel(link->getChannel());
@@ -60,17 +75,6 @@ void Crazyradio::setToCrtpLink(libcrtp::CrtpLink * link)
             setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_250KPS);
     }  
 }
-
-void Crazyradio::sendCrtpPacket(
-        libcrtp::CrtpPacket * packet,
-        Ack & result)
-{
-    uint8_t data[32];
-    data[0] = packet->port << 4 | packet->channel;
-    memcpy(&data[1], &packet->data, packet->dataLength);
-    sendPacket(data, 1 + packet->dataLength , result);
-}
-
 
 void Crazyradio::setChannel(uint8_t channel)
 {

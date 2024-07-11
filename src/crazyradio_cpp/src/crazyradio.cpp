@@ -111,6 +111,11 @@ class CrazyradioNode : public rclcpp::Node
         {   
             std::unique_lock<std::mutex> mlock(m_linksMutex);
             libcrtp::CrtpPort highestPriorityPort = libcrtp::CrtpPort::NO_PORT;
+            
+            libcrtp::CrtpPacket  outPacket;
+            libcrtp::CrtpPacket  responsePacket;       
+            libcrtp::CrtpResponseCallback callback;
+
             do {
                 // gets highest priority link
                 highestPriorityPort = libcrtp::CrtpPort::NO_PORT;
@@ -124,36 +129,35 @@ class CrazyradioNode : public rclcpp::Node
                     } 
                 }
 
-                auto link_it = m_links.find(bestKey);
-                if (highestPriorityPort != libcrtp::CrtpPort::NO_PORT && link_it != m_links.end()) {
-                    libcrtp::CrtpPacket  pkt;
-                    
-                    bool success = link_it->second.getPacket(highestPriorityPort, &pkt);
-
-                    if (success) 
+                auto link = m_links.find(bestKey);
+                if (highestPriorityPort != libcrtp::CrtpPort::NO_PORT && link != m_links.end()) 
+                {   
+                    if (link->second.getPacket(highestPriorityPort, &outPacket)) 
                     {  
-                        libcrtp::CrtpPacket  responsePacket; 
-                        bool sendSuccess = sendCrtpPacket(&pkt, &responsePacket,&link_it->second);
-                        if (sendSuccess) {
-                            //RCLCPP_INFO(this->get_logger(), "sendSuccess") ;
-                            libcrtp::CrtpResponseCallback callback; 
-                            if (link_it->second.releasePacket(&responsePacket, callback)) {
-                                //RCLCPP_INFO(this->get_logger(), "Calling callback");
-                                //sendCrtpUnresponded(&responsePacket, &link_it->second); 
-                                callback(&responsePacket); // This callback needs to be used at some point
-                            } else {
-                                //RCLCPP_INFO(this->get_logger(), "Received Packet which wasnt to be responded to");
-                                sendCrtpUnresponded(&responsePacket, &link_it->second); 
+                        if (this->sendCrtpPacket(&link->second, &outPacket, &responsePacket)) 
+                        {
+                            if (link->second.releasePacket(&responsePacket, callback)) 
+                            {
+                                callback(&responsePacket);
+                            } else 
+                            {
+                                sendCrtpUnresponded(&responsePacket, &link->second); 
                             }
                         }
                     }
                 }
             } while (highestPriorityPort != libcrtp::CrtpPort::NO_PORT);
-            if (m_links.size()) {
-            auto it = m_links.begin();
-            std::advance(it, rand() % m_links.size());
-            libcrtp::CrtpPacket packet = libcrtp::nullPacket;
-            it->second.addPacket(&packet, NULL);
+            
+            /*
+            * Send out nullpackets, should we only do this, if there are packets to be responded to?
+            * Keep logging in mind
+            */
+            if (m_links.size())
+            {
+                auto it = m_links.begin();
+                std::advance(it, rand() % m_links.size());
+                libcrtp::CrtpPacket packet = libcrtp::nullPacket;
+                it->second.addPacket(&packet, NULL);
             }
             //RCLCPP_INFO(this->get_logger(), "This");
         }
@@ -173,11 +177,13 @@ class CrazyradioNode : public rclcpp::Node
             send_response_pub->publish(resp);
         }
 
-        bool sendCrtpPacket(libcrtp::CrtpPacket * packet, libcrtp::CrtpPacket * responsePacket, libcrtp::CrtpLink * link)
+        bool sendCrtpPacket(
+            libcrtp::CrtpLink * link,
+            libcrtp::CrtpPacket * packet,
+            libcrtp::CrtpPacket * responsePacket)
         {  
             libcrazyradio::Crazyradio::Ack ack;
-            m_radio.setToCrtpLink(link); // Sets Channel/Address/Datarate of radio to link-specific settings
-            m_radio.sendCrtpPacket(packet, ack);
+            m_radio.sendCrtpPacket(link, packet, ack);
 
             if (!ack.ack) RCLCPP_WARN(this->get_logger(),"Not succesfull");
             else if (!ack.size) RCLCPP_WARN(this->get_logger(),"Empty response #703");

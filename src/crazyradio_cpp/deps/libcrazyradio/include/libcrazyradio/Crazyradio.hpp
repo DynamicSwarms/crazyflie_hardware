@@ -46,12 +46,11 @@ public:
 
     virtual ~Crazyradio();
 
-    void setToCrtpLink(libcrtp::CrtpLink * link);
-
     void sendCrtpPacket(
+        libcrtp::CrtpLink * link,
         libcrtp::CrtpPacket * packet,
         Ack & result);
-
+        
     void sendPacket(
         const uint8_t* data,
         uint32_t length, 
@@ -60,6 +59,7 @@ public:
 
     static void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
 private:
+    void setToCrtpLink(libcrtp::CrtpLink * link);
 
     void setChannel(uint8_t channel);
 
