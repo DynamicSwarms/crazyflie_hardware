@@ -28,8 +28,8 @@ class CrazyradioNode : public rclcpp::Node
     public: 
         CrazyradioNode(const rclcpp::NodeOptions & options) : 
             Node("crazyradio_cpp", options),
-            m_radio(libcrazyradio::Crazyradio(0))
-
+            m_radio(libcrazyradio::Crazyradio(0)),
+            m_links()
         {
             auto qos = rclcpp::QoS(500);
             qos.reliable();
@@ -110,56 +110,41 @@ class CrazyradioNode : public rclcpp::Node
         void antennaCallback()
         {   
             std::unique_lock<std::mutex> mlock(m_linksMutex);
-            libcrtp::CrtpPort highestPriorityPort = libcrtp::CrtpPort::NO_PORT;
+            
             
             libcrtp::CrtpPacket  outPacket;
             libcrtp::CrtpPacket  responsePacket;       
             libcrtp::CrtpResponseCallback callback;
 
-            do {
-                // gets highest priority link
-                highestPriorityPort = libcrtp::CrtpPort::NO_PORT;
-                std::pair<uint8_t, uint64_t> bestKey = {0,0};
-                for (const auto& [key, link] : m_links) 
-                {       
-                    libcrtp::CrtpPort port = link.getPriorityPort();
-                    if (port < highestPriorityPort) {
-                        highestPriorityPort = port;
-                        bestKey = key;
-                    } 
-                }
+            libcrtp::CrtpLink * link;
+            libcrtp::CrtpPort port;
 
-                auto link = m_links.find(bestKey);
-                if (highestPriorityPort != libcrtp::CrtpPort::NO_PORT && link != m_links.end()) 
-                {   
-                    if (link->second.getPacket(highestPriorityPort, &outPacket)) 
-                    {  
-                        if (this->sendCrtpPacket(&link->second, &outPacket, &responsePacket)) 
+            while (m_links.getHighestPriorityLink(&link, &port))
+            {
+                if (link->getPacket(port, &outPacket)) 
+                {  
+                    if (this->sendCrtpPacket(link, &outPacket, &responsePacket)) 
+                    {
+                        if (link->releasePacket(&responsePacket, callback)) 
                         {
-                            if (link->second.releasePacket(&responsePacket, callback)) 
-                            {
-                                callback(&responsePacket);
-                            } else 
-                            {
-                                sendCrtpUnresponded(&responsePacket, &link->second); 
-                            }
+                            callback(&responsePacket);
+                        } else 
+                        {
+                            sendCrtpUnresponded(&responsePacket, link); 
                         }
                     }
                 }
-            } while (highestPriorityPort != libcrtp::CrtpPort::NO_PORT);
+            } 
             
             /*
             * Send out nullpackets, should we only do this, if there are packets to be responded to?
             * Keep logging in mind
             */
-            if (m_links.size())
+            if (m_links.getRandomLink(&link))
             {
-                auto it = m_links.begin();
-                std::advance(it, rand() % m_links.size());
                 libcrtp::CrtpPacket packet = libcrtp::nullPacket;
-                it->second.addPacket(&packet, NULL);
+                link->addPacket(&packet, NULL);
             }
-            //RCLCPP_INFO(this->get_logger(), "This");
         }
 
         void sendCrtpUnresponded(libcrtp::CrtpPacket * packet, libcrtp::CrtpLink * link)
@@ -209,7 +194,10 @@ class CrazyradioNode : public rclcpp::Node
             for (int i = 4; i >= 0; i--) address |= (uint64_t)request->address[i] << (8* (i+1));
             uint8_t datarate = request->datarate;
             std::pair<uint8_t, uint64_t> linkKey = {channel, address};
-            m_links.insert({linkKey, libcrtp::CrtpLink(channel, address, datarate)}); // If already in m_links this wont duplicate
+            
+            libcrtp::CrtpLink link(channel, address, datarate);
+            m_links.addLink(&link);
+            
 
             // Create Packet and put into Link
             libcrtp::CrtpPort port = (libcrtp::CrtpPort)request->packet.port;
@@ -239,14 +227,20 @@ class CrazyradioNode : public rclcpp::Node
                     // RCLCPP_WARN(this->get_logger(),"Nested Callback Response");
                     callback_called = true;
                 };
-                auto link = this->m_links.find(linkKey); // A sad cpp construct
-                
-                if (packet.expectsResponse) {
-                    if (link != this->m_links.end()) link->second.addPacket(&packet, response_callback);
-                } else {
-                    if (link != this->m_links.end()) link->second.addPacket(&packet, NULL);
-                    response_callback(&packet);
+
+
+                libcrtp::CrtpLink * link;
+                if (this->m_links.getLink(&link, linkKey.first, linkKey.second)) {
+                    if (packet.expectsResponse) 
+                    {
+                        link->addPacket(&packet, response_callback);
+                    } else  
+                    {
+                        link->addPacket(&packet, NULL);
+                        response_callback(&packet); // So we dont wait infinetely
+                    }
                 }
+                
                 mlock.unlock();
 
                 while (!callback_called) std::this_thread::sleep_for(10ms);
@@ -311,7 +305,8 @@ class CrazyradioNode : public rclcpp::Node
         }
     private:    
         libcrazyradio::Crazyradio m_radio;
-        std::map<std::pair<uint8_t, uint64_t>, libcrtp::CrtpLink> m_links;
+        libcrtp::CrtpLinkContainer m_links;
+        //std::map<std::pair<uint8_t, uint64_t>, libcrtp::CrtpLink> m_links;
 
         rclcpp::CallbackGroup::SharedPtr crtp_send_callback_group;
 

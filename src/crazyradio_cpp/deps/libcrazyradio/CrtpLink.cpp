@@ -1,5 +1,5 @@
 #include "libcrazyradio/CrtpLink.hpp"
-
+#include <iostream>
 
 
 namespace libcrtp {
@@ -74,5 +74,71 @@ uint8_t CrtpLink::getDatarate() const
 {
     return m_datarate;
 }
+
+
+
+CrtpLinkContainer::CrtpLinkContainer() 
+    : m_links()
+{
+}
+
+CrtpLinkContainer::~CrtpLinkContainer()
+{
+    /* Maybe have to close links properly */
+}
+
+void CrtpLinkContainer::addLink(CrtpLink * link)
+{
+    std::pair<uint8_t, uint64_t> linkKey = {link->getChannel(), link->getAddress()};
+    m_links.insert({linkKey, *link}); // If already in m_links this wont duplicate
+}
+
+bool CrtpLinkContainer::getLink(CrtpLink ** link, uint8_t channel, uint64_t address)
+{
+    std::pair<uint8_t, uint64_t> linkKey = {channel, address};
+    auto link_ = m_links.find(linkKey); // A sad cpp construct
+    if (link_ != m_links.end()) {
+        *link = &link_->second;
+        return true;
+    }
+    return false;
+}
+
+bool CrtpLinkContainer::getHighestPriorityLink(CrtpLink ** link, CrtpPort * port)
+{
+    libcrtp::CrtpPort highestPriorityPort = libcrtp::CrtpPort::NO_PORT;
+    std::pair<uint8_t, uint64_t> bestKey = {0,0};
+    for (const auto& [key, link_] : m_links) 
+    {       
+        libcrtp::CrtpPort port = link_.getPriorityPort();
+        if (port < highestPriorityPort) {
+            highestPriorityPort = port;
+            bestKey = key;
+        } 
+    }
+    auto link_ = m_links.find(bestKey);
+    if (highestPriorityPort != libcrtp::CrtpPort::NO_PORT && link_ != m_links.end()) 
+    {   
+        *link = &link_->second;
+        *port = highestPriorityPort;
+        return true;
+    }
+    return false;
+}
+
+bool CrtpLinkContainer::getRandomLink(CrtpLink ** link)
+{
+    if (m_links.size())
+    {
+        auto it = m_links.begin();
+        std::advance(it, rand() % m_links.size());
+        *link = &it->second;
+        return true;
+    }
+    return false;
+}
+
+
+
 
 }; // namespace libcrtp
