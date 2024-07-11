@@ -1,5 +1,5 @@
 #include "libcrazyradio/CrtpLink.hpp"
-
+#include <iostream>
 namespace libcrtp {
 
 CrtpLink::CrtpLink(
@@ -18,10 +18,11 @@ CrtpLink::CrtpLink(
         {CLIENT_SIDE_DEBUG, CrtpPacketQueue()},
         {LINK_LAYER,        CrtpPacketQueue() }
         })
+    , m_channel(channel)
+    , m_address(address)
+    , m_datarate(datarate)
+    , m_isBroadcast(((address >> 4 * 8) & 0xFF) == 0xFF) // Broadcasting Packet if 0xFF   
 {
-    m_channel = channel;
-    m_address = address;
-    m_datarate = datarate;
 }
 
 CrtpLink::~CrtpLink()
@@ -71,6 +72,11 @@ uint64_t CrtpLink::getAddress() const
 uint8_t CrtpLink::getDatarate() const
 {
     return m_datarate;
+}
+
+bool CrtpLink::isBroadcast() const
+{
+    return m_isBroadcast;
 }
 
 

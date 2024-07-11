@@ -62,6 +62,7 @@ class Crazyflie(Node):
         self.channel = self.get_parameter('channel').get_parameter_value().integer_value
         self.datarate = self.get_parameter('datarate').get_parameter_value().integer_value
         self.address = (0xE7, 0xE7,0xE7,0xE7, self.id)
+        if self.id == 0xE7: self.address = (0xFF, 0xE7,0xE7,0xE7, 0xE7) # TODO very hacky way to test broadcasting
         self.cf_prefix = 'cf' + str(self.id)
 
 

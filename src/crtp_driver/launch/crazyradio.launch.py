@@ -37,10 +37,21 @@ def generate_launch_description():
         ]
     )
 
+    cf_broad = Node(
+        package="crtp_driver",
+        executable="crazyflie",
+        parameters=[
+            {"id": 0xE7},
+            {"channel": 100},
+            {"datarate": 2}
+        ]
+    )
+
     return LaunchDescription([
         #crazyradio,
         crazyradio_cpp,
         radiolistener,
-        cf
+        cf,
+        cf_broad
         ])
 

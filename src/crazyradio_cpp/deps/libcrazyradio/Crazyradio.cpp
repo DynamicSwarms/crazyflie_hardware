@@ -74,6 +74,7 @@ void Crazyradio::setToCrtpLink(libcrtp::CrtpLink * link)
         default: 
             setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_250KPS);
     }  
+    setAckEnable(! link->isBroadcast()); 
 }
 
 void Crazyradio::setChannel(uint8_t channel)
@@ -202,28 +203,31 @@ void Crazyradio::sendPacket(
         throw std::runtime_error(sstr.str());
     }
 
-    // Read result
-    status = libusb_bulk_transfer(
-        m_handle,
-        /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),
-        (unsigned char*)&result,
-        sizeof(result) - 1,
-        &transferred,
-        /*timeout*/ 100);
-    
-    if (status == LIBUSB_ERROR_TIMEOUT) std::cerr << "timeout in read\n";
-    
-    if (status != LIBUSB_SUCCESS) 
+    if (m_ackEnable) 
     {
-        // TODO: On Node restart throwing this error will block 
-       // throw std::runtime_error(libusb_error_name(status));
-    } 
+        // Read result
+        status = libusb_bulk_transfer(
+            m_handle,
+            /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),
+            (unsigned char*)&result,
+            sizeof(result) - 1,
+            &transferred,
+            /*timeout*/ 100);
+        
+        if (status == LIBUSB_ERROR_TIMEOUT) std::cerr << "timeout in read\n";
+        
+        if (status != LIBUSB_SUCCESS) 
+        {
+            // TODO: On Node restart throwing this error will block 
+            // throw std::runtime_error(libusb_error_name(status));
+        } 
 
-    result.size = transferred - 1;
+        result.size = transferred - 1;
 
-    //if (m_enableLogging) {
-    //    logAck(result);
-    //}
+        //if (m_enableLogging) {
+        //    logAck(result);
+        //}
+    }
 }
 
 

@@ -70,12 +70,15 @@ class CrazyradioNode : public rclcpp::Node
                 {  
                     if (this->sendCrtpPacket(link, &outPacket, &responsePacket)) 
                     {
-                        if (link->releasePacket(&responsePacket, callback)) 
+                        if (!link->isBroadcast())
                         {
-                            callback(&responsePacket);
-                        } else 
-                        {
-                            sendCrtpUnresponded(&responsePacket, link); 
+                            if (link->releasePacket(&responsePacket, callback)) 
+                            {
+                                callback(&responsePacket);
+                            } else 
+                            {
+                                sendCrtpUnresponded(&responsePacket, link); 
+                            }
                         }
                     }
                 }
@@ -85,7 +88,7 @@ class CrazyradioNode : public rclcpp::Node
             * Send out nullpackets, should we only do this, if there are packets to be responded to?
             * Keep logging in mind
             */
-            if (m_links.getRandomLink(&link))
+            if (m_links.getRandomLink(&link) && !link->isBroadcast())
             {
                 libcrtp::CrtpPacket packet = libcrtp::nullPacket;
                 link->addPacket(&packet, NULL);
@@ -116,6 +119,11 @@ class CrazyradioNode : public rclcpp::Node
             libcrazyradio::Crazyradio::Ack ack;
 
             m_radio.sendCrtpPacket(link, packet, ack);
+            if (link->isBroadcast()) 
+            {
+                return true;
+            }
+
             if (!ack.ack)       RCLCPP_WARN(this->get_logger(),"Crazyflie with id 0x%X not reachable!", (uint8_t)(link->getAddress() & 0xFF) );
             else if (!ack.size) RCLCPP_WARN(this->get_logger(),"Empty response #703");
             else {               
@@ -135,7 +143,7 @@ class CrazyradioNode : public rclcpp::Node
 
             // Insert Link
             uint64_t address = 0;
-            for (int i = 4; i >= 0; i--) address |= (uint64_t)request->address[i] << (8* (i+1));
+            for (int i = 0; i < 5; i++) address |= (uint64_t)request->address[i] << (8 * (4 - i));
             m_links.addLink(request->channel, address, request->datarate);
             
             // Create Packet 

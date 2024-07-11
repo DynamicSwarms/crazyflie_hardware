@@ -46,11 +46,13 @@ class CrtpLink
         uint8_t getChannel() const;
         uint64_t getAddress() const;
         uint8_t getDatarate() const;
+        bool isBroadcast() const;
 
     private: 
         uint8_t m_channel;
         uint64_t m_address;
         uint8_t m_datarate; 
+        bool m_isBroadcast;
 
         std::map<CrtpPort, CrtpPacketQueue> m_crtpPortQueues;
 };
