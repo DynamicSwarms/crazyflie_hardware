@@ -64,7 +64,7 @@ class CrtpLinkContainer
         /**
          * Adds Link to Container, if already present will not overwrite
          */
-        void addLink(CrtpLink * link);
+        void addLink(uint8_t channel, uint64_t address, uint8_t datarate);
 
         bool getLink(CrtpLink ** link, uint8_t channel, uint64_t address);
 

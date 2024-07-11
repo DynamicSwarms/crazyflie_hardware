@@ -1,6 +1,4 @@
 #include "libcrazyradio/CrtpLink.hpp"
-#include <iostream>
-
 
 namespace libcrtp {
 
@@ -87,10 +85,11 @@ CrtpLinkContainer::~CrtpLinkContainer()
     /* Maybe have to close links properly */
 }
 
-void CrtpLinkContainer::addLink(CrtpLink * link)
+void CrtpLinkContainer::addLink(uint8_t channel, uint64_t address, uint8_t datarate)
 {
-    std::pair<uint8_t, uint64_t> linkKey = {link->getChannel(), link->getAddress()};
-    m_links.insert({linkKey, *link}); // If already in m_links this wont duplicate
+    CrtpLink link(channel, address, datarate);
+    std::pair<uint8_t, uint64_t> linkKey = {channel,address};
+    m_links.insert({linkKey, link}); // If already in m_links this wont duplicate
 }
 
 bool CrtpLinkContainer::getLink(CrtpLink ** link, uint8_t channel, uint64_t address)
