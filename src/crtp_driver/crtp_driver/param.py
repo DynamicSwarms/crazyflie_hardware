@@ -58,16 +58,6 @@ class Toc:
                     return self.toc[group][name]
         return None
 
-
-
-
-
-
-
-
-
-
-
 class ParamTocElement:
     """An element in the Log TOC."""
 

@@ -26,4 +26,6 @@ class CrtpPacker():
         pk.port = self.port
         pk.channel = channel
         self._fill_packet_data(pk, data)
+        pk.data_length = len(data)
+        
         return pk  

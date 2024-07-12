@@ -177,7 +177,7 @@ class CrazyradioNode : public rclcpp::Node
 
 
                 libcrtp::CrtpLink * link;
-                if (this->m_links.getLink(&link, channel, address)) {
+                if (this->m_links.getLink(&link, channel, address)) { // release if not 
                     if (packet.expectsResponse) 
                     {
                         link->addPacket(&packet, response_callback);

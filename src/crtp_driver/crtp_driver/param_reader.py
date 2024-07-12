@@ -6,6 +6,7 @@ import rclpy
 
 from .toccache import TocCache
 from .param import ParamTocElement, Toc
+from crtp_driver.crtp_packer import CrtpPacker
 IDLE = 0
 REQ_INFO = 1
 REQ_ITEM = 2
@@ -15,9 +16,16 @@ CMD_TOC_INFO_V2 = 3
 import os
 
 
-class ParamReader():
+class ParamReader(CrtpPacker):
+    PORT_PARAMETER = 0x02
+
+    TOC_CHANNEL = 0
+    READ_CHANNEL = 1
+    WRITE_CHANNEL = 2
+    MISC_CHANNEL = 3
 
     def __init__(self, node):
+        super().__init__(self.PORT_PARAMETER)
         node.create_subscription(CrtpResponse, "crazyradio/crtp_response",self.handle_response,  500)
         self.node = node
         self.count = 0
@@ -53,7 +61,6 @@ class ParamReader():
         req.packet.channel = 0 # access
         req.packet.data[0] = CMD_TOC_INFO_V2 # v2#0x01 # assuming this is message id then this is "get next toc element"
         req.packet.data_length = 2
-
         req.expects_response = True
         req.matching_bytes = 1
 
@@ -80,14 +87,51 @@ class ParamReader():
         for result in responses: 
             self.to_loc_item(result.packet.data)
 
+    def get_loc_or_load(self):
+        req = self.node._prepare_send_request()
+        req.packet.port = 2 # log
+        req.packet.channel = 0 # access
+        req.packet.data[0] = CMD_TOC_INFO_V2 # v2#0x01 # assuming this is message id then this is "get next toc element"
+        req.packet.data_length = 1 #one or two??
+        req.expects_response = True
+        req.matching_bytes = 1
+
+        fut = self.node.send_packet_service.call_async(req)
+        rclpy.spin_until_future_complete(self.node, fut)   
+        data = fut.result().packet.data
+        
+
+        [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
+        cache_data = self.toc_cache.fetch(self._crc)
+        if (cache_data): 
+            self.node.get_logger().info(str("Loaded toc from cache"))
+            self.toc.toc = cache_data
+            for group in cache_data:
+                 for name in cache_data[group]:
+                    self.node.declare_parameter(str(group) + "." + str(name), rclpy.Parameter.Type.DOUBLE)
+                    
+        else:
+            self.get_loc_toc()
+    
+    def set_parameters(self, par_dict):
+        #
 
 
+        pass
+    def set_parameter(self, group, name, value):
+        toc_element = self.toc.get_element(group, name) ## Error checking!!
+        id = toc_element.ident
 
-        #req.packet.data[0] = CMD_TOC_ITEM_V2
-        #req.packet.data[1] = 1
-        #self.send_packet_service.call_async(req)
-#
-        #self.param_reader.set_count(msg.data)
+        req = self.node._prepare_send_request()
+        data = struct.pack('<H', id)
+        if toc_element.pytype == '<f' or toc_element.pytype == '<d':
+            value_nr = float(value)
+        else:
+            value_nr = int(value)
+        data += struct.pack(toc_element.pytype, value_nr)
+        req.packet = self._prepare_packet(self.WRITE_CHANNEL, data)
+        
+        self.node.send_packet_service.call_async(req)
     
     def handle_response(self, response):
         data = response.packet.data

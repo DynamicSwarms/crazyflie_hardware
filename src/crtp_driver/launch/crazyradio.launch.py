@@ -27,24 +27,29 @@ def generate_launch_description():
         executable="radiolistener"
     )
 
+    id = 0
     cf = Node(
         package="crtp_driver",
         executable="crazyflie",
         parameters=[
-            {"id": 0x00},
+            {"id": id},
             {"channel": 100},
             {"datarate": 2}
-        ]
+        ],
+        name='cf_' + str(id)
     )
 
+    id = 0xE7
     cf_broad = Node(
         package="crtp_driver",
         executable="crazyflie",
         parameters=[
-            {"id": 0xE7},
+            {"id": id},
             {"channel": 100},
             {"datarate": 2}
-        ]
+        ],
+        name="cf_" + str(id)
+
     )
 
     return LaunchDescription([

@@ -45,16 +45,27 @@ from crtp_driver.basic_commander import BasicCommander
 from crtp_driver.generic_commander import GenericCommander
 from crtp_driver.hardware_commander import HardwareCommander
 from crtp_driver.param_reader import ParamReader
+from crtp_driver.localization import Localization
 
 from crazyflie_interface.msg import SetGroupMask, Takeoff, Land, Stop, GoTo, StartTrajectory, UploadTrajectory # HL_Commander
 from crazyflie_interface.msg import NotifySetpointsStop, VelocityWorld, Hover, FullState, Position # (Generic)Commander
+
+
+import math
+
+from geometry_msgs.msg import Twist
+
+
+from tf2_ros import TransformException
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
 
 class Crazyflie(Node):
     COMMAND_TAKEOFF = 7
     COMMAND_LAND = 8
     SETPOINT_HL = 0x08
     def __init__(self):
-        super().__init__("cf_no_id_set")
+        super().__init__("cf")
         self.declare_parameter('id', 0x0)
         self.declare_parameter('channel', 100)
         self.declare_parameter('datarate', 2)
@@ -72,6 +83,7 @@ class Crazyflie(Node):
         self.hardware_commander = HardwareCommander()
 
         self.param_reader = ParamReader(self)
+        self.localization = Localization()
 
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.RELIABLE,
@@ -102,16 +114,56 @@ class Crazyflie(Node):
         second_cb_group = MutuallyExclusiveCallbackGroup()
         self.create_subscription(Int16, self.cf_prefix + "/get_loc_toc", self.get_loc_toc, 10, callback_group=second_cb_group)
 
+
+        self.create_subscription(Int16, self.cf_prefix + "/initialize", self.initialize, 10,callback_group=second_cb_group)
+        self.create_subscription(Int16, self.cf_prefix + "/set_parameter", self.initialize, 10,callback_group=second_cb_group)
+        
+
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        self.timer = self.create_timer(0.1, self.on_timer)
     def __del__(self):
         self.destroy_node()
     
+    def on_timer(self):
+        if self.id == 0xE7: return
+        try:
+            t = self.tf_buffer.lookup_transform(
+                "cf",
+                "world",
+                rclpy.time.Time())
+        except TransformException as ex:
+            self.get_logger().info("Tracker no Frame")
+            return
+
+        pos =  [t.transform.translation.x, t.transform.translation.y, t.transform.tranlation.z ]
+        req = self._prepare_send_request()
+        req.packet = self.localization.send_extpos(pos)
+        self.send_packet_service.call_async(req)
+
+        
     def _prepare_send_request(self):
         req = CrtpPacketSend.Request()
         req.channel = self.channel
         req.address = self.address
         req.datarate = self.datarate
         return req
-    
+    def initialize(self, msg):
+        # Read Loc CRC, Load param toc, set param 
+        for i in range(10):
+            self.send_null_packet("-") # TODO remove... but its good to check if all is fine by sending some packets
+        self.param_reader.get_loc_or_load()
+        self.param_reader.set_parameter("ring", "effect", msg.data)
+        self.param_reader.set_parameter("commander", "enHighLevel", 1)
+        self.param_reader.set_parameter("stabilizer", "estimator", 2) #kalman
+        self.param_reader.set_parameter("stabilizer", "controller",1) #pid
+        self.param_reader.set_parameter("locSrv", "extPosStdDev", 1e-3)
+        self.param_reader.set_parameter("locSrv", "extQuatStdDev", 0.5e-1)
+        self.param_reader.set_parameter("kalman", "resetEstimation", 1)
+        pass
+
+
     def send_null_packet(self, msg):
         req = self._prepare_send_request()
         req.packet.port = 15
