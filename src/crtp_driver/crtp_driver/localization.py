@@ -102,7 +102,7 @@ class Localization(CrtpPacker):
         forwarded to the Crazyflie's position estimator.
         """
         data = struct.pack('<fff', pos[0], pos[1], pos[2])
-        return self._prepare_packet(self.POSITION_CH, data)
+        return self._prepare_packet(channel=self.POSITION_CH, data=data)
 
     def send_extpose(self, pos, quat):
         """

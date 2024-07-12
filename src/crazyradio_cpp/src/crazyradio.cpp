@@ -123,7 +123,6 @@ class CrazyradioNode : public rclcpp::Node
             {
                 return true;
             }
-
             if (!ack.ack)       RCLCPP_WARN(this->get_logger(),"Crazyflie with id 0x%X not reachable!", (uint8_t)(link->getAddress() & 0xFF) );
             else if (!ack.size) RCLCPP_WARN(this->get_logger(),"Empty response #703");
             else {               

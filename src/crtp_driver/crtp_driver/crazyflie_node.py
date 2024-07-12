@@ -122,7 +122,7 @@ class Crazyflie(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.timer = self.create_timer(0.1, self.on_timer)
+        self.timer = self.create_timer(0.1, self.on_timer, callback_group=second_cb_group)
     def __del__(self):
         self.destroy_node()
     
@@ -136,11 +136,15 @@ class Crazyflie(Node):
         except TransformException as ex:
             self.get_logger().info("Tracker no Frame")
             return
+        pos =  [t.transform.translation.x   * 1
+               , t.transform.translation.y  * 1
+               , t.transform.translation.z  * 1]
 
-        pos =  [t.transform.translation.x, t.transform.translation.y, t.transform.tranlation.z ]
         req = self._prepare_send_request()
         req.packet = self.localization.send_extpos(pos)
         self.send_packet_service.call_async(req)
+
+
 
         
     def _prepare_send_request(self):
@@ -157,9 +161,31 @@ class Crazyflie(Node):
         self.param_reader.set_parameter("ring", "effect", msg.data)
         self.param_reader.set_parameter("commander", "enHighLevel", 1)
         self.param_reader.set_parameter("stabilizer", "estimator", 2) #kalman
-        self.param_reader.set_parameter("stabilizer", "controller",1) #pid
+        self.param_reader.set_parameter("stabilizer", "controller",2) #1: pid 2: mellinger
         self.param_reader.set_parameter("locSrv", "extPosStdDev", 1e-3)
         self.param_reader.set_parameter("locSrv", "extQuatStdDev", 0.5e-1)
+        
+        
+        self.param_reader.set_parameter("ctrlMel", "kp_xy", 0.4)
+        self.param_reader.set_parameter("ctrlMel", "kd_xy", 0.2)
+        self.param_reader.set_parameter("ctrlMel", "ki_xy", 0.05)
+        self.param_reader.set_parameter("ctrlMel", "i_range_xy", 2.0)
+        self.param_reader.set_parameter("ctrlMel", "kR_xy", 70000)
+        self.param_reader.set_parameter("ctrlMel", "kw_xy", 20000)
+        self.param_reader.set_parameter("ctrlMel", "kR_z", 60000)
+        self.param_reader.set_parameter("ctrlMel", "kw_z", 12000)
+        self.param_reader.set_parameter("ctrlMel", "ki_m_z", 500)
+        self.param_reader.set_parameter("ctrlMel", "i_range_m_z", 1500)
+        self.param_reader.set_parameter("ctrlMel", "kd_omega_rp", 200)
+        self.param_reader.set_parameter("ctrlMel", "kp_z", 1.25)
+        self.param_reader.set_parameter("ctrlMel", "kd_z", 0.4)
+        self.param_reader.set_parameter("ctrlMel", "ki_z", 0.05)
+        self.param_reader.set_parameter("ctrlMel", "i_range_z", 0.4)
+        self.param_reader.set_parameter("ctrlMel", "mass", 0.037)
+        self.param_reader.set_parameter("ctrlMel", "massThrust", 132000)
+        
+        
+        
         self.param_reader.set_parameter("kalman", "resetEstimation", 1)
         pass
 
@@ -176,8 +202,11 @@ class Crazyflie(Node):
     def takeoff(self, msg):
         req = self._prepare_send_request()
         duration = msg.duration.sec + msg.duration.nanosec * 1e-9
-        req.packet = self.hl_commander.takeoff(msg.height, duration, msg.group_mask, msg.yaw)
+        req.packet = self.hl_commander.takeoff(msg.height, duration, msg.group_mask, msg.yaw) 
+        self.get_logger().info(str(req.packet))
+
         self.send_packet_service.call_async(req)
+
     
     def land(self, msg):
         req = self._prepare_send_request()
@@ -188,7 +217,7 @@ class Crazyflie(Node):
     def go_to(self, msg):
         req = self._prepare_send_request()
         duration = msg.duration.sec + msg.duration.nanosec * 1e-9
-        req.packet = self.hl_commander.go_to(msg.Point.x, msg.Point.y, msg.Point.z, msg.yaw, duration, msg.relative, msg.group_mask)
+        req.packet = self.hl_commander.go_to(msg.goal.x, msg.goal.y, msg.goal.z, msg.yaw, duration, msg.relative, msg.group_mask)
         self.send_packet_service.call_async(req)
 
     def set_group_mask(self, msg):
