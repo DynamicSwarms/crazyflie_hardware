@@ -36,7 +36,7 @@ def generate_launch_description():
             {"channel": 100},
             {"datarate": 2}
         ],
-        name='cf_' + str(id)
+        name='cf' + str(id)
     )
 
     id = 0xE7
@@ -48,8 +48,7 @@ def generate_launch_description():
             {"channel": 100},
             {"datarate": 2}
         ],
-        name="cf_" + str(id)
-
+        name="cf" + str(id)
     )
 
     return LaunchDescription([

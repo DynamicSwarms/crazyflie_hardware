@@ -7,6 +7,10 @@ import rclpy
 from .toccache import TocCache
 from .param import ParamTocElement, Toc
 from crtp_driver.crtp_packer import CrtpPacker
+
+from std_msgs.msg import Int16
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+
 IDLE = 0
 REQ_INFO = 1
 REQ_ITEM = 2
@@ -15,91 +19,29 @@ CMD_TOC_INFO_V2 = 3
 
 import os
 
-
-class ParamReader(CrtpPacker):
-    PORT_PARAMETER = 0x02
-
-    TOC_CHANNEL = 0
-    READ_CHANNEL = 1
-    WRITE_CHANNEL = 2
-    MISC_CHANNEL = 3
-
-    def __init__(self, node):
-        super().__init__(self.PORT_PARAMETER)
-        node.create_subscription(CrtpResponse, "crazyradio/crtp_response",self.handle_response,  500)
+class ParameterCommander:
+    def __init__(self, node, send_crtp_async=None, send_crtp_sync=None):
+        self.send_crtp_sync = send_crtp_sync
+        self.send_crtp_async = send_crtp_async
         self.node = node
-        self.count = 0
 
-        self.state = IDLE
-        
         self.toc = Toc()
 
         p = os.environ.get("HOME")
         path = os.path.join(p, ".crazyflie", "param")
         self.toc_cache = TocCache(rw_cache=path)
- 
-    def get_loc_toc(self):
-        #self.node.get_logger().info(str(os.listdir(os.environ.get("$HOME")))  +" "+ str(os.getcwd()))
-        #self.node.get_logger().info(str(os.environ.get("HOME")))
-        #return
-        if self.state == REQ_ITEM:
-            self.node.get_logger().info(str(len(self.params)))
-            self.node.get_logger().info(str(self.params))
-            self.state = IDLE
-            return
-        self.params = []
-        req = self.node._prepare_send_request()
 
-#        req.packet.port = 2 # log
-#        req.packet.channel = 0 # access
-#        req.packet.data[0] = 0x00 # reset toc pointer
-#        req.data_length = 1
-#        self.send_packet_service.call_async(req) # send the toc pointer reset
-       
+        self.packer = ParameterCommanderPacker()
 
-        req.packet.port = 2 # log
-        req.packet.channel = 0 # access
-        req.packet.data[0] = CMD_TOC_INFO_V2 # v2#0x01 # assuming this is message id then this is "get next toc element"
-        req.packet.data_length = 2
-        req.expects_response = True
-        req.matching_bytes = 1
+        callback_group = MutuallyExclusiveCallbackGroup()
+        node.create_subscription(Int16, "~/get_loc_toc", self.get_loc_toc, 10, callback_group=callback_group)
 
-        self.state = REQ_INFO
-        fut = self.node.send_packet_service.call_async(req)
-        rclpy.spin_until_future_complete(self.node, fut)   
-        
-        data = fut.result().packet.data
-        
-        [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
-        self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
 
-        futures = []
-        for i in range(self.nbr_of_items):
-            ret = self.get_idx(i) 
-            futures.append(ret)
-
-        responses = []
-        for fut in futures:
-            rclpy.spin_until_future_complete(self.node, fut)
-            result =  fut.result()
-            responses.append(result)
-
-        for result in responses: 
-            self.to_loc_item(result.packet.data)
 
     def get_loc_or_load(self):
-        req = self.node._prepare_send_request()
-        req.packet.port = 2 # log
-        req.packet.channel = 0 # access
-        req.packet.data[0] = CMD_TOC_INFO_V2 # v2#0x01 # assuming this is message id then this is "get next toc element"
-        req.packet.data_length = 1 #one or two??
-        req.expects_response = True
-        req.matching_bytes = 1
-
-        fut = self.node.send_packet_service.call_async(req)
-        rclpy.spin_until_future_complete(self.node, fut)   
-        data = fut.result().packet.data
-        
+        packet, expects_response, matching_bytes = self.packer.get_loc_info()        
+        resp_packet = self.send_crtp_sync(packet, expects_response, matching_bytes)
+        data = resp_packet.data
 
         [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
         cache_data = self.toc_cache.fetch(self._crc)
@@ -113,63 +55,54 @@ class ParamReader(CrtpPacker):
         else:
             self.get_loc_toc()
     
+
+
+
+    def get_loc_toc(self, msg):
+        self.params = []
+
+        packet, expects_response, matching_bytes = self.packer.get_loc_info()
+        
+        resp_packet = self.send_crtp_packet_sync(packet, expects_response, matching_bytes)
+        data = resp_packet.data
+
+        
+        [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
+        self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
+
+        futures = []
+        for i in range(self.nbr_of_items):
+            ret = self.get_toc_item(i) 
+            futures.append(ret)
+
+        responses = []
+        for fut in futures:
+            rclpy.spin_until_future_complete(self.node, fut)
+            result =  fut.result()
+            responses.append(result)
+
+        for result in responses: 
+            self.to_loc_item(result.packet.data)
+
+    def get_toc_item(self, index):
+        packet, expects_response, response_bytes = self.packer.get_toc_item(index)
+        self.node.get_logger().info(str("Requesting" + str(index)))
+        return self.send_crtp_async(packet, expects_response,response_bytes)
     def set_parameters(self, par_dict):
         #
-
-
         pass
+
     def set_parameter(self, group, name, value):
         toc_element = self.toc.get_element(group, name) ## Error checking!!
         id = toc_element.ident
-
-        req = self.node._prepare_send_request()
-        data = struct.pack('<H', id)
         if toc_element.pytype == '<f' or toc_element.pytype == '<d':
             value_nr = float(value)
         else:
             value_nr = int(value)
-        data += struct.pack(toc_element.pytype, value_nr)
-        req.packet = self._prepare_packet(self.WRITE_CHANNEL, data)
         
-        self.node.send_packet_service.call_async(req)
-    
-    def handle_response(self, response):
-        data = response.packet.data
-        data_length = response.packet.data_length
-        channel = response.packet.channel
-        port = response.packet.port
+        packet = self.packer.set_parameter(id, toc_element.pytype, value_nr)
+        self.send_crtp_async(packet)
 
-        if port != 2 or channel != 0 or not data_length: return # not us 
-        #self.node.get_logger().info("Received in ParamReader" + str(self.state) +str(data[0]) )
-        #self.node.get_logger().info(str(response.packet))
-        if self.state == REQ_INFO and data[0] == CMD_TOC_INFO_V2:
-            [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
-            self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
-            #self.node.get_logger().info(str(self._crc))
-
-            #self.count = 0
-            #self.get_next()
-
-            if False: # self.toc_cache.fetch(self._crc) is not None:
-                self.state = IDLE
-            else:   # retrieve
-                for i in range(self.nbr_of_items):
-                    self.get_idx(i)
-                
-                self.node.send_null_packet("")
-                self.node.send_null_packet("")
-
-                self.state = REQ_ITEM
-
-            #self.node.send_null_packet("")
-            #self.node.send_null_packet("")
-        elif self.state == REQ_ITEM and data[0] == CMD_TOC_ITEM_V2:
-            #data: cmd, ident, group, name
-            #self.node.get_logger().info(str(data))
-            self.to_loc_item(data)
-            
-        else:
-            pass
     def to_loc_item(self, data):
         ident = struct.unpack('<H', data[1:3])[0]
         data_ = bytearray(data[3:])
@@ -177,34 +110,96 @@ class ParamReader(CrtpPacker):
 
         self.node.get_logger().info("New Element: '" + str(element.ident) + "' '" + element.group + "' '" + element.name + "'")
 
-
         self.params.append(element)
         self.toc.add_element(element)
 
         self.node.get_logger().info("Recv: " + str(len(self.params)))
         if len(self.params) == self.nbr_of_items:
-            self.state = IDLE
-            
             self.toc_cache.insert(self._crc,self.toc.toc )
             self.node.get_logger().info("Received all Params, Writing to cache")
+
+
+class ParameterCommanderPacker(CrtpPacker):
+    PORT_PARAMETER = 0x02
+    
+    TOC_CHANNEL = 0
+    READ_CHANNEL = 1
+    WRITE_CHANNEL = 2
+    MISC_CHANNEL = 3
+
+    def __init__(self):
+        super().__init__(self.PORT_PARAMETER)
+        #node.create_subscription(CrtpResponse, "crazyradio/crtp_response",self.handle_response,  500)
+        #self.node = node
+        #self.count = 0
+
+        #self.state = IDLE
+               
+    # Overwrite
+    def _prepare_packet(self, channel, data):
+        return super()._prepare_packet(channel=channel, data=data)
+ 
+    def get_loc_info(self):
+        data = struct.pack('<B',
+                           CMD_TOC_INFO_V2)                           
+        packet = self._prepare_packet(self.TOC_CHANNEL, data)
+        return packet, True, 1 
+    
+    def get_toc_item(self, index):
+        data = struct.pack('<BBB',
+                           CMD_TOC_ITEM_V2, 
+                           index & 0xFF,
+                           (index >> 8) & 0xFF )
+        return self._prepare_packet(self.TOC_CHANNEL, data), True, 3   
+     
+    
+    def set_parameter(self, id, pytype, value):
+        data = struct.pack('<H', id)
+        data += struct.pack(pytype, value)
+        return self._prepare_packet(self.WRITE_CHANNEL, data)
+        
+    #def handle_response(self, response):
+    #    data = response.packet.data
+    #    data_length = response.packet.data_length
+    #    channel = response.packet.channel
+    #    port = response.packet.port
+#
+    #    if port != 2 or channel != 0 or not data_length: return # not us 
+    #    #self.node.get_logger().info("Received in ParamReader" + str(self.state) +str(data[0]) )
+    #    #self.node.get_logger().info(str(response.packet))
+    #    if self.state == REQ_INFO and data[0] == CMD_TOC_INFO_V2:
+    #        [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
+    #        self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
+    #        #self.node.get_logger().info(str(self._crc))
+#
+    #        #self.count = 0
+    #        #self.get_next()
+#
+    #        if False: # self.toc_cache.fetch(self._crc) is not None:
+    #            self.state = IDLE
+    #        else:   # retrieve
+    #            for i in range(self.nbr_of_items):
+    #                self.get_idx(i)
+    #            
+    #            self.node.send_null_packet("")
+    #            self.node.send_null_packet("")
+#
+    #            self.state = REQ_ITEM
+#
+    #        #self.node.send_null_packet("")
+    #        #self.node.send_null_packet("")
+    #    elif self.state == REQ_ITEM and data[0] == CMD_TOC_ITEM_V2:
+    #        #data: cmd, ident, group, name
+    #        #self.node.get_logger().info(str(data))
+    #        self.to_loc_item(data)
+    #        
+    #    else:
+    #        pass
+
             #for param in self.params:
             #    self.node.get_logger().info(str(param.ident) + ": "  + param.group + " " + param.name)
 
 
-    def get_idx(self, idx):
-        req = self.node._prepare_send_request()
-        req.packet.port = 2 # log
-        req.packet.channel = 0 # access
 
-        req.packet.data_length = 3
-        req.packet.data[0] = CMD_TOC_ITEM_V2
-        req.packet.data[1] = idx & 0x0ff
-        req.packet.data[2] = (idx >> 8) & 0x0ff
-        req.expects_response = True
-        req.matching_bytes = 3 # Watchdog shall Guard these messages
-        response = self.node.send_packet_service.call_async(req)
-        #self.node.send_null_packet("")
-        #self.node.send_null_packet("")
-        self.node.get_logger().info(str("requesting" + str(idx)))
-        return response
+
      

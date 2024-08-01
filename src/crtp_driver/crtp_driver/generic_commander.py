@@ -1,27 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-#     ||          ____  _ __
-#  +------+      / __ )(_) /_______________ _____  ___
-#  | 0xBC |     / __  / / __/ ___/ ___/ __ `/_  / / _ \
-#  +------+    / /_/ / / /_/ /__/ /  / /_/ / / /_/  __/
-#   ||  ||    /_____/_/\__/\___/_/   \__,_/ /___/\___/
-#
-#  Copyright (C) 2011-2023 Bitcraze AB
-#
-#  Crazyflie Nano Quadcopter Client
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 Used for sending control setpoints to the Crazyflie
 """
@@ -32,14 +8,59 @@ from crtp_interface.msg import CrtpPacket
 from crtp_driver.crtp_packer import CrtpPacker
 
 from cflib.utils.encoding import compress_quaternion
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from crazyflie_interface.msg import NotifySetpointsStop, VelocityWorld, Hover, FullState, Position # (Generic)Commander
 
 __author__ = 'Bitcraze AB'
 __all__ = ['Commander']
 
 
+class GenericCommander:
+    def __init__(self, node, send_crtp_async=None, send_crtp_sync=None):
+        self.send_crtp_sync = send_crtp_sync
+        self.send_crtp_async = send_crtp_async
+
+        self.packer = GenericCommanderPacker()
+
+        callback_group = MutuallyExclusiveCallbackGroup()
+
+        node.create_subscription(NotifySetpointsStop, "~/notify_setpoints_stop", self.notify_setpoints_stop, 10,callback_group=callback_group) 
+        node.create_subscription(VelocityWorld, "~/cmd_vel", self.cmd_vel, 10, callback_group=callback_group)
+        node.create_subscription(Hover, "~/cmd_hover", self.cmd_hover, 10,callback_group=callback_group)
+        node.create_subscription(FullState, "~/cmd_full_state", self.cmd_full_state, 10, callback_group=callback_group)
+        node.create_subscription(Position, "~/cmd_position", self.cmd_position, 10, callback_group=callback_group)
+
+    def notify_setpoints_stop(self, msg):
+        #TODO: check if group mask might be used
+        packet = self.packer.send_notify_setpoint_stop(msg.remain_valid_millisecs)
+        self.send_crtp_async(packet)
+
+    def cmd_vel(self, msg):
+        packet = self.packer.send_velocity_world_setpoint(msg.vel.x, msg.vel.y, msg.vel.z, msg.yaw_rate)
+        self.send_crtp_async(packet)
+
+    def cmd_hover(self, msg):
+        packet = self.packer.send_hover_setpoint(msg.vx, msg.vy, msg.yawrate, msg.z_distance)
+        self.send_crtp_async(packet)
+
+    def cmd_full_state(self, msg):
+        pos = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+        vel = [msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z]
+        acc = [msg.acc.x, msg.acc.y, msg.acc.z]
+        orientation = [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w ]
+        rollRate = msg.twist.angular.x
+        pitchRate = msg.twist.angular.y
+        yawRate = msg.twist.angular.z
+        packet = self.packer.send_full_state_setpoint(pos, vel, acc, orientation, rollRate, pitchRate, yawRate)
+        self.send_crtp_async(packet)
 
 
-class GenericCommander(CrtpPacker):
+    def cmd_position(self, msg):
+        packet = self.packer.send_position_setpoint(msg.x, msg.y, msg.z, msg.yaw)
+        self.send_crtp_async(packet)
+
+
+class GenericCommanderPacker(CrtpPacker):
     """
     Used for sending control setpoints to the Crazyflie
     """

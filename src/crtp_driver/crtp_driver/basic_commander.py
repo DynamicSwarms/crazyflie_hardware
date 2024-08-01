@@ -36,10 +36,25 @@ from cflib.utils.encoding import compress_quaternion
 __author__ = 'Bitcraze AB'
 __all__ = ['Commander']
 
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
+class BasicCommander:
+    def __init__(self, node, send_crtp_async=None, send_crtp_sync=None):
+        self.send_crtp_sync = send_crtp_sync
+        self.send_crtp_async = send_crtp_async
 
+        self.packer = BasicCommanderPacker()
 
-class BasicCommander(CrtpPacker):
+        callback_group = MutuallyExclusiveCallbackGroup()
+
+        # TODO: sendSetpoint not implemented yet
+        #node.create_subscription(SendSetpoint, "~/send_setpoint", self.send_setpoint, 10,callback_group=callback_group) 
+
+    def send_setpoint(self, msg):
+        packet = self.packer(msg.roll, msg.pitch, msg.yawrate, msg.thrust)
+        self.send_crtp_async(packet)
+
+class BasicCommanderPacker(CrtpPacker):
     """
     Used for sending control setpoints to the Crazyflie
     """
