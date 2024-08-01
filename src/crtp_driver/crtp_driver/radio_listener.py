@@ -60,6 +60,10 @@ class ResponseListener(Node):
             #        string = string + chr(data[i])
             #    else:
             #        string = string + '{:02x} '.format(data[i]) 
+        elif port == 5 and channel == 2:
+            if len(data) > 15:
+                string = string + str(struct.unpack('<BBBfff', bytearray(data[1:16])))
+            else: string = string  + "Wrong datalength"
         else:
             string = string + "[" +  ''.join('{:02x} '.format(x) for x in data[:data_length])    + "]"
         

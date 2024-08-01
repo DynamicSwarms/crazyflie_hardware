@@ -31,7 +31,7 @@ import logging
 import os
 from glob import glob
 
-#from .log import LogTocElement  # noqa
+from .log import LogTocElement  # noqa
 from .param import ParamTocElement  # noqa
 
 __author__ = 'Bitcraze AB'

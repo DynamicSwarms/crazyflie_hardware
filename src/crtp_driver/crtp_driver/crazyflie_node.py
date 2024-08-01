@@ -45,6 +45,8 @@ from crtp_driver.basic_commander import BasicCommander
 from crtp_driver.generic_commander import GenericCommander
 from crtp_driver.hardware_commander import HardwareCommander
 from crtp_driver.param_reader import ParameterCommander
+from crtp_driver.LoggingCommander import LoggingCommander
+
 from crtp_driver.localization import Localization
 
 import math
@@ -88,6 +90,8 @@ class Crazyflie(Node):
         self.generic_commander = GenericCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         self.hardware_commander = HardwareCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         self.param_reader = ParameterCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+        self.logging_commander = LoggingCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+
         self.localization = Localization()
 
 
@@ -103,7 +107,7 @@ class Crazyflie(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.timer = self.create_timer(0.1, self.on_timer, callback_group=second_cb_group)
+        self.timer = self.create_timer(0.05, self.on_timer, callback_group=second_cb_group)
     def __del__(self):
         self.destroy_node()
 
@@ -123,8 +127,8 @@ class Crazyflie(Node):
         if self.id == 0xE7: return
         try:
             t = self.tf_buffer.lookup_transform(
-                "cf0",
                 "world",
+                "cf0",
                 rclpy.time.Time())
         except TransformException as ex:
             self.get_logger().info("Tracker no Frame")
@@ -144,10 +148,16 @@ class Crazyflie(Node):
         req.datarate = self.datarate
         return req
     def initialize(self, msg):
+        self.get_logger().info("Initializing:")
         # Read Loc CRC, Load param toc, set param 
         for i in range(10):
             self.send_null_packet("-") # TODO remove... but its good to check if all is fine by sending some packets
+        
+        self.logging_commander.load_toc()
         self.param_reader.get_loc_or_load()
+
+        self.get_logger().info("Setting Parameters:")
+
         self.param_reader.set_parameter("ring", "effect", msg.data)
         self.param_reader.set_parameter("commander", "enHighLevel", 1)
         self.param_reader.set_parameter("stabilizer", "estimator", 2) #kalman
@@ -174,7 +184,10 @@ class Crazyflie(Node):
         self.param_reader.set_parameter("ctrlMel", "mass", 0.037)
         self.param_reader.set_parameter("ctrlMel", "massThrust", 132000)
         
-        
+        self.get_logger().info("Adding Log Blocks")
+
+        self.logging_commander.add_block(1, None)
+        self.logging_commander.start_block(1, 100)
         
         self.param_reader.set_parameter("kalman", "resetEstimation", 1)
         pass

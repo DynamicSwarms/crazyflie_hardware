@@ -1,7 +1,5 @@
 
-from crtp_interface.msg import CrtpResponse
 import struct 
-import time
 import rclpy
 
 from .toccache import TocCache
@@ -50,20 +48,16 @@ class ParameterCommander:
             self.toc.toc = cache_data
             for group in cache_data:
                  for name in cache_data[group]:
-                    self.node.declare_parameter(str(group) + "." + str(name), rclpy.Parameter.Type.DOUBLE)
-                    
+                    self.node.declare_parameter(str(group) + "." + str(name), rclpy.Parameter.Type.DOUBLE)     
         else:
-            self.get_loc_toc()
-    
+            self.get_loc_toc()  
 
-
-
-    def get_loc_toc(self, msg):
+    def get_loc_toc(self, msg=None):
         self.params = []
 
         packet, expects_response, matching_bytes = self.packer.get_loc_info()
         
-        resp_packet = self.send_crtp_packet_sync(packet, expects_response, matching_bytes)
+        resp_packet = self.send_crtp_sync(packet, expects_response, matching_bytes)
         data = resp_packet.data
 
         
