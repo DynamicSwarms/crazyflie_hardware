@@ -158,48 +158,4 @@ class ParameterCommanderPacker(CrtpPacker):
         data += struct.pack(pytype, value)
         return self._prepare_packet(self.WRITE_CHANNEL, data)
         
-    #def handle_response(self, response):
-    #    data = response.packet.data
-    #    data_length = response.packet.data_length
-    #    channel = response.packet.channel
-    #    port = response.packet.port
-#
-    #    if port != 2 or channel != 0 or not data_length: return # not us 
-    #    #self.node.get_logger().info("Received in ParamReader" + str(self.state) +str(data[0]) )
-    #    #self.node.get_logger().info(str(response.packet))
-    #    if self.state == REQ_INFO and data[0] == CMD_TOC_INFO_V2:
-    #        [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
-    #        self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
-    #        #self.node.get_logger().info(str(self._crc))
-#
-    #        #self.count = 0
-    #        #self.get_next()
-#
-    #        if False: # self.toc_cache.fetch(self._crc) is not None:
-    #            self.state = IDLE
-    #        else:   # retrieve
-    #            for i in range(self.nbr_of_items):
-    #                self.get_idx(i)
-    #            
-    #            self.node.send_null_packet("")
-    #            self.node.send_null_packet("")
-#
-    #            self.state = REQ_ITEM
-#
-    #        #self.node.send_null_packet("")
-    #        #self.node.send_null_packet("")
-    #    elif self.state == REQ_ITEM and data[0] == CMD_TOC_ITEM_V2:
-    #        #data: cmd, ident, group, name
-    #        #self.node.get_logger().info(str(data))
-    #        self.to_loc_item(data)
-    #        
-    #    else:
-    #        pass
 
-            #for param in self.params:
-            #    self.node.get_logger().info(str(param.ident) + ": "  + param.group + " " + param.name)
-
-
-
-
-     
