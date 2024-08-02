@@ -28,7 +28,8 @@ setup(
             'crazyradio = crtp_driver.crazyradio_node:main',
             'crazyradio_sim = crtp_driver.crazyradio_node_sim:main',
             'radiolistener = crtp_driver.radio_listener:main',
-            "crazyflie =  crtp_driver.crazyflie_node:main"
+            "crazyflie =  crtp_driver.crazyflie_node:main",
+            "crtp_broadcaster =  crtp_driver.crtp_broadcaster:main"
         ],
     },
 )
