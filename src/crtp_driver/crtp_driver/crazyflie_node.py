@@ -61,6 +61,7 @@ class Crazyflie(Node):
     COMMAND_TAKEOFF = 7
     COMMAND_LAND = 8
     SETPOINT_HL = 0x08
+
     def __init__(self):
         super().__init__("cf")
         self.declare_parameter('id', 0x0)
@@ -107,7 +108,7 @@ class Crazyflie(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.timer = self.create_timer(0.05, self.on_timer, callback_group=second_cb_group)
+        self.timer = self.create_timer(0.2, self.on_timer, callback_group=second_cb_group)
     def __del__(self):
         self.destroy_node()
 
@@ -137,6 +138,7 @@ class Crazyflie(Node):
                , t.transform.translation.y  * 1
                , t.transform.translation.z  * 1]
 
+        
         req = self._prepare_send_request()
         req.packet = self.localization.send_extpos(pos)
         self.send_packet_service.call_async(req)
@@ -162,7 +164,7 @@ class Crazyflie(Node):
         self.param_reader.set_parameter("commander", "enHighLevel", 1)
         self.param_reader.set_parameter("stabilizer", "estimator", 2) #kalman
         self.param_reader.set_parameter("stabilizer", "controller",2) #1: pid 2: mellinger
-        self.param_reader.set_parameter("locSrv", "extPosStdDev", 1e-3)
+        self.param_reader.set_parameter("locSrv", "extPosStdDev", 1e-2) #1e-3 # this allows us to fly with 5 hz only
         self.param_reader.set_parameter("locSrv", "extQuatStdDev", 0.5e-1)
         
         
