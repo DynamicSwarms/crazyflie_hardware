@@ -57,10 +57,16 @@ from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
+from object_tracker_interfaces.srv import AddTrackerObject
+
 class Crazyflie(Node):
     COMMAND_TAKEOFF = 7
     COMMAND_LAND = 8
     SETPOINT_HL = 0x08
+
+    STATE_INIT = 0
+    STATE_RUNNING = 1
+    STATE_DESTROY = 2
 
     def __init__(self):
         super().__init__("cf")
@@ -72,10 +78,9 @@ class Crazyflie(Node):
         self.datarate = self.get_parameter('datarate').get_parameter_value().integer_value
         self.address = (0xE7, 0xE7,0xE7,0xE7, self.id)
         if self.id == 0xE7: self.address = (0xFF, 0xE7,0xE7,0xE7, 0xE7) # TODO very hacky way to test broadcasting
-        self.cf_prefix = 'cf' + str(self.id)
+        self.prefix = "cf" + str(self.id)
 
-
-        
+        self.state = self.STATE_INIT
 
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.RELIABLE,
@@ -85,30 +90,54 @@ class Crazyflie(Node):
         while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Send CRTP Packet Service not available, waiting again...")
 
+        # Establish Connection
+        for i in range(10):
+            self.send_null_packet()
+
+        # Establish Tracking
+        self.add_to_tracker_service = self.create_client(AddTrackerObject, "/tracker/add_object")
+        while not self.add_to_tracker_service.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Add to Tracker Service not available, waiting again...")
+        
+        req = AddTrackerObject.Request()
+        req.tf_name.data = self.prefix
+        req.marker_configuration_idx = 4
+        req.max_initial_deviation = 0.4
+        self.add_to_tracker_service.call_async(req)
+
+
+        ## Add necesities in order to initialise
+        self.param_reader = ParameterCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+        self.logging_commander = LoggingCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+        self.hardware_commander = HardwareCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+        self.localization = Localization()      
+        self.initialize()
+
+
+
 
         self.hl_commander = HighLevelCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         self.basic_commander = BasicCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         self.generic_commander = GenericCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
-        self.hardware_commander = HardwareCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
-        self.param_reader = ParameterCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
-        self.logging_commander = LoggingCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+        
 
-        self.localization = Localization()
-
-
-        self.create_subscription(Int16, self.cf_prefix + "/set_color", self.set_color,  10)
-        self.create_subscription(Int16, self.cf_prefix + "/send_nullpacket", self.send_null_packet, 10)
+        self.create_subscription(Int16, "~/set_color", self.set_color,  10)
+        self.create_subscription(Int16, "~/send_nullpacket", self.send_null_packet, 10)
 
         
         second_cb_group = MutuallyExclusiveCallbackGroup()
-        self.create_subscription(Int16, self.cf_prefix + "/initialize", self.initialize, 10,callback_group=second_cb_group)
-        self.create_subscription(Int16, self.cf_prefix + "/set_parameter", self.initialize, 10,callback_group=second_cb_group)
+        self.create_subscription(Int16, "~/initialize", self.initialize, 10,callback_group=second_cb_group)
+        self.create_subscription(Int16, "~/set_parameter", self.initialize, 10,callback_group=second_cb_group)
         
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.timer = self.create_timer(0.2, self.on_timer, callback_group=second_cb_group)
+
+        self.state = self.STATE_RUNNING
+        self.get_logger().info("Initialization complete!")
+
     def __del__(self):
         self.destroy_node()
 
@@ -125,19 +154,20 @@ class Crazyflie(Node):
         return fut.result().packet
 
     def on_timer(self):
+        if self.state == self.STATE_INIT: return
         if self.id == 0xE7: return
         try:
             t = self.tf_buffer.lookup_transform(
                 "world",
-                "cf0",
+                self.prefix,
                 rclpy.time.Time())
         except TransformException as ex:
             self.get_logger().info("Tracker no Frame")
             return
+
         pos =  [t.transform.translation.x   * 1
                , t.transform.translation.y  * 1
                , t.transform.translation.z  * 1]
-
         
         req = self._prepare_send_request()
         req.packet = self.localization.send_extpos(pos)
@@ -149,7 +179,7 @@ class Crazyflie(Node):
         req.address = self.address
         req.datarate = self.datarate
         return req
-    def initialize(self, msg):
+    def initialize(self, msg=None):
         self.get_logger().info("Initializing:")
         # Read Loc CRC, Load param toc, set param 
         for i in range(10):
@@ -160,7 +190,7 @@ class Crazyflie(Node):
 
         self.get_logger().info("Setting Parameters:")
 
-        self.param_reader.set_parameter("ring", "effect", msg.data)
+        self.param_reader.set_parameter("ring", "effect", 2)
         self.param_reader.set_parameter("commander", "enHighLevel", 1)
         self.param_reader.set_parameter("stabilizer", "estimator", 2) #kalman
         self.param_reader.set_parameter("stabilizer", "controller",2) #1: pid 2: mellinger
@@ -195,7 +225,7 @@ class Crazyflie(Node):
         pass
 
 
-    def send_null_packet(self, msg):
+    def send_null_packet(self, msg=None):
         req = self._prepare_send_request()
         req.packet.port = 15
         req.packet.channel = 3 # 0xff
