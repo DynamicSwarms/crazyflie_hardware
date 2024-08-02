@@ -7,6 +7,8 @@ from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
+from crtp_driver.crtp_packer import CrtpPacker
+
 
 class Broadcaster(Node):
     def __init__(self):
@@ -24,6 +26,10 @@ class Broadcaster(Node):
         self.timer = self.create_timer(1.0 / self.hz, self.run)
         self.channels = set()
         self.frames = set()
+        #self.address = (0xFF, 0xE7, 0xE7, 0xE7, 0xE7)  # TODO very hacky way to test broadcasting
+        #https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/src/crazyswarm_server.cpp 810 Paar infos über broadcasting Adresse
+        #https://github.com/whoenig/crazyflie_cpp/blob/25bc72c120f8cea6664dd24e334eefeb7c9606ca/src/Crazyflie.cpp alter code von broadcaster
+
 
     def add_object(self, request, response):
         if request.channel != 0:
@@ -57,6 +63,9 @@ class Broadcaster(Node):
                    t.transform.translation.y,
                    t.transform.translation.z]
             yield pos
+
+class BroadcasterPacker(CrtpPacker):
+    pass
 
 
 def main(args=None):
