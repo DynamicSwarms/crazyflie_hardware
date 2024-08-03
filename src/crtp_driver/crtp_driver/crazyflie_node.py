@@ -21,19 +21,27 @@ from crtp_driver.LoggingCommander import LoggingCommander
 
 from crtp_driver.localization import Localization
 
-
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
-from object_tracker_interfaces.srv import AddTrackerObject
+from object_tracker_interfaces.srv import AddTrackerObject, RemoveTrackerObject
 
 class Link:
-    def __init__(self, send_no_resonse):
+    def __init__(self, send_no_resonse, send_packet_sync, batch_request):
         self.send_no_response = send_no_resonse
+        self.send_packet_sync = send_packet_sync
+        self.batch_request = batch_request
     
     def send_packet_no_response(self, packet):
         self.send_no_response(packet)
+    
+
+    def send_packet(self, packet, expects_response, matching_bytes):
+        return self.send_packet_sync(packet, expects_response, matching_bytes)
+    
+    def send_batch_request(self, packets):
+        return self.batch_request(packets)
 
 
 
@@ -70,6 +78,7 @@ class Crazyflie(Node):
 
         # Establish Tracking
         self.add_to_tracker_service = self.create_client(AddTrackerObject, "/tracker/add_object")
+        self.remove_from_tracker_service = self.create_client(RemoveTrackerObject, "/tracker/remove_object")
         while not self.add_to_tracker_service.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Add to Tracker Service not available, waiting again...")
         
@@ -80,11 +89,11 @@ class Crazyflie(Node):
         self.add_to_tracker_service.call_async(req)
 
         
-        link = Link(self.send_crtp_packet_async)
+        link = Link(self.send_crtp_packet_async,self.send_crtp_packet_sync, self.send_crtp_batch_request_sync)
 
         ## Add necesities in order to initialise
-        self.param_reader = ParameterCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
-        self.logging_commander = LoggingCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+        self.param_reader = ParameterCommander(self, link)
+        self.logging_commander = LoggingCommander(self, link)
         self.hardware_commander = HardwareCommander(self, link)
         self.localization = Localization(self, link)      
         self.initialize()
@@ -132,7 +141,20 @@ class Crazyflie(Node):
         fut = self.send_crtp_packet_async(packet, expects_response, matching_bytes)
         rclpy.spin_until_future_complete(self, fut)
         return fut.result().packet
+    
+    def send_crtp_batch_request_sync(self, packets):
+        futures = []
+        for pkt in packets:
+            packet, expects_response, matching_bytes = pkt
+            futures.append(self.send_crtp_packet_async(packet, expects_response, matching_bytes))
+        
+        responses = []
+        for fut in futures:
+            rclpy.spin_until_future_complete(self, fut)
+            responses.append(fut.result())
 
+        return responses
+        
     def on_timer(self):
         if self.state == self.STATE_INIT: return
         if self.id == 0xE7: return

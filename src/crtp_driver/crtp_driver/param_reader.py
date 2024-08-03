@@ -14,9 +14,8 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 import os
 
 class ParameterCommander:
-    def __init__(self, node, send_crtp_async=None, send_crtp_sync=None):
-        self.send_crtp_sync = send_crtp_sync
-        self.send_crtp_async = send_crtp_async
+    def __init__(self, node, CrtpLink):
+        self.link = CrtpLink
         self.node = node
 
         self.toc = Toc()
@@ -32,7 +31,7 @@ class ParameterCommander:
 
     def get_loc_or_load(self):
         packet, expects_response, matching_bytes = self.packer.get_loc_info()        
-        resp_packet = self.send_crtp_sync(packet, expects_response, matching_bytes)
+        resp_packet = self.link.send_packet(packet, expects_response, matching_bytes)
         data = resp_packet.data
 
         [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
@@ -51,31 +50,21 @@ class ParameterCommander:
 
         packet, expects_response, matching_bytes = self.packer.get_loc_info()
         
-        resp_packet = self.send_crtp_sync(packet, expects_response, matching_bytes)
+        resp_packet = self.link.send_packet(packet, expects_response, matching_bytes)
         data = resp_packet.data
 
         
         [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
         self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
 
-        futures = []
+        packets = []
         for i in range(self.nbr_of_items):
-            ret = self.get_toc_item(i) 
-            futures.append(ret)
-
-        responses = []
-        for fut in futures:
-            rclpy.spin_until_future_complete(self.node, fut)
-            result =  fut.result()
-            responses.append(result)
-
+            packets.append(self.packer.get_toc_item(i))
+            
+        responses = self.link.send_batch_request(packets)
         for result in responses: 
             self.to_loc_item(result.packet.data)
 
-    def get_toc_item(self, index):
-        packet, expects_response, response_bytes = self.packer.get_toc_item(index)
-        self.node.get_logger().info(str("Requesting" + str(index)))
-        return self.send_crtp_async(packet, expects_response,response_bytes)
     def set_parameters(self, par_dict):
         #
         pass
@@ -89,7 +78,7 @@ class ParameterCommander:
             value_nr = int(value)
         
         packet = self.packer.set_parameter(id, toc_element.pytype, value_nr)
-        self.send_crtp_async(packet)
+        self.link.send_packet_no_response(packet)
 
     def to_loc_item(self, data):
         ident = struct.unpack('<H', data[1:3])[0]

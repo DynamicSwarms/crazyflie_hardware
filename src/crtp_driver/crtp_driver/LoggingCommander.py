@@ -14,9 +14,8 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from crtplib.packers.logging import LoggingPacker
 
 class LoggingCommander:
-    def __init__(self, node, send_crtp_async=None, send_crtp_sync=None):
-        self.send_crtp_sync = send_crtp_sync
-        self.send_crtp_async = send_crtp_async
+    def __init__(self, node, CrtpLink):
+        self.link = CrtpLink
         self.node = node
 
         self.toc = Toc()
@@ -32,7 +31,7 @@ class LoggingCommander:
 
     def load_toc(self):
         packet, expects_response, matching_bytes = self.packer.get_toc_info()        
-        resp_packet = self.send_crtp_sync(packet, expects_response, matching_bytes)
+        resp_packet = self.link.send_packet(packet, expects_response, matching_bytes)
         data = resp_packet.data
 
         [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
@@ -51,31 +50,22 @@ class LoggingCommander:
 
         packet, expects_response, matching_bytes = self.packer.get_toc_info()
         
-        resp_packet = self.send_crtp_sync(packet, expects_response, matching_bytes)
+        resp_packet = self.link.send_packet(packet, expects_response, matching_bytes)
         data = resp_packet.data
 
         
         [self.nbr_of_items, self._crc] = struct.unpack('<HI', data[1:7])
         self.node.get_logger().info(str("NBR of Items: "+ str(self.nbr_of_items)))
-
-        futures = []
+        
+        
+        packets = []
         for i in range(self.nbr_of_items):
-            ret = self.get_toc_item(i) 
-            futures.append(ret)
-
-        responses = []
-        for fut in futures:
-            rclpy.spin_until_future_complete(self.node, fut)
-            result =  fut.result()
-            responses.append(result)
+            packets.append(self.packer.get_toc_item(i))
+        
+        responses = self.link.send_batch_request(packets)
 
         for result in responses: 
             self.to_log_item(result.packet.data[:result.packet.data_length])
-
-    def get_toc_item(self, index):
-        packet, expects_response, response_bytes = self.packer.get_toc_item(index)
-        self.node.get_logger().info(str("Requesting" + str(index)))
-        return self.send_crtp_async(packet, expects_response,response_bytes)
 
     def to_log_item(self, data):
         ident = struct.unpack('<H', data[1:3])[0]
@@ -94,7 +84,7 @@ class LoggingCommander:
 
     def start_block(self, id, period):
         packet, expects_response, matching = self.packer.start_block(id, period)
-        self.send_crtp_async(packet)
+        self.link.send_packet_no_response(packet)
         
     def add_block(self, id, elements):
         stX = self.toc.get_element_by_complete_name("stateEstimate.x")
@@ -105,5 +95,5 @@ class LoggingCommander:
         typeZ = LogTocElement.get_id_from_cstring(stZ.ctype)
         elements = [(typeX, stX.ident),(typeY, stY.ident), (typeZ, stZ.ident) ]
         packet, expects_response, matching = self.packer.create_block(id, elements)
-        self.send_crtp_async(packet)
+        self.link.send_packet_no_response(packet)
 
