@@ -28,6 +28,15 @@ from tf2_ros.transform_listener import TransformListener
 
 from object_tracker_interfaces.srv import AddTrackerObject
 
+class Link:
+    def __init__(self, send_no_resonse):
+        self.send_no_response = send_no_resonse
+    
+    def send_packet_no_response(self, packet):
+        self.send_no_response(packet)
+
+
+
 class Crazyflie(Node):
     COMMAND_TAKEOFF = 7
     COMMAND_LAND = 8
@@ -84,8 +93,8 @@ class Crazyflie(Node):
 
 
 
-
-        self.hl_commander = HighLevelCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+        link = Link(self.send_crtp_packet_async)
+        self.hl_commander = HighLevelCommander(self, link)
         self.basic_commander = BasicCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         self.generic_commander = GenericCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         
