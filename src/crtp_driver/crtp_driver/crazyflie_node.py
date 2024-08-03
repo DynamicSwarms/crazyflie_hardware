@@ -5,37 +5,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy, QoSDurabilityPolicy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from cflib.utils import uri_helper
-from cflib.crtp.crtpstack import CRTPPacket
 
-import cflib.drivers
-import cflib.crtp
-
-from crtp_driver.IsseCrazyflie import IsseCrazyflie
-
-
-import time
-import struct
-from threading import Thread
-import keyboard
-ping = CRTPPacket(0xFF)
-import array
-
-
-from cflib.drivers import crazyradio
 import logging
-from std_srvs.srv import Trigger
-def keyboard_thread(cf):
-    pass
-   # while not keyboard.is_pressed('a'): 
-   #     print(cf.state)
-   #     keyboard.wait('f')
-   #     cf.send_packet(ping)
 
-
-from crtp_interface.msg import CrtpPacket
-from crtp_interface.msg import CrtpResponse
-from crtp_interface.msg import SetAutoping
 from crtp_interface.srv import CrtpPacketSend
 
 from std_msgs.msg import Int16
@@ -49,9 +21,6 @@ from crtp_driver.LoggingCommander import LoggingCommander
 
 from crtp_driver.localization import Localization
 
-import math
-
-from geometry_msgs.msg import Twist
 
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
@@ -110,7 +79,7 @@ class Crazyflie(Node):
         self.param_reader = ParameterCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         self.logging_commander = LoggingCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         self.hardware_commander = HardwareCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
-        self.localization = Localization()      
+        self.localization = Localization(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)      
         self.initialize()
 
 
@@ -168,10 +137,8 @@ class Crazyflie(Node):
         pos =  [t.transform.translation.x   * 1
                , t.transform.translation.y  * 1
                , t.transform.translation.z  * 1]
+        self.localization.send_extpos(pos)
         
-        req = self._prepare_send_request()
-        req.packet = self.localization.send_extpos(pos)
-        self.send_packet_service.call_async(req)
         
     def _prepare_send_request(self):
         req = CrtpPacketSend.Request()
@@ -229,13 +196,10 @@ class Crazyflie(Node):
         req = self._prepare_send_request()
         req.packet.port = 15
         req.packet.channel = 3 # 0xff
-        self.send_packet_service.call_async(req)
+        self.send_packet_service.call_async(req)    
 
-  
- 
-    
-    
 
+    # Legacy function remove, when time is right
     def set_color(self, msg):
         color = msg.data
         pk = CrtpPacketSend.Request()
@@ -249,10 +213,6 @@ class Crazyflie(Node):
         pk.packet.data[2] = color
         pk.packet.data_length = 3
         self.send_packet_service.call_async(pk)
-
-  
-
-
 
 def main():
     rclpy.init()

@@ -1,11 +1,7 @@
-import struct
 import numpy as np
-
 from crtp_interface.msg import CrtpPacket
 
-
-class CrtpPacker():
-
+class CrtpPacker:
     def __init__(self, port):
         self.port = port
 
@@ -18,7 +14,7 @@ class CrtpPacker():
         pk.data = self._struct_to_data(data)
         pk.data_length = len(data)   
 
-    def _prepare_packet(self, channel, data):
+    def prepare_packet(self, channel, data):
         pk = CrtpPacket()
         pk.port = self.port
         pk.channel = channel

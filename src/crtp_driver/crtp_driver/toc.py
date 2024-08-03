@@ -27,28 +27,11 @@ A generic TableOfContents module that is used to fetch, store and manipulate
 a TOC for logging or parameters.
 """
 import logging
-import struct
-
-from cflib.crtp.crtpstack import CRTPPacket
 
 __author__ = 'Bitcraze AB'
-__all__ = ['Toc', 'TocFetcher']
+__all__ = ['Toc']
 
 logger = logging.getLogger(__name__)
-
-TOC_CHANNEL = 0
-
-# Commands used when accessing the Table of Contents
-CMD_TOC_ELEMENT = 0  # original version: up to 255 entries
-CMD_TOC_INFO = 1    # original version: up to 255 entries
-CMD_TOC_ITEM_V2 = 2  # version 2: up to 16k entries
-CMD_TOC_INFO_V2 = 3  # version 2: up to 16k entries
-
-# Possible states when receiving TOC
-IDLE = 'IDLE'
-GET_TOC_INFO = 'GET_TOC_INFO'
-GET_TOC_ELEMENT = 'GET_TOC_ELEMENT'
-
 
 class Toc:
     """Container for TocElements."""
