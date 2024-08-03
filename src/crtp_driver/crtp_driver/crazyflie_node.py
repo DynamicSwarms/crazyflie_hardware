@@ -38,10 +38,6 @@ class Link:
 
 
 class Crazyflie(Node):
-    COMMAND_TAKEOFF = 7
-    COMMAND_LAND = 8
-    SETPOINT_HL = 0x08
-
     STATE_INIT = 0
     STATE_RUNNING = 1
     STATE_DESTROY = 2
@@ -83,20 +79,19 @@ class Crazyflie(Node):
         req.max_initial_deviation = 0.4
         self.add_to_tracker_service.call_async(req)
 
+        
+        link = Link(self.send_crtp_packet_async)
 
         ## Add necesities in order to initialise
         self.param_reader = ParameterCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
         self.logging_commander = LoggingCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
-        self.hardware_commander = HardwareCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
-        self.localization = Localization(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)      
+        self.hardware_commander = HardwareCommander(self, link)
+        self.localization = Localization(self, link)      
         self.initialize()
 
-
-
-        link = Link(self.send_crtp_packet_async)
         self.hl_commander = HighLevelCommander(self, link)
-        self.basic_commander = BasicCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
-        self.generic_commander = GenericCommander(self, send_crtp_async=self.send_crtp_packet_async, send_crtp_sync=self.send_crtp_packet_sync)
+        self.basic_commander = BasicCommander(self, link)
+        self.generic_commander = GenericCommander(self, link)
         
 
         self.create_subscription(Int16, "~/set_color", self.set_color,  10)
@@ -118,6 +113,13 @@ class Crazyflie(Node):
 
     def __del__(self):
         self.destroy_node()
+    
+    def _prepare_send_request(self):
+        req = CrtpPacketSend.Request()
+        req.channel = self.channel
+        req.address = self.address
+        req.datarate = self.datarate
+        return req
 
     def send_crtp_packet_async(self, packet, expects_response=False, matching_bytes=0):
         req = self._prepare_send_request()
@@ -149,12 +151,7 @@ class Crazyflie(Node):
         self.localization.send_extpos(pos)
         
         
-    def _prepare_send_request(self):
-        req = CrtpPacketSend.Request()
-        req.channel = self.channel
-        req.address = self.address
-        req.datarate = self.datarate
-        return req
+    
     def initialize(self, msg=None):
         self.get_logger().info("Initializing:")
         # Read Loc CRC, Load param toc, set param 

@@ -46,11 +46,7 @@ class HighLevelCommanderPacker(Packer):
                                       x, y, z,
                                       yaw,
                                       duration_s)
-        return self._prepare_packet(data)
-
-    
-
-
+        return self._prepare_packet(data) 
     
     def start_trajectory(self, group_mask, relative, reversed, trajectory_id, time_scale):    
         data = struct.pack('<BBBBBf',
@@ -72,7 +68,6 @@ class HighLevelCommanderPacker(Packer):
                                       n_pieces)
         return self._prepare_packet(data)
     
-
     def takeoff(self, group_mask, absolute_height_m, target_yaw, use_current_yaw, duration_s):
         data = struct.pack('<BBff?f',
                             self.COMMAND_TAKEOFF_2,

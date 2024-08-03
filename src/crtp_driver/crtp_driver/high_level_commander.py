@@ -1,10 +1,9 @@
-
-
-from crazyflie_interface.msg import SetGroupMask, Takeoff, Land, Stop, GoTo, StartTrajectory, UploadTrajectory # HL_Commander
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from crtplib.logic.hl_commander import HighLevelCommanderLogic
+from crazyflie_interface.msg import SetGroupMask, Takeoff, Land, Stop, GoTo, StartTrajectory, UploadTrajectory # HL_Commander
 from crtp_driver.crtp_packer import CrtpPacker
+
+from crtplib.logic.hl_commander import HighLevelCommanderLogic
 
 class HighLevelCommander(HighLevelCommanderLogic):
     def __init__(self, node, CrtpLink):
