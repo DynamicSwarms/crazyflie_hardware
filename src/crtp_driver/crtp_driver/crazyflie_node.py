@@ -2,7 +2,6 @@
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy, QoSDurabilityPolicy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 
@@ -26,23 +25,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 from object_tracker_interfaces.srv import AddTrackerObject, RemoveTrackerObject
-
-class Link:
-    def __init__(self, send_no_resonse, send_packet_sync, batch_request):
-        self.send_no_response = send_no_resonse
-        self.send_packet_sync = send_packet_sync
-        self.batch_request = batch_request
-    
-    def send_packet_no_response(self, packet):
-        self.send_no_response(packet)
-    
-
-    def send_packet(self, packet, expects_response, matching_bytes):
-        return self.send_packet_sync(packet, expects_response, matching_bytes)
-    
-    def send_batch_request(self, packets):
-        return self.batch_request(packets)
-
+from .crtp_link_ros import CrtpLinkRos
 
 
 class Crazyflie(Node):
@@ -63,14 +46,7 @@ class Crazyflie(Node):
         self.prefix = "cf" + str(self.id)
 
         self.state = self.STATE_INIT
-
-        qos_profile = QoSProfile(
-            reliability=QoSReliabilityPolicy.RELIABLE,
-            history= QoSHistoryPolicy.KEEP_ALL,
-            durability=QoSDurabilityPolicy.VOLATILE)
-        self.send_packet_service = self.create_client(CrtpPacketSend, "/crazyradio/send_crtp_packet", qos_profile=qos_profile)
-        while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info("Send CRTP Packet Service not available, waiting again...")
+        self.crtp_link = CrtpLinkRos(self, self.channel, self.address, self.datarate)
 
         # Establish Connection
         for i in range(10):
@@ -88,19 +64,16 @@ class Crazyflie(Node):
         req.max_initial_deviation = 0.4
         self.add_to_tracker_service.call_async(req)
 
-        
-        link = Link(self.send_crtp_packet_async,self.send_crtp_packet_sync, self.send_crtp_batch_request_sync)
-
         ## Add necesities in order to initialise
-        self.param_reader = ParameterCommander(self, link)
-        self.logging_commander = LoggingCommander(self, link)
-        self.hardware_commander = HardwareCommander(self, link)
-        self.localization = Localization(self, link)      
+        self.param_reader = ParameterCommander(self, self.crtp_link)
+        self.logging_commander = LoggingCommander(self, self.crtp_link)
+        self.hardware_commander = HardwareCommander(self, self.crtp_link)
+        self.localization = Localization(self, self.crtp_link)
         self.initialize()
 
-        self.hl_commander = HighLevelCommander(self, link)
-        self.basic_commander = BasicCommander(self, link)
-        self.generic_commander = GenericCommander(self, link)
+        self.hl_commander = HighLevelCommander(self, self.crtp_link)
+        self.basic_commander = BasicCommander(self, self.crtp_link)
+        self.generic_commander = GenericCommander(self, self.crtp_link)
         
 
         self.create_subscription(Int16, "~/set_color", self.set_color,  10)
@@ -122,38 +95,6 @@ class Crazyflie(Node):
 
     def __del__(self):
         self.destroy_node()
-    
-    def _prepare_send_request(self):
-        req = CrtpPacketSend.Request()
-        req.channel = self.channel
-        req.address = self.address
-        req.datarate = self.datarate
-        return req
-
-    def send_crtp_packet_async(self, packet, expects_response=False, matching_bytes=0):
-        req = self._prepare_send_request()
-        req.expects_response = expects_response
-        req.matching_bytes = matching_bytes        
-        req.packet = packet
-        return self.send_packet_service.call_async(req)
-
-    def send_crtp_packet_sync(self, packet, expects_response, matching_bytes):
-        fut = self.send_crtp_packet_async(packet, expects_response, matching_bytes)
-        rclpy.spin_until_future_complete(self, fut)
-        return fut.result().packet
-    
-    def send_crtp_batch_request_sync(self, packets):
-        futures = []
-        for pkt in packets:
-            packet, expects_response, matching_bytes = pkt
-            futures.append(self.send_crtp_packet_async(packet, expects_response, matching_bytes))
-        
-        responses = []
-        for fut in futures:
-            rclpy.spin_until_future_complete(self, fut)
-            responses.append(fut.result())
-
-        return responses
         
     def on_timer(self):
         if self.state == self.STATE_INIT: return
