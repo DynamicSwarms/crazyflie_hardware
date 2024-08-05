@@ -14,7 +14,7 @@ class CrtpPacker:
         pk.data = self._struct_to_data(data)
         pk.data_length = len(data)   
 
-    def prepare_packet(self, channel, data):
+    def prepare_packet(self, channel, data) -> CrtpPacket:
         pk = CrtpPacket()
         pk.port = self.port
         pk.channel = channel
