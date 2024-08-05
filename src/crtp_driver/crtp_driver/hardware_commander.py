@@ -1,7 +1,7 @@
 import struct
 
 from crtp_driver.crtp_packer import CrtpPacker
-from crtplib.logic.link_layer import LinkLayerLogic
+from crtplib.logic.link_layer_logic import LinkLayerLogic
 
 from std_msgs.msg import Int16
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup

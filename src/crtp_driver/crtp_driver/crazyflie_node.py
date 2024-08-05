@@ -180,8 +180,8 @@ class Crazyflie(Node):
         for i in range(10):
             self.send_null_packet("-") # TODO remove... but its good to check if all is fine by sending some packets
         
-        self.logging_commander.load_toc()
-        self.param_reader.get_loc_or_load()
+        self.logging_commander.initialize_toc()
+        self.param_reader.initialize_toc()
 
         self.get_logger().info("Setting Parameters:")
 

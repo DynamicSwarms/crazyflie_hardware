@@ -31,8 +31,8 @@ import logging
 import os
 from glob import glob
 
-from .log import LogTocElement  # noqa
-from .param import ParamTocElement  # noqa
+from .logging import LogTocElement  # noqa
+from .parameters import ParamTocElement  # noqa
 
 __author__ = 'Bitcraze AB'
 __all__ = ['TocCache']

@@ -1,7 +1,7 @@
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from crtp_driver.crtp_packer import CrtpPacker
-from crtplib.logic.basic_commander import BasicCommanderLogic
+from crtplib.logic.basic_commander_logic import BasicCommanderLogic
 
 class BasicCommander(BasicCommanderLogic):
     def __init__(self, node, CrtpLink):
