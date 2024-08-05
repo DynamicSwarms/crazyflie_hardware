@@ -1,41 +1,9 @@
 #!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
 
-from cflib.utils import uri_helper
-from cflib.crtp.crtpstack import CRTPPacket
-
-import cflib.drivers
-import cflib.crtp
-
-from crtp_driver.IsseCrazyflie import IsseCrazyflie
-
-
-import time
 import struct
-from threading import Thread
-import keyboard
-ping = CRTPPacket(0xFF)
-import array
-
-
-from cflib.drivers import crazyradio
-import logging
-from std_srvs.srv import Trigger
-def keyboard_thread(cf):
-    pass
-   # while not keyboard.is_pressed('a'): 
-   #     print(cf.state)
-   #     keyboard.wait('f')
-   #     cf.send_packet(ping)
-
-
-from crtp_interface.msg import CrtpPacket
 from crtp_interface.msg import CrtpResponse
-from crtp_interface.msg import SetAutoping
-from crtp_interface.srv import CrtpPacketSend
-
 
 class ResponseListener(Node):
     def __init__(self):

@@ -2,62 +2,6 @@ import struct
 import logging
 logger = logging.getLogger(__name__)
 
-
-class Toc:
-    """Container for TocElements."""
-
-    def __init__(self):
-        self.toc = {}
-
-    def clear(self):
-        """Clear the TOC"""
-        self.toc = {}
-
-    def add_element(self, element):
-        """Add a new TocElement to the TOC container."""
-        try:
-            self.toc[element.group][element.name] = element
-        except KeyError:
-            self.toc[element.group] = {}
-            self.toc[element.group][element.name] = element
-
-    def get_element_by_complete_name(self, complete_name):
-        """Get a TocElement element identified by complete name from the
-        container."""
-        try:
-            return self.get_element_by_id(self.get_element_id(complete_name))
-        except ValueError:
-            # Item not found
-            return None
-
-    def get_element_id(self, complete_name):
-        """Get the TocElement element id-number of the element with the
-        supplied name."""
-        [group, name] = complete_name.split('.')
-        element = self.get_element(group, name)
-        if element:
-            return element.ident
-        else:
-            logger.warning('Unable to find variable [%s]', complete_name)
-            return None
-
-    def get_element(self, group, name):
-        """Get a TocElement element identified by name and group from the
-        container."""
-        try:
-            return self.toc[group][name]
-        except KeyError:
-            return None
-
-    def get_element_by_id(self, ident):
-        """Get a TocElement element identified by index number from the
-        container."""
-        for group in list(self.toc.keys()):
-            for name in list(self.toc[group].keys()):
-                if self.toc[group][name].ident == ident:
-                    return self.toc[group][name]
-        return None
-
 class ParamTocElement:
     """An element in the Log TOC."""
 
