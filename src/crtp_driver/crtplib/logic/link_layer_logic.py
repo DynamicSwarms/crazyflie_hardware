@@ -1,4 +1,4 @@
-from crtplib.packers.link_layer import LinkLayerPacker
+from crtplib.packers.link_layer_packer import LinkLayerPacker
 
 class LinkLayerLogic:
 

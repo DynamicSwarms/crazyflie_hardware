@@ -1,4 +1,4 @@
-from crtplib.packers.basic_commander import BasicCommanderPacker
+from crtplib.packers.basic_commander_packer import BasicCommanderPacker
 
 class BasicCommanderLogic:
     """

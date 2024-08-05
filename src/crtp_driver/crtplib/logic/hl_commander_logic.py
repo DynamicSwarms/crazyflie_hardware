@@ -1,4 +1,4 @@
-from crtplib.packers.hl_commander import HighLevelCommanderPacker
+from crtplib.packers.hl_commander_packer import HighLevelCommanderPacker
 
 class HighLevelCommanderLogic:
     ALL_GROUPS = 0
