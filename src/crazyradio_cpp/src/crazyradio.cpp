@@ -117,13 +117,10 @@ class CrazyradioNode : public rclcpp::Node
 
         void sendCrtpUnresponded(libcrtp::CrtpPacket * packet, libcrtp::CrtpLinkIdentifier * link)
         {
-            uint64_t address = link->address;
-            std::vector<uint8_t> addr;
-            for (int i = 0; i < 5; i++) addr.push_back( (address & (0xFF << i )     ) >> i);
-            
             auto resp = crtp_interface::msg::CrtpResponse();
+            
             resp.channel = link->channel;           
-            resp.address = addr;
+            for (int i = 0; i < 5; i++) resp.address[4-i] = (link->address & ((uint64_t)0xFF << i * 8 )     ) >> i * 8;
             resp.packet.port = (uint8_t)packet->port;
             resp.packet.channel = packet->channel;
             for (int i = 0; i < packet->dataLength; i++) resp.packet.data[i] = packet->data[i];
@@ -133,12 +130,8 @@ class CrazyradioNode : public rclcpp::Node
 
         void crtpLinkEndCallback(libcrtp::CrtpLinkIdentifier * link)
         {
-            uint64_t address = link->address;
-            std::vector<uint8_t> addr;
-            for (int i = 0; i < 5; i++) addr.push_back( (address & (0xFF << i )     ) >> i);
-
             auto msg = crtp_interface::msg::CrtpLinkEnd();
-            msg.address = addr;
+            for (int i = 0; i < 5; i++) msg.address[4-i] = (link->address & ((uint64_t)0xFF << i * 8 )     ) >> i * 8;
             link_end_pub->publish(msg);
         }
 

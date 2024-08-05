@@ -48,9 +48,12 @@ class Crazyflie(Node):
         self.state = self.STATE_INIT
         self.crtp_link = CrtpLinkRos(self, self.channel, self.address, self.datarate)
 
+        self.hardware_commander = HardwareCommander(self, self.crtp_link)
+
         # Establish Connection
         for i in range(10):
-            self.send_null_packet()
+            self.hardware_commander.send_nullpacket()
+
 
         # Establish Tracking
         self.add_to_tracker_service = self.create_client(AddTrackerObject, "/tracker/add_object")
@@ -67,7 +70,6 @@ class Crazyflie(Node):
         ## Add necesities in order to initialise
         self.param_reader = ParameterCommander(self, self.crtp_link)
         self.logging_commander = LoggingCommander(self, self.crtp_link)
-        self.hardware_commander = HardwareCommander(self, self.crtp_link)
         self.localization = Localization(self, self.crtp_link)
         self.initialize()
 
@@ -77,7 +79,7 @@ class Crazyflie(Node):
         
 
         self.create_subscription(Int16, "~/set_color", self.set_color,  10)
-        self.create_subscription(Int16, "~/send_nullpacket", self.send_null_packet, 10)
+        self.create_subscription(Int16, "~/send_nullpacket", self.hardware_commander.send_nullpacket(), 10)
 
         
         second_cb_group = MutuallyExclusiveCallbackGroup()
@@ -119,7 +121,7 @@ class Crazyflie(Node):
         self.get_logger().info("Initializing:")
         # Read Loc CRC, Load param toc, set param 
         for i in range(10):
-            self.send_null_packet("-") # TODO remove... but its good to check if all is fine by sending some packets
+            self.hardware_commander.send_nullpacket() # TODO remove... but its good to check if all is fine by sending some packets
         
         self.logging_commander.initialize_toc()
         self.param_reader.initialize_toc()
@@ -160,28 +162,21 @@ class Crazyflie(Node):
         self.param_reader.set_parameter("kalman", "resetEstimation", 1)
         pass
 
-
-    def send_null_packet(self, msg=None):
-        req = self._prepare_send_request()
-        req.packet.port = 15
-        req.packet.channel = 3 # 0xff
-        self.send_packet_service.call_async(req)    
-
-
     # Legacy function remove, when time is right
     def set_color(self, msg):
         color = msg.data
-        pk = CrtpPacketSend.Request()
-        pk.channel = self.channel
-        pk.address = self.address
-        pk.datarate = self.datarate
-        pk.packet.port = 2
-        pk.packet.channel = 2
-        pk.packet.data[0] = 23 ####0x16 in old
-        pk.packet.data[1] = 0x00
-        pk.packet.data[2] = color
-        pk.packet.data_length = 3
-        self.send_packet_service.call_async(pk)
+        self.param_reader.set_parameter("ring", "effect", color)
+        #pk = CrtpPacketSend.Request()
+        #pk.channel = self.channel
+        #pk.address = self.address
+        #pk.datarate = self.datarate
+        #pk.packet.port = 2
+        #pk.packet.channel = 2
+        #pk.packet.data[0] = 23 ####0x16 in old
+        #pk.packet.data[1] = 0x00
+        #pk.packet.data[2] = color
+        #pk.packet.data_length = 3
+        #self.send_packet_service.call_async(pk)
 
 def main():
     rclpy.init()

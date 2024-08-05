@@ -6,10 +6,13 @@ class LinkLayerLogic:
         self.link = CrtpLink
         self.packer = LinkLayerPacker(CrtpPacker)
     
+    def send_nullpacket(self):
+        packet = self.packer.nullpacket()
+        self.link.send_packet_no_response(packet)
+
     def platform_power_down(self):
         packet = self.packer.platform_power_down()
         self.link.send_packet_no_response(packet)
-
     
     def reboot_to_bootloader(self):
         packet = self.packer.reset_init()
