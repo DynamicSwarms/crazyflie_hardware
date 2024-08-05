@@ -18,7 +18,7 @@ find_package(std_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CrtpPacket.msg"
   "msg/CrtpResponse.msg"
-  "msg/SetAutoping.msg"
+  "msg/CrtpLinkEnd.msg"
   "srv/CrtpPacketSend.srv"
   DEPENDENCIES std_msgs 
 )

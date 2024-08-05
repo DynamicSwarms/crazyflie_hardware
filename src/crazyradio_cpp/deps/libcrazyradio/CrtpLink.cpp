@@ -22,6 +22,8 @@ CrtpLink::CrtpLink(
     , m_address(address)
     , m_datarate(datarate)
     , m_isBroadcast(((address >> 4 * 8) & 0xFF) == 0xFF) // Broadcasting Packet if 0xFF   
+    , m_failedMessagesMaximum(10)
+    , m_failedMessagesCount(0)
 {
 }
 
@@ -67,6 +69,28 @@ CrtpPort CrtpLink::getPriorityPort() const
     return CrtpPort::NO_PORT;
 }
 
+bool CrtpLink::notifyFailedMessage()
+{
+    m_failedMessagesCount++;
+    if (m_failedMessagesCount > m_failedMessagesMaximum) 
+    {
+        return true;
+    }
+    return false;
+}
+
+void CrtpLink::notifySuccessfullMessage(CrtpPort port)
+{
+    m_crtpPortQueues[port].sendPacketSuccess();
+    m_failedMessagesCount = 0;
+}
+
+double CrtpLink::getLinkQuality()
+{
+    return 1.0 - ((double)m_failedMessagesCount / (double)m_failedMessagesMaximum);
+}
+
+
 uint8_t CrtpLink::getChannel() const
 {
     return m_channel;
@@ -99,26 +123,62 @@ CrtpLinkContainer::~CrtpLinkContainer()
     /* Maybe have to close links properly */
 }
 
+void CrtpLinkContainer::linkToIdentifier(const CrtpLink * link, CrtpLinkIdentifier *  link_id) const
+{
+    link_id->channel = link->getChannel();
+    link_id->address = link->getAddress();
+    link_id->datarate = link->getDatarate();
+    link_id->isBroadcast = link->isBroadcast();
+}
+
+bool CrtpLinkContainer::linkFromIdentifier(CrtpLink ** link, CrtpLinkIdentifier * link_id)
+{
+    std::pair<uint8_t, uint64_t> key = {link_id->channel,link_id->address};
+    auto link_ = m_links.find(key);
+    if (link_ != m_links.end()) 
+    {   
+        *link = &link_->second;
+        return true;
+    }
+    return false; 
+}
+
 void CrtpLinkContainer::addLink(uint8_t channel, uint64_t address, uint8_t datarate)
 {
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
     CrtpLink link(channel, address, datarate);
     std::pair<uint8_t, uint64_t> linkKey = {channel,address};
     m_links.insert({linkKey, link}); // If already in m_links this wont duplicate
 }
 
-bool CrtpLinkContainer::getLink(CrtpLink ** link, uint8_t channel, uint64_t address)
+bool CrtpLinkContainer::removeLink(CrtpLinkIdentifier * link_id)
 {
-    std::pair<uint8_t, uint64_t> linkKey = {channel, address};
-    auto link_ = m_links.find(linkKey); // A sad cpp construct
-    if (link_ != m_links.end()) {
-        *link = &link_->second;
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    std::pair<uint8_t, uint64_t> linkKey = {link_id->channel,link_id->address};
+    auto link = m_links.find(linkKey);
+    if (link != m_links.end()) 
+    {
+        m_links.erase(link);
         return true;
     }
     return false;
 }
 
-bool CrtpLinkContainer::getHighestPriorityLink(CrtpLink ** link, CrtpPort * port)
+bool CrtpLinkContainer::getLinkIdentifier(CrtpLinkIdentifier * link, uint8_t channel, uint64_t address) const
 {
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    std::pair<uint8_t, uint64_t> linkKey = {channel, address};
+    auto link_ = m_links.find(linkKey); // A sad cpp construct
+    if (link_ != m_links.end()) {
+        linkToIdentifier(&link_->second , link);
+        return true;
+    }
+    return false;
+}
+
+bool CrtpLinkContainer::getHighestPriorityLink(CrtpLinkIdentifier * link, CrtpPort * port) const
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
     libcrtp::CrtpPort highestPriorityPort = libcrtp::CrtpPort::NO_PORT;
     std::pair<uint8_t, uint64_t> bestKey = {0,0};
     for (const auto& [key, link_] : m_links) 
@@ -132,26 +192,78 @@ bool CrtpLinkContainer::getHighestPriorityLink(CrtpLink ** link, CrtpPort * port
     auto link_ = m_links.find(bestKey);
     if (highestPriorityPort != libcrtp::CrtpPort::NO_PORT && link_ != m_links.end()) 
     {   
-        *link = &link_->second;
+        linkToIdentifier(&link_->second , link);
         *port = highestPriorityPort;
         return true;
     }
     return false;
 }
 
-bool CrtpLinkContainer::getRandomLink(CrtpLink ** link)
+bool CrtpLinkContainer::getRandomLink(CrtpLinkIdentifier * link) const
 {
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
     if (m_links.size())
     {
         auto it = m_links.begin();
         std::advance(it, rand() % m_links.size());
-        *link = &it->second;
+        linkToIdentifier(&it->second , link);
         return true;
     }
     return false;
 }
 
+void CrtpLinkContainer::linkAddPacket(CrtpLinkIdentifier * link_id, CrtpPacket * packet, CrtpResponseCallback callback)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    CrtpLink * link;
+    if (linkFromIdentifier(&link, link_id))
+    {
+        link->addPacket(packet, callback);
+    }
+}
 
+bool CrtpLinkContainer::linkGetPacket(CrtpLinkIdentifier * link_id, CrtpPort port, CrtpPacket * packet)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    CrtpLink * link;
+    if (linkFromIdentifier(&link, link_id)) {
+        return link->getPacket(port, packet);
+    }
+    return false;
+}
+
+void CrtpLinkContainer::linkNotifySuccessfullMessage(CrtpLinkIdentifier * link_id, CrtpPort port)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    CrtpLink * link;
+    if (linkFromIdentifier(&link, link_id)) {
+        link->notifySuccessfullMessage(port);
+    }
+}
+
+bool CrtpLinkContainer::linkNotifyFailedMessage(CrtpLinkIdentifier * link_id)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    CrtpLink * link;
+    if (linkFromIdentifier(&link, link_id))
+    {
+        return link->notifyFailedMessage();
+    }
+    return false;
+}
+
+bool CrtpLinkContainer::linkReleasePacket(CrtpLinkIdentifier * link_id, 
+                                          CrtpPacket * responsePacket, 
+                                          CrtpResponseCallback & callback)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    CrtpLink * link;
+    if (linkFromIdentifier(&link, link_id))
+    {
+        return link->releasePacket(responsePacket, callback);
+    }
+    return false;
+}
 
 
 }; // namespace libcrtp

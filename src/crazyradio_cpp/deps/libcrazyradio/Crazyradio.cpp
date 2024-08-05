@@ -47,7 +47,7 @@ Crazyradio::~Crazyradio()
 
 
 void Crazyradio::sendCrtpPacket(
-        libcrtp::CrtpLink * link,
+        libcrtp::CrtpLinkIdentifier * link,
         libcrtp::CrtpPacket * packet,
         Ack & result)
 {
@@ -59,11 +59,11 @@ void Crazyradio::sendCrtpPacket(
     sendPacket(data, 1 + packet->dataLength , result);
 }
 
-void Crazyradio::setToCrtpLink(libcrtp::CrtpLink * link)
+void Crazyradio::setToCrtpLink(libcrtp::CrtpLinkIdentifier * link)
 {
-    setChannel(link->getChannel());
-    setAddress(link->getAddress());
-    switch (link->getDatarate()) 
+    setChannel(link->channel);
+    setAddress(link->address);
+    switch (link->datarate) 
     {
         case 2: 
             setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_2MPS);
@@ -74,7 +74,7 @@ void Crazyradio::setToCrtpLink(libcrtp::CrtpLink * link)
         default: 
             setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_250KPS);
     }  
-    setAckEnable(! link->isBroadcast()); 
+    setAckEnable(! link->isBroadcast); 
 }
 
 void Crazyradio::setChannel(uint8_t channel)

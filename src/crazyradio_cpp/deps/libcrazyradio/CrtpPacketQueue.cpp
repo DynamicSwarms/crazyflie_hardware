@@ -33,8 +33,12 @@ bool CrtpPacketQueue::getPacket(
 {
     if (m_out_queue.empty()) return false;
     *packet = m_out_queue.front();
-    m_out_queue.pop();
     return true;
+}
+
+void CrtpPacketQueue::sendPacketSuccess()
+{
+    m_out_queue.pop();
 }
 
 bool CrtpPacketQueue::releasePacket(
