@@ -47,6 +47,14 @@ bool CrtpLink::releasePacket(
     CrtpPacket * packet,
     CrtpResponseCallback &  callback)
 {   
+    /*
+        Because log messages are not obeying the ordering process and dont have a request we cannot pass them into the queue
+        otherwise other requested messages would get unvalidated
+        TODO: Fix this in Crazyflie Firmware, because this does not fullfill crtp specifications as defined in:
+        https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/functional-areas/crtp/
+    */
+    if (packet->port == CrtpPort::DATA_LOGGING && packet->channel == 2) return false;
+    
     return m_crtpPortQueues[packet->port].releasePacket(packet, callback);
 }
 
