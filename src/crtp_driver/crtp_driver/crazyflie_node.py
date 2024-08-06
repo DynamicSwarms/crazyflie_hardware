@@ -99,6 +99,7 @@ class Crazyflie(Node):
         self.destroy_node()
         
     def on_timer(self):
+        return
         if self.state == self.STATE_INIT: return
         if self.id == 0xE7: return
         try:
