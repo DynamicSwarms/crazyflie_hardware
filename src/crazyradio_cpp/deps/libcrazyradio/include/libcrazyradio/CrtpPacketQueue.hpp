@@ -19,6 +19,8 @@ class CrtpPacketQueue
 
         void addPacket(CrtpPacket * packet, CrtpResponseCallback  callback);
 
+        void sendPacketSuccess();
+        
         bool getPacket(CrtpPacket * packet);
 
         bool releasePacket(CrtpPacket * packet, CrtpResponseCallback &  callback);
