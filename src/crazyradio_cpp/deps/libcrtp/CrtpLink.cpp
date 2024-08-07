@@ -1,4 +1,4 @@
-#include "libcrazyradio/CrtpLink.hpp"
+#include "libcrtp/CrtpLink.hpp"
 #include <iostream>
 namespace libcrtp {
 

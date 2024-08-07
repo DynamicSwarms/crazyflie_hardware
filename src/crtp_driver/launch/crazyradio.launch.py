@@ -22,7 +22,7 @@ def generate_launch_description():
 
     crazyradio_cpp = Node(
         package="crazyradio_cpp",
-        executable="crazyradio"
+        executable="crazyradio_node"
     )
 
     radiolistener = Node(

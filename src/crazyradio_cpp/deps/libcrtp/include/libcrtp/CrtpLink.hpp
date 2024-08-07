@@ -5,8 +5,8 @@
 #include <map>
 #include <mutex>
 
-#include "libcrazyradio/CrtpPacketQueue.hpp"
-#include "libcrazyradio/CrtpPacket.hpp"
+#include "libcrtp/CrtpPacketQueue.hpp"
+#include "libcrtp/CrtpPacket.hpp"
 
 namespace libcrtp {
 struct CrtpLinkIdentifier

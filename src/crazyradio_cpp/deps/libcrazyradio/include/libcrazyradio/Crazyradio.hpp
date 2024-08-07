@@ -4,8 +4,8 @@
 #include "USBDevice.hpp"
 
 
-#include "libcrazyradio/CrtpPacket.hpp"
-#include "libcrazyradio/CrtpLink.hpp"
+#include "libcrtp/CrtpPacket.hpp"
+#include "libcrtp/CrtpLink.hpp"
 
 namespace libcrazyradio {
 class Crazyradio : public USBDevice

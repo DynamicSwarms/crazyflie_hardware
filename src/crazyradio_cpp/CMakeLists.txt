@@ -3,6 +3,7 @@ project(crazyradio_cpp)
 
 add_subdirectory(deps/libcrazyradio)
 
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -28,14 +29,21 @@ include_directories(
   deps/libcrazyradio/include
 )
 
-add_executable(crazyradio src/crazyradio.cpp)
-ament_target_dependencies(crazyradio
+
+add_executable(crazyradio_node 
+  src/crazyradio_node.cpp)
+
+#dependencies for node from ros packages
+ament_target_dependencies(crazyradio_node
   rclcpp
   crtp_interface)
 
+#dependencies for node from local libs
+target_link_libraries(crazyradio_node
+  libcrazyradio)
 
-install(TARGETS crazyradio DESTINATION lib/${PROJECT_NAME})
-
-target_link_libraries(crazyradio libcrazyradio)
+install(TARGETS   
+  crazyradio_node 
+  DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

@@ -8,7 +8,7 @@
 #include "rclcpp/qos.hpp"
 
 #include "libcrazyradio/Crazyradio.hpp"
-#include "libcrazyradio/CrtpLink.hpp"
+#include "libcrtp/CrtpLink.hpp"
 
 
 #include "crtp_interface/srv/crtp_packet_send.hpp"
