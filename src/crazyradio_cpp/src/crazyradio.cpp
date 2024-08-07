@@ -141,15 +141,23 @@ class CrazyradioNode : public rclcpp::Node
             libcrtp::CrtpPacket * responsePacket)
         {  
             libcrazyradio::Crazyradio::Ack ack;
-
+        
             m_radio.sendCrtpPacket(link, packet, ack);
             if (link->isBroadcast) 
             {
                 return true;
             }
             if (!ack.ack)       RCLCPP_WARN(this->get_logger(),"Crazyflie with id 0x%X not reachable!", (uint8_t)(link->address & 0xFF) );
-            else if (!ack.size) RCLCPP_WARN(this->get_logger(),"Empty response #703");
-            else {               
+            else if (!ack.size) {
+                /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
+                *  The message however gets succesfully received by the crazyflie.
+                *  For now we just assume that a nullpacket would have been sent from crazyflie, in order not to break any other code.
+                */
+                RCLCPP_WARN(this->get_logger(),"Empty response #703");
+                memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
+                return true;
+            
+            } else {               
                 libcrazyradio::Crazyradio::ackToCrtpPacket(&ack, responsePacket);
                 return true;
             }       

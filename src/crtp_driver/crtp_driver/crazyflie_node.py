@@ -17,7 +17,7 @@ from crtp_driver.generic_commander import GenericCommander
 from crtp_driver.hardware_commander import HardwareCommander
 from crtp_driver.param_reader import ParameterCommander
 from crtp_driver.LoggingCommander import LoggingCommander
-
+from crtp_driver.Console import Console
 from crtp_driver.localization import Localization
 
 from tf2_ros import TransformException
@@ -49,10 +49,12 @@ class Crazyflie(Node):
         self.crtp_link = CrtpLinkRos(self, self.channel, self.address, self.datarate)
 
         self.hardware_commander = HardwareCommander(self, self.crtp_link)
+        self.console = Console(self, self.crtp_link)
 
         # Establish Connection
         for i in range(10):
-            self.hardware_commander.send_nullpacket()
+            #self.hardware_commander.send_nullpacket()
+            self.console.send_consolepacket()
 
 
         # Establish Tracking
