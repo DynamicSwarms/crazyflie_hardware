@@ -6,7 +6,7 @@ from crtplib.logic.link_layer_logic import LinkLayerLogic
 from std_msgs.msg import Empty
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-class HardwareCommander(LinkLayerLogic):
+class LinkLayer(LinkLayerLogic):
     def __init__(self, node, CrtpLink):
         super().__init__(CrtpPacker, CrtpLink)
 

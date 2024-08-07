@@ -7,13 +7,15 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from crtplib.logic.logging_logic import LoggingLogic
 
-class LoggingCommander(LoggingLogic):
+class Logging(LoggingLogic):
     def __init__(self, node, CrtpLink):
         p = os.environ.get("HOME")
         path = os.path.join(p, ".crazyflie", "log")
         super().__init__(CrtpPacker, CrtpLink, path)
-        
         self.node = node
+
+        self.initialize_toc()
+
         callback_group = MutuallyExclusiveCallbackGroup()
 
         node.create_subscription(Empty, "~/get_logging_toc_info", self._get_toc_info, 10, callback_group=callback_group)

@@ -7,6 +7,7 @@ data_files.append(('share/ament_index/resource_index/packages', ['resource/' + p
 data_files.append(('share/' + package_name + '/launch', ['launch/crazyradio.launch.py']))
 data_files.append(('share/' + package_name + '/launch', ['launch/crazyradio_sim.launch.py']))
 data_files.append(('share/' + package_name + '/launch', ['launch/crazyradio_pure.launch.py']))
+data_files.append(('share/' + package_name + '/launch', ['launch/crazyflie_config.yaml']))
 
 
 

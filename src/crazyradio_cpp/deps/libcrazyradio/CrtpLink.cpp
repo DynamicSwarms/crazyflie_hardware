@@ -22,7 +22,7 @@ CrtpLink::CrtpLink(
     , m_address(address)
     , m_datarate(datarate)
     , m_isBroadcast(((address >> 4 * 8) & 0xFF) == 0xFF) // Broadcasting Packet if 0xFF   
-    , m_failedMessagesMaximum(10)
+    , m_failedMessagesMaximum(100)
     , m_failedMessagesCount(0)
 {
 }

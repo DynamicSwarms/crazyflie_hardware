@@ -7,22 +7,20 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 import logging
 
-from crtp_interface.srv import CrtpPacketSend
-
-from std_msgs.msg import Int16
+from broadcaster_interface.srv import PosiPoseBroadcastObject
 
 from crtp_driver.high_level_commander import HighLevelCommander
 from crtp_driver.basic_commander import BasicCommander
 from crtp_driver.generic_commander import GenericCommander
-from crtp_driver.hardware_commander import HardwareCommander
-from crtp_driver.param_reader import ParameterCommander
-from crtp_driver.LoggingCommander import LoggingCommander
-from crtp_driver.Console import Console
+from crtp_driver.link_layer import LinkLayer
+from crtp_driver.parameters import Parameters
+from crtp_driver.logging import Logging
+from crtp_driver.console import Console
 from crtp_driver.localization import Localization
 
 from object_tracker_interfaces.srv import AddTrackerObject, RemoveTrackerObject
 from .crtp_link_ros import CrtpLinkRos
-
+from rclpy.parameter import Parameter
 
 class Crazyflie(Node):
     STATE_INIT = 0
@@ -30,35 +28,36 @@ class Crazyflie(Node):
     STATE_DESTROY = 2
 
     def __init__(self):
-        super().__init__("cf")
-        self.declare_parameter('id', 0x0)
-        self.declare_parameter('channel', 100)
-        self.declare_parameter('datarate', 2)
+        super().__init__("cf", automatically_declare_parameters_from_overrides=True)
         self.id = self.get_parameter('id').get_parameter_value().integer_value
         self.channel = self.get_parameter('channel').get_parameter_value().integer_value
         self.datarate = self.get_parameter('datarate').get_parameter_value().integer_value
+        self.initial_position = self.get_parameter('initial_position').get_parameter_value().double_array_value
         self.address = (0xE7, 0xE7,0xE7,0xE7, self.id)
-
         self.prefix = "cf" + str(self.id)
 
         self.state = self.STATE_INIT
         self.crtp_link = CrtpLinkRos(self, self.channel, self.address, self.datarate, self.on_link_shutdown)
 
-        self.hardware_commander = HardwareCommander(self, self.crtp_link)
+        self.hardware_commander = LinkLayer(self, self.crtp_link)
         self.console = Console(self, self.crtp_link)
 
         # Establish Connection
+        # We need to send highest priority packets because some packages might get lost in the beginning
         for _ in range(10):
             self.console.send_consolepacket()
 
         self.add_to_tracker()
-        
-        ## Add necesities in order to initialise
-        self.param_reader = ParameterCommander(self, self.crtp_link)
-        self.logging_commander = LoggingCommander(self, self.crtp_link)
-        self.localization = Localization(self, self.crtp_link)
-        self.initialize()
 
+        self.add_to_broadcaster()
+        
+        ## Add Parameters, Logging and Localization which initialize automatically
+        self.parameters = Parameters(self, self.crtp_link)
+        self.logging = Logging(self, self.crtp_link)
+        self.localization = Localization(self, self.crtp_link)
+        self.initialize() # Intialize from default parameters
+
+        # Add functionalities after initialization, ensuring we cannot takeoff before initialization
         self.hl_commander = HighLevelCommander(self, self.crtp_link)
         self.basic_commander = BasicCommander(self, self.crtp_link)
         self.generic_commander = GenericCommander(self, self.crtp_link)
@@ -85,49 +84,37 @@ class Crazyflie(Node):
         req.tf_name.data = self.prefix
         req.marker_configuration_idx = 4
         req.max_initial_deviation = 0.4
+        req.initial_pose.position.x, req.initial_pose.position.y, req.initial_pose.position.z = self.initial_position
         self.add_to_tracker_service.call_async(req)
 
-    
+
+    def add_to_broadcaster(self):
+        # Establish Broadcasting
+        self.add_to_broadcaster_service = self.create_client(PosiPoseBroadcastObject, "/add_posi_pose_object")
+        while not self.add_to_broadcaster_service.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Add to Broadcaster Service not available, waiting again...")
+        
+        req = PosiPoseBroadcastObject.Request()
+        req.channel = self.channel
+        req.tf_frame_id = self.prefix
+        req.data_rate = self.datarate
+        self.add_to_broadcaster_service.call_async(req)
+
     def initialize(self, msg=None):
         self.get_logger().info("Initializing:")
-        
-        self.logging_commander.initialize_toc()
-        self.param_reader.initialize_toc()
-
         self.get_logger().info("Setting Parameters:")
 
-        self.param_reader.set_parameter("ring", "effect", 2)
-        self.param_reader.set_parameter("commander", "enHighLevel", 1)
-        self.param_reader.set_parameter("stabilizer", "estimator", 2) #kalman
-        self.param_reader.set_parameter("stabilizer", "controller",2) #1: pid 2: mellinger
-        self.param_reader.set_parameter("locSrv", "extPosStdDev", 1e-2) #1e-3 # this allows us to fly with 5 hz only
-        self.param_reader.set_parameter("locSrv", "extQuatStdDev", 0.5e-1)
-        
-        
-        self.param_reader.set_parameter("ctrlMel", "kp_xy", 0.4)
-        self.param_reader.set_parameter("ctrlMel", "kd_xy", 0.2)
-        self.param_reader.set_parameter("ctrlMel", "ki_xy", 0.05)
-        self.param_reader.set_parameter("ctrlMel", "i_range_xy", 2.0)
-        self.param_reader.set_parameter("ctrlMel", "kR_xy", 70000)
-        self.param_reader.set_parameter("ctrlMel", "kw_xy", 20000)
-        self.param_reader.set_parameter("ctrlMel", "kR_z", 60000)
-        self.param_reader.set_parameter("ctrlMel", "kw_z", 12000)
-        self.param_reader.set_parameter("ctrlMel", "ki_m_z", 500)
-        self.param_reader.set_parameter("ctrlMel", "i_range_m_z", 1500)
-        self.param_reader.set_parameter("ctrlMel", "kd_omega_rp", 200)
-        self.param_reader.set_parameter("ctrlMel", "kp_z", 1.25)
-        self.param_reader.set_parameter("ctrlMel", "kd_z", 0.4)
-        self.param_reader.set_parameter("ctrlMel", "ki_z", 0.05)
-        self.param_reader.set_parameter("ctrlMel", "i_range_z", 0.4)
-        self.param_reader.set_parameter("ctrlMel", "mass", 0.037)
-        self.param_reader.set_parameter("ctrlMel", "massThrust", 132000)
-        
+        default_parameter_names = dict(filter(lambda par: par[0].startswith("default_firmware_params") ,self._parameters.items()))
+        for param_name in default_parameter_names:
+            param = self.get_parameter(param_name)
+            msg = param.to_parameter_msg()
+            msg.name = msg.name[len("default_firmware_params."):] 
+            self.set_parameters([Parameter.from_parameter_msg(msg)])
+            
         self.get_logger().info("Adding Log Blocks")
-
-        self.logging_commander.add_block(1, None)
-        self.logging_commander.start_block(1, 100)
-        
-        self.param_reader.set_parameter("kalman", "resetEstimation", 1)
+        self.logging.add_block(1, None)
+        self.logging.start_block(1, 100)
+        self.parameters.set_parameter("kalman", "resetEstimation", 1)
        
 def main():
     rclpy.init()

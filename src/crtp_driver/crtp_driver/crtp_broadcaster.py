@@ -94,7 +94,7 @@ class BroadcasterLogic:
         for i in range(math.ceil(len(id_positions) / 4)):
             packets = []
             for id_, pos in id_positions[i * 4: i * 4 + 4]:
-                self.node.get_logger().info(f"Sending position for {id_}: {pos}")
+                #self.node.get_logger().info(f"Sending position for {id_}: {pos}")
                 packets.append(self.packer.create_external_position_packet(id_, int(pos[0]), int(pos[1]), int(pos[2])))
             packet = self.packer.send_external_positions(packets)
 
