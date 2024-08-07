@@ -4,7 +4,7 @@ import rclpy
 
 from crtp_driver.crtp_packer import CrtpPacker
 from crtplib.logic.parameters_logic import ParametersLogic
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Int16
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 
@@ -21,6 +21,11 @@ class ParameterCommander(ParametersLogic):
         node.create_subscription(Empty, "~/get_parameters_toc_info", self._get_toc_info, 10, callback_group=callback_group)
         node.create_subscription(Empty, "~/download_parameters_toc", self._download_toc, 10, callback_group=callback_group)
 
+        #self.create_subscription(Int16, "~/set_parameter", self.initialize, 10,callback_group=second_cb_group)
+
+        node.create_subscription(Int16, "~/set_color", self._set_color,  10, callback_group=callback_group)
+
+
     def _download_toc(self, msg):
          self.download_toc_items()
 
@@ -34,6 +39,11 @@ class ParameterCommander(ParametersLogic):
                 for name in self.toc.toc[group]:
                     self.node.declare_parameter(str(group) + "." + str(name), rclpy.Parameter.Type.DOUBLE)     
     
+
+    # Legacy function remove, when time is right
+    def _set_color(self, msg):
+        color = msg.data
+        self.set_parameter("ring", "effect", color)
   
     
 

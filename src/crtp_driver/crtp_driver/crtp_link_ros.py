@@ -4,10 +4,11 @@ from crtp_interface.msg import CrtpLinkEnd
 import rclpy
 
 class CrtpLinkRos:
-    def __init__(self, node, channel, address, datarate):
+    def __init__(self, node, channel, address, datarate, link_end_callback):
         self.channel = channel
         self.address = address
         self.datarate = datarate
+        self.link_end_callback = link_end_callback 
         self.node = node
 
 
@@ -40,6 +41,7 @@ class CrtpLinkRos:
         address = msg.address
         if (address == self.address).all():
             self.node.get_logger().info("Address mathces, killing us")
+            if self.link_end_callback is not None: self.link_end_callback()
 
     def send_packet_no_response(self, packet, expects_response=False, matching_bytes=0):
         '''

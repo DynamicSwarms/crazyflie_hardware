@@ -20,10 +20,6 @@ from crtp_driver.LoggingCommander import LoggingCommander
 from crtp_driver.Console import Console
 from crtp_driver.localization import Localization
 
-from tf2_ros import TransformException
-from tf2_ros.buffer import Buffer
-from tf2_ros.transform_listener import TransformListener
-
 from object_tracker_interfaces.srv import AddTrackerObject, RemoveTrackerObject
 from .crtp_link_ros import CrtpLinkRos
 
@@ -42,21 +38,43 @@ class Crazyflie(Node):
         self.channel = self.get_parameter('channel').get_parameter_value().integer_value
         self.datarate = self.get_parameter('datarate').get_parameter_value().integer_value
         self.address = (0xE7, 0xE7,0xE7,0xE7, self.id)
-        if self.id == 0xE7: self.address = (0xFF, 0xE7,0xE7,0xE7, 0xE7) # TODO very hacky way to test broadcasting
+
         self.prefix = "cf" + str(self.id)
 
         self.state = self.STATE_INIT
-        self.crtp_link = CrtpLinkRos(self, self.channel, self.address, self.datarate)
+        self.crtp_link = CrtpLinkRos(self, self.channel, self.address, self.datarate, self.on_link_shutdown)
 
         self.hardware_commander = HardwareCommander(self, self.crtp_link)
         self.console = Console(self, self.crtp_link)
 
         # Establish Connection
-        for i in range(10):
-            #self.hardware_commander.send_nullpacket()
+        for _ in range(10):
             self.console.send_consolepacket()
 
+        self.add_to_tracker()
+        
+        ## Add necesities in order to initialise
+        self.param_reader = ParameterCommander(self, self.crtp_link)
+        self.logging_commander = LoggingCommander(self, self.crtp_link)
+        self.localization = Localization(self, self.crtp_link)
+        self.initialize()
 
+        self.hl_commander = HighLevelCommander(self, self.crtp_link)
+        self.basic_commander = BasicCommander(self, self.crtp_link)
+        self.generic_commander = GenericCommander(self, self.crtp_link)
+        
+        self.state = self.STATE_RUNNING
+        self.get_logger().info("Initialization complete!")
+
+    def __del__(self):
+        self.destroy_node()
+
+    def on_link_shutdown(self):
+        self.get_logger().info("Callback for Link Shutdown!")
+        self.destroy_node()
+        # TODO: Check if this results in any issues in future
+    
+    def add_to_tracker(self):
         # Establish Tracking
         self.add_to_tracker_service = self.create_client(AddTrackerObject, "/tracker/add_object")
         self.remove_from_tracker_service = self.create_client(RemoveTrackerObject, "/tracker/remove_object")
@@ -69,62 +87,9 @@ class Crazyflie(Node):
         req.max_initial_deviation = 0.4
         self.add_to_tracker_service.call_async(req)
 
-        ## Add necesities in order to initialise
-        self.param_reader = ParameterCommander(self, self.crtp_link)
-        self.logging_commander = LoggingCommander(self, self.crtp_link)
-        self.localization = Localization(self, self.crtp_link)
-        self.initialize()
-
-        self.hl_commander = HighLevelCommander(self, self.crtp_link)
-        self.basic_commander = BasicCommander(self, self.crtp_link)
-        self.generic_commander = GenericCommander(self, self.crtp_link)
-        
-
-        self.create_subscription(Int16, "~/set_color", self.set_color,  10)
-        self.create_subscription(Int16, "~/send_nullpacket", self.hardware_commander.send_nullpacket(), 10)
-
-        
-        second_cb_group = MutuallyExclusiveCallbackGroup()
-        self.create_subscription(Int16, "~/initialize", self.initialize, 10,callback_group=second_cb_group)
-        self.create_subscription(Int16, "~/set_parameter", self.initialize, 10,callback_group=second_cb_group)
-        
-
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
-
-        self.timer = self.create_timer(0.2, self.on_timer, callback_group=second_cb_group)
-
-        self.state = self.STATE_RUNNING
-        self.get_logger().info("Initialization complete!")
-
-    def __del__(self):
-        self.destroy_node()
-        
-    def on_timer(self):
-        return
-        if self.state == self.STATE_INIT: return
-        if self.id == 0xE7: return
-        try:
-            t = self.tf_buffer.lookup_transform(
-                "world",
-                self.prefix,
-                rclpy.time.Time())
-        except TransformException as ex:
-            self.get_logger().info("Tracker no Frame")
-            return
-
-        pos =  [t.transform.translation.x   * 1
-               , t.transform.translation.y  * 1
-               , t.transform.translation.z  * 1]
-        self.localization.send_extpos(pos)
-        
-        
     
     def initialize(self, msg=None):
         self.get_logger().info("Initializing:")
-        # Read Loc CRC, Load param toc, set param 
-        for i in range(10):
-            self.hardware_commander.send_nullpacket() # TODO remove... but its good to check if all is fine by sending some packets
         
         self.logging_commander.initialize_toc()
         self.param_reader.initialize_toc()
@@ -163,24 +128,7 @@ class Crazyflie(Node):
         self.logging_commander.start_block(1, 100)
         
         self.param_reader.set_parameter("kalman", "resetEstimation", 1)
-        pass
-
-    # Legacy function remove, when time is right
-    def set_color(self, msg):
-        color = msg.data
-        self.param_reader.set_parameter("ring", "effect", color)
-        #pk = CrtpPacketSend.Request()
-        #pk.channel = self.channel
-        #pk.address = self.address
-        #pk.datarate = self.datarate
-        #pk.packet.port = 2
-        #pk.packet.channel = 2
-        #pk.packet.data[0] = 23 ####0x16 in old
-        #pk.packet.data[1] = 0x00
-        #pk.packet.data[2] = color
-        #pk.packet.data_length = 3
-        #self.send_packet_service.call_async(pk)
-
+       
 def main():
     rclpy.init()
     cf = Crazyflie()

@@ -73,7 +73,7 @@ class BroadcasterLogic:
             if frame not in self.frame_channels.keys():
                 # multiple channels can use the same id
                 self.frame_channels[frame] = [channel]
-            self.crtp_links.append(CrtpLinkRos(self.node, channel, self.address, data_rate))
+            self.crtp_links.append(CrtpLinkRos(self.node, channel, self.address, data_rate, None))
         return True
 
     def remove_object(self, channel: int, frame: str) -> bool:
