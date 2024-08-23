@@ -139,12 +139,11 @@ class BroadcasterPacker(Packer):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = Broadcaster()
+    bc = Broadcaster()
 
-    rclpy.spin(node)
-
-    node.destroy_node()
-    rclpy.shutdown()
+    while rclpy.ok():
+        rclpy.spin_once(bc)
+    rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

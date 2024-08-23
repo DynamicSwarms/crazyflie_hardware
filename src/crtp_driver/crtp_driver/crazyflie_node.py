@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 
 import rclpy
 from rclpy.node import Node
@@ -21,7 +22,7 @@ from crtp_driver.localization import Localization
 from object_tracker_interfaces.srv import AddTrackerObject, RemoveTrackerObject
 from .crtp_link_ros import CrtpLinkRos
 from rclpy.parameter import Parameter
-
+from std_msgs.msg import Int16
 class Crazyflie(Node):
     STATE_INIT = 0
     STATE_RUNNING = 1
@@ -29,6 +30,7 @@ class Crazyflie(Node):
 
     def __init__(self):
         super().__init__("cf", automatically_declare_parameters_from_overrides=True)
+        self.get_logger().fatal("Crazyflie Launching!")
         self.id = self.get_parameter('id').get_parameter_value().integer_value
         self.channel = self.get_parameter('channel').get_parameter_value().integer_value
         self.datarate = self.get_parameter('datarate').get_parameter_value().integer_value
@@ -37,8 +39,8 @@ class Crazyflie(Node):
         self.prefix = "cf" + str(self.id)
 
         self.state = self.STATE_INIT
+            
         self.crtp_link = CrtpLinkRos(self, self.channel, self.address, self.datarate, self.on_link_shutdown)
-
         self.hardware_commander = LinkLayer(self, self.crtp_link)
         self.console = Console(self, self.crtp_link)
 
@@ -119,10 +121,11 @@ class Crazyflie(Node):
 def main():
     rclpy.init()
     cf = Crazyflie()
-    while rclpy.ok():
-        rclpy.spin_once(cf)
-    
-    rclpy.shutdown()
-
+    try:
+        while rclpy.ok():
+            rclpy.spin_once(cf)
+        rclpy.try_shutdown()
+    except:
+        pass # Do not print Message on shutdown because we get closed on demand
 if __name__ == '__main__':
     main()

@@ -1,17 +1,21 @@
 cmake_minimum_required(VERSION 3.8)
-project(crazyradio_cpp)
-
-add_subdirectory(deps/libcrazyradio)
-
+project(crazyflie_server_interfaces)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
 # find dependencies
-find_package(rclcpp REQUIRED)
 find_package(ament_cmake REQUIRED)
-find_package(crtp_interface REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/Crazyflie.srv"
+  DEPENDENCIES std_msgs geometry_msgs
+ )
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -24,26 +28,5 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
-
-include_directories(
-  deps/libcrazyradio/include
-)
-
-
-add_executable(crazyradio_node 
-  src/crazyradio_node.cpp)
-
-#dependencies for node from ros packages
-ament_target_dependencies(crazyradio_node
-  rclcpp
-  crtp_interface)
-
-#dependencies for node from local libs
-target_link_libraries(crazyradio_node
-  libcrazyradio)
-
-install(TARGETS   
-  crazyradio_node 
-  DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

@@ -1,4 +1,4 @@
-#include "libcrazyradio/CrtpPacketQueue.hpp"
+#include "libcrtp/CrtpPacketQueue.hpp"
 
 #include <iostream>
 
