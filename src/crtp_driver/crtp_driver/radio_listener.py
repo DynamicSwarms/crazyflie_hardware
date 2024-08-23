@@ -42,8 +42,9 @@ class ResponseListener(Node):
 def main():
     rclpy.init()
     listener = ResponseListener()
-    rclpy.spin(listener)
-    rclpy.shutdown()
+    while rclpy.ok():
+        rclpy.spin_once(listener)
+    rclpy.try_shutdown()
 
 if __name__ == '__main__':
     main()

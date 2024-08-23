@@ -8,56 +8,10 @@ from launch import LaunchDescription
 from ament_index_python.packages import get_package_share_directory
 
 
-def generate_launch_description():
-    package_dir = get_package_share_directory('crtp_driver')
-    
-    cf_config = os.path.join(get_package_share_directory('crtp_driver'),
-                          'launch',
-                          'crazyflie_config.yaml')
-    
-    crazyradio = Node(
-        package="crtp_driver",
-        executable="crazyradio"
-    )
-
+def generate_launch_description():    
     crazyradio_cpp = Node(
         package="crazyradio_cpp",
         executable="crazyradio_node"
-    )
-
-    radiolistener = Node(
-        package="crtp_driver",
-        executable="radiolistener"
-    )
-
-    id = 0xA1
-    cf = Node(
-        package="crtp_driver",
-        executable="crazyflie",
-        parameters=[
-            {
-            "id": id,
-            "channel": 100,
-            "datarate": 2,
-            "initial_position": [0.0, 0.0, 0.0]},
-            cf_config
-        ],
-        name='cf' + str(id)
-    )
-
-    id = 0xA2
-    cf_2 = Node(
-        package="crtp_driver",
-        executable="crazyflie",
-        parameters=[
-            {
-            "id": id,
-            "channel": 100,
-            "datarate": 2,
-            "initial_position": [0.0, 1.0, 0.0]},
-            cf_config
-        ],
-        name='cf' + str(id)
     )
 
     broadcaster = Node(
@@ -65,6 +19,46 @@ def generate_launch_description():
         executable="crtp_broadcaster"
     )
 
+    radiolistener = Node(
+        package="crtp_driver",
+        executable="radiolistener"
+    )
+
+#    cf_config = os.path.join(get_package_share_directory('crtp_driver'),
+#                          'launch',
+#                          'crazyflie_config.yaml')
+#    
+#    id = 0xA1
+#    cf = Node(
+#        package="crtp_driver",
+#        executable="crazyflie",
+#        parameters=[
+#            {
+#            "id": id,
+#            "channel": 100,
+#            "datarate": 2,
+#            "initial_position": [0.0, 0.0, 0.0]},
+#            cf_config
+#        ],
+#        name='cf' + str(id)
+#    )
+#
+#    id = 0xA2
+#    cf_2 = Node(
+#        package="crtp_driver",
+#        executable="crazyflie",
+#        parameters=[
+#            {
+#            "id": id,
+#            "channel": 100,
+#            "datarate": 2,
+#            "initial_position": [0.0, 1.0, 0.0]},
+#            cf_config
+#        ],
+#        name='cf' + str(id)
+#    )
+
+    
     #id = 0xE7
     #cf_broad = Node(
     #    package="crtp_driver",
@@ -78,12 +72,8 @@ def generate_launch_description():
     #)
 
     return LaunchDescription([
-        #crazyradio,
         crazyradio_cpp,
         radiolistener,
-        cf,
-        cf_2,
-        broadcaster#,
-        #cf_broad
-        ])
+        broadcaster
+    ])
 

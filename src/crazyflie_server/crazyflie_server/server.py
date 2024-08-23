@@ -10,7 +10,7 @@ from crazyflie_server_interfaces.srv import Crazyflie
 from ament_index_python.packages import get_package_share_directory
 from ros2run.api import get_executable_path
 
-
+from signal import SIGINT
 class Server(Node):
 
     def __init__(self):
@@ -22,6 +22,9 @@ class Server(Node):
         self.cfs = {}
 
     def remove_crazyflie(self, req, resp):
+        self.get_logger().info("Got called to remove Crazyflie with ID: {}".format(req.id))
+
+        self.cfs[(req.channel, req.id)].terminate()
         resp.success = True
         return resp
 
@@ -50,16 +53,18 @@ class Server(Node):
             '-r', '__node:=cf{}'.format(req.id)
         ]
 
-        self.cfs[(req.channel, req.id)] = asyncio.ensure_future(self.start_cf(args))
-
+        asyncio.ensure_future(self.create_cf(req.id, req.channel, args))  
+        
         resp.success = True 
         return resp
     
-    async def start_cf(self, args):
+    async def create_cf(self, id, channel, args):
         path = get_executable_path(package_name="crtp_driver", executable_name="crazyflie")
-        cmd = ' '.join([path] + args)
-        p =  await asyncio.create_subprocess_shell(cmd)
-        await p.wait()    
+        cmd = [path] + args
+        self.cfs[(channel, id)] = await asyncio.create_subprocess_exec(*cmd)
+        await self.cfs[(channel, id)].wait()
+        
+
 
 async def run_node():
     server = Server()

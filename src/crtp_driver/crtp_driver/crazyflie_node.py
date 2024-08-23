@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 
 import rclpy
 from rclpy.node import Node
@@ -120,10 +121,11 @@ class Crazyflie(Node):
 def main():
     rclpy.init()
     cf = Crazyflie()
-    while rclpy.ok():
-        rclpy.spin_once(cf)
-    
-    rclpy.shutdown()
-
+    try:
+        while rclpy.ok():
+            rclpy.spin_once(cf)
+        rclpy.try_shutdown()
+    except:
+        pass # Do not print Message on shutdown because we get closed on demand
 if __name__ == '__main__':
     main()
