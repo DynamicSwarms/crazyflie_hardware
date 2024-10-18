@@ -1,6 +1,6 @@
 import struct 
-from crtplib.packers.localization_packer import LocalizationPacker
-from crtplib.utils.encoding import fp16_to_float
+from crtp.packers.localization_packer import LocalizationPacker
+from crtp.utils.encoding import fp16_to_float
 
 class LocalizationLogic:
     """

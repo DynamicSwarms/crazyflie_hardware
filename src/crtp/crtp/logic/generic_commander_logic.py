@@ -1,5 +1,5 @@
-from crtplib.packers.generic_commander_packer import GenericCommanderPacker
-from crtplib.utils.encoding import compress_quaternion
+from crtp.packers.generic_commander_packer import GenericCommanderPacker
+from crtp.utils.encoding import compress_quaternion
 
 class GenericCommanderLogic:
     """

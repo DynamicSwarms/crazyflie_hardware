@@ -1,8 +1,8 @@
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from crazyflie_interfaces.msg import NotifySetpointsStop, VelocityWorld, Hover, FullState, Position # (Generic)Commander
 
-from crazyflie_hardware.crtp_driver.crtp_packer_ros import CrtpPackerRos
-from crtp.crtp.logic.generic_commander_logic import GenericCommanderLogic
+from .crtp_packer_ros import CrtpPackerRos
+from crtp.logic.generic_commander_logic import GenericCommanderLogic
 
 class GenericCommander(GenericCommanderLogic):
     def __init__(self, node, CrtpLink):

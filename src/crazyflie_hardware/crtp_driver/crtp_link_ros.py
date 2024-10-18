@@ -1,7 +1,8 @@
+import rclpy
+
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy, QoSDurabilityPolicy
 from crtp_interfaces.srv import CrtpPacketSend
 from crtp_interfaces.msg import CrtpLinkEnd
-import rclpy
 
 class CrtpLinkRos:
     def __init__(self, node, channel, address, datarate, link_end_callback):

@@ -2,11 +2,12 @@ import rclpy
 import os
 
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-
-from crtp.crtp.logic.parameters_logic import ParametersLogic
-from crazyflie_hardware.crtp_driver.crtp_packer_ros import CrtpPackerRos
 from rcl_interfaces.msg import SetParametersResult
 from std_msgs.msg import Empty, Int16
+
+
+from .crtp_packer_ros import CrtpPackerRos
+from crtp.logic.parameters_logic import ParametersLogic
 
 
 class Parameters(ParametersLogic):

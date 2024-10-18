@@ -6,8 +6,8 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 
-from crazyflie_hardware.crtp_driver.crtp_packer_ros import CrtpPackerRos
-from crtp.crtp.logic.localization_logic import LocalizationLogic
+from .crtp_packer_ros import CrtpPackerRos
+from crtp.logic.localization_logic import LocalizationLogic
 
 class Localization(LocalizationLogic):
     def __init__(self, node, CrtpLink):

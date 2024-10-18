@@ -1,7 +1,7 @@
 import struct
 
-from crazyflie_hardware.crtp_driver.crtp_packer_ros import CrtpPackerRos
-from crtp.crtp.logic.link_layer_logic import LinkLayerLogic
+from .crtp_packer_ros import CrtpPackerRos
+from crtp.logic.link_layer_logic import LinkLayerLogic
 
 from std_msgs.msg import Empty
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup

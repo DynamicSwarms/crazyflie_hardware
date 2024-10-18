@@ -1,6 +1,4 @@
-import struct
-
-from crtplib.packers.logging_packer import LoggingPacker
+from crtp.packers.logging_packer import LoggingPacker
 
 from .toc.logging import LogTocElement
 from .toc_logic import TocLogic

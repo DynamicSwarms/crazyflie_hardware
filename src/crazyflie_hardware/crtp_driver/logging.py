@@ -1,11 +1,10 @@
 import os
 
-from crazyflie_hardware.crtp_driver.crtp_packer_ros import CrtpPackerRos
-
 from std_msgs.msg import Int16, Empty
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from crtp.crtp.logic.logging_logic import LoggingLogic
+from .crtp_packer_ros import CrtpPackerRos
+from crtp.logic.logging_logic import LoggingLogic
 
 class Logging(LoggingLogic):
     def __init__(self, node, CrtpLink):

@@ -1,6 +1,4 @@
-import struct 
-
-from crtplib.packers.parameters_packer import ParametersPacker
+from crtp.packers.parameters_packer import ParametersPacker
 
 from .toc.parameters import ParamTocElement
 from .toc_logic import TocLogic

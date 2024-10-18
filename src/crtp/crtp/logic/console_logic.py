@@ -1,4 +1,4 @@
-from crtplib.packers.console_packer import ConsolePacker
+from crtp.packers.console_packer import ConsolePacker
 
 class ConsoleLogic:
 
