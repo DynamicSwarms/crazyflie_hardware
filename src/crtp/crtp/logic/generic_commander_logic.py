@@ -10,12 +10,12 @@ class GenericCommanderLogic:
         self.link = CrtpLink
         self.packer = GenericCommanderPacker(CrtpPacker)
 
-    def send_notify_setpoint_stop(self, remain_valid_milliseconds=0):
+    def send_notify_setpoints_stop(self, remain_valid_milliseconds=0):
         """
         Sends a packet so that the priority of the current setpoint to the lowest non-disabled value,
         so any new setpoint regardless of source will overwrite it.
         """
-        packet = self.packer.send_notify_sendpoint_stop(remain_valid_milliseconds)
+        packet = self.packer.send_notify_sendpoints_stop(remain_valid_milliseconds)
         self.link.send_packet_no_response(packet)
 
     def send_stop_setpoint(self):

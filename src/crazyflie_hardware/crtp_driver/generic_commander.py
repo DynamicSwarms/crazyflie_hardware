@@ -18,7 +18,7 @@ class GenericCommander(GenericCommanderLogic):
 
     def _notify_setpoints_stop(self, msg):
         #TODO: check if group mask might be used
-        self._notify_setpoints_stop(msg.remain_valid_millisecs)
+        self.send_notify_setpoints_stop(msg.remain_valid_millisecs)
 
     def _cmd_vel(self, msg):
         self.send_velocity_world_setpoint(msg.vel.x, msg.vel.y, msg.vel.z, msg.yaw_rate)

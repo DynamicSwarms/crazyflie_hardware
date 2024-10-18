@@ -15,14 +15,14 @@ class GenericCommanderPacker(Packer):
     TYPE_FULL_STATE = 6
     TYPE_POSITION = 7
 
-    TYPE_META_COMMAND_NOTIFY_SETPOINT_STOP = 0
+    TYPE_META_COMMAND_NOTIFY_SETPOINTS_STOP = 0
 
     def __init__(self, CrtpPacker):
         super().__init__(CrtpPacker, self.PORT_COMMANDER_GENERIC)
 
-    def send_notify_sendpoint_stop(self, remain_valid_milliseconds):
+    def send_notify_sendpoints_stop(self, remain_valid_milliseconds):
         data = struct.pack('<BI', 
-                           self.TYPE_META_COMMAND_NOTIFY_SETPOINT_STOP,
+                           self.TYPE_META_COMMAND_NOTIFY_SETPOINTS_STOP,
                            remain_valid_milliseconds)
         return self._prepare_packet(channel=self.META_COMMAND_CHANNEL,
                                     data=data)
