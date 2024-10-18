@@ -11,13 +11,13 @@ from ament_index_python.packages import get_package_share_directory
 from ros2run.api import get_executable_path
 
 from signal import SIGINT
-class Server(Node):
+class Gateway(Node):
 
     def __init__(self):
-        super().__init__("crazyflie_server", automatically_declare_parameters_from_overrides=True)
+        super().__init__("crazyflie_hardware_gateway", automatically_declare_parameters_from_overrides=True)
 
-        self.add_service = self.create_service(Crazyflie, "add_crazyflie", self.add_crazyflie)
-        self.remove_service = self.create_service(Crazyflie, "remove_crazyflie", self.remove_crazyflie)
+        self.add_service = self.create_service(Crazyflie, "~/add_crazyflie", self.add_crazyflie)
+        self.remove_service = self.create_service(Crazyflie, "~/remove_crazyflie", self.remove_crazyflie)
 
         self.cfs = {}
 
@@ -67,10 +67,10 @@ class Server(Node):
 
 
 async def run_node():
-    server = Server()
+    gateway = Gateway()
     while rclpy.ok():
         await asyncio.sleep(0.01)
-        rclpy.spin_once(server, timeout_sec=0)
+        rclpy.spin_once(gateway, timeout_sec=0)
     rclpy.shutdown()
 
 def main():
