@@ -35,7 +35,7 @@ class Gateway(Node):
             Crazyflie, "~/remove_crazyflie", self._remove_crazyflie_callback
         )
 
-    def remove_crazyflie(self, id: int, channel: int) -> bool:
+    def remove_crazyflie(self, channel: int, id: int) -> bool:
         self.get_logger().info("Removing Crazyflie with ID: {}".format(id))
         if (channel, id) in self.crazyflies.keys():
             process = self.crazyflies[(channel, id)]
@@ -67,14 +67,14 @@ class Gateway(Node):
     async def _create_cf(
         self, channel: int, id: int, initial_position: List[float], type: str
     ):
-        cmd = self._create_start_command(channel, id, initial_position)
+        cmd = self._create_start_command(channel, id, initial_position, type)
         self.crazyflies[(channel, id)] = await asyncio.create_subprocess_exec(
             *cmd, preexec_fn=os.setsid
         )
         await self.crazyflies[(channel, id)].wait()
 
     def _create_start_command(
-        self, channel: int, id: int, initial_position: List[float]
+        self, channel: int, id: int, initial_position: List[float], type: str
     ) -> List[str]:
         crazyflie_path = get_executable_path(
             package_name="crazyflie_hardware", executable_name="crazyflie"
