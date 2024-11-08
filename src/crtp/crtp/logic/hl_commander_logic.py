@@ -1,16 +1,24 @@
+from .logic import Logic
+from crtp.crtp_link import CrtpLink
 from crtp.packers.hl_commander_packer import HighLevelCommanderPacker
+from crtp.packers.crtp_packer import CrtpPacker
 
-class HighLevelCommanderLogic:
+from typing import Callable
+
+
+class HighLevelCommanderLogic(Logic):
     ALL_GROUPS = 0
 
     TRAJECTORY_TYPE_POLY4D = 0
     TRAJECTORY_TYPE_POLY4D_COMPRESSED = 1
 
-    def __init__(self, CrtpPacker, CrtpLink):
-        self.link = CrtpLink
-        self.packer = HighLevelCommanderPacker(CrtpPacker)
-        
-    def set_group_mask(self, group_mask=ALL_GROUPS):
+    def __init__(
+        self, crtp_packer_factory: Callable[[int], CrtpPacker], crtp_link: CrtpLink
+    ):
+        super().__init__(crtp_link)
+        self.packer = HighLevelCommanderPacker(crtp_packer_factory)
+
+    def send_set_group_mask(self, group_mask=ALL_GROUPS):
         """
         Set the group mask that the Crazyflie belongs to
 
@@ -19,7 +27,7 @@ class HighLevelCommanderLogic:
         packet = self.packer.set_group_mask(group_mask)
         self.link.send_packet_no_response(packet)
 
-    def stop(self, group_mask=ALL_GROUPS):
+    def send_stop(self, group_mask=ALL_GROUPS):
         """
         stops the current trajectory (turns off the motors)
 
@@ -28,9 +36,10 @@ class HighLevelCommanderLogic:
         """
         packet = self.packer.stop(group_mask)
         self.link.send_packet_no_response(packet)
-    
-    def go_to(self, x, y, z, yaw, duration_s, relative=False,
-              group_mask=ALL_GROUPS):
+
+    def send_go_to(
+        self, x, y, z, yaw, duration_s, relative=False, group_mask=ALL_GROUPS
+    ):
         """
         Go to an absolute or relative position
 
@@ -45,8 +54,14 @@ class HighLevelCommanderLogic:
         packet = self.packer.go_to(group_mask, relative, x, y, z, yaw, duration_s)
         self.link.send_packet_no_response(packet)
 
-    def start_trajectory(self, trajectory_id, time_scale=1.0, relative=False,
-                         reversed=False, group_mask=ALL_GROUPS):
+    def send_start_trajectory(
+        self,
+        trajectory_id,
+        time_scale=1.0,
+        relative=False,
+        reversed=False,
+        group_mask=ALL_GROUPS,
+    ):
         """
         starts executing a specified trajectory
 
@@ -62,10 +77,14 @@ class HighLevelCommanderLogic:
         :param group_mask: Mask for which CFs this should apply to
         :return:
         """
-        packet = self.packer.start_trajectory(group_mask, relative, reversed, trajectory_id, time_scale)
+        packet = self.packer.start_trajectory(
+            group_mask, relative, reversed, trajectory_id, time_scale
+        )
         self.link.send_packet_no_response(packet)
 
-    def define_trajectory(self, trajectory_id, offset, n_pieces, type=TRAJECTORY_TYPE_POLY4D):
+    def send_define_trajectory(
+        self, trajectory_id, offset, n_pieces, type=TRAJECTORY_TYPE_POLY4D
+    ):
         """
         Define a trajectory that has previously been uploaded to memory.
 
@@ -78,8 +97,9 @@ class HighLevelCommanderLogic:
         packet = self.packer.define_trajectory(trajectory_id, type, offset, n_pieces)
         self.link.send_packet_no_response(packet)
 
-
-    def takeoff(self, absolute_height_m, duration_s, group_mask=ALL_GROUPS, yaw=0.0):
+    def send_takeoff(
+        self, absolute_height_m, duration_s, group_mask=ALL_GROUPS, yaw=0.0
+    ):
         """
         vertical takeoff from current x-y position to given height
 
@@ -94,11 +114,12 @@ class HighLevelCommanderLogic:
         if yaw is None:
             target_yaw = 0.0
             useCurrentYaw = True
-        packet = self.packer.takeoff(group_mask, absolute_height_m, target_yaw, useCurrentYaw, duration_s)
+        packet = self.packer.takeoff(
+            group_mask, absolute_height_m, target_yaw, useCurrentYaw, duration_s
+        )
         self.link.send_packet_no_response(packet)
-    
-    def land(self, absolute_height_m, duration_s, group_mask=ALL_GROUPS,
-             yaw=0.0):
+
+    def send_land(self, absolute_height_m, duration_s, group_mask=ALL_GROUPS, yaw=0.0):
         """
         vertical land from current x-y position to given height
 
@@ -113,10 +134,7 @@ class HighLevelCommanderLogic:
         if yaw is None:
             target_yaw = 0.0
             useCurrentYaw = True
-        packet = self.packer.land(group_mask, absolute_height_m, target_yaw, useCurrentYaw, duration_s)         
+        packet = self.packer.land(
+            group_mask, absolute_height_m, target_yaw, useCurrentYaw, duration_s
+        )
         self.link.send_packet_no_response(packet)
-    
-
-    
-
-

@@ -1,41 +1,59 @@
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from crazyflie_interfaces.msg import NotifySetpointsStop, VelocityWorld, Hover, FullState, Position # (Generic)Commander
+from rclpy.node import Node
 
+from crtp_driver.crtp_link_ros import CrtpLinkRos
 from .crtp_packer_ros import CrtpPackerRos
 from crtp.logic.generic_commander_logic import GenericCommanderLogic
+from crazyflie_interfaces_python.server import GenericCommanderServer
 
-class GenericCommander(GenericCommanderLogic):
-    def __init__(self, node, CrtpLink):
-        super().__init__(CrtpPackerRos, CrtpLink)
+from typing import List
 
-        callback_group = MutuallyExclusiveCallbackGroup()
 
-        node.create_subscription(NotifySetpointsStop, "~/notify_setpoints_stop", self._notify_setpoints_stop, 10,callback_group=callback_group) 
-        node.create_subscription(VelocityWorld, "~/cmd_vel", self._cmd_vel, 10, callback_group=callback_group)
-        node.create_subscription(Hover, "~/cmd_hover", self._cmd_hover, 10,callback_group=callback_group)
-        node.create_subscription(FullState, "~/cmd_full_state", self._cmd_full_state, 10, callback_group=callback_group)
-        node.create_subscription(Position, "~/cmd_position", self._cmd_position, 10, callback_group=callback_group)
+class GenericCommander(GenericCommanderServer, GenericCommanderLogic):
+    """
+    Setpoints are received via ros in the GenericCommanderServer.
+    They are then sent out to crtp crazyradio with GenericCommander Logic
+    """
 
-    def _notify_setpoints_stop(self, msg):
-        #TODO: check if group mask might be used
-        self.send_notify_setpoints_stop(msg.remain_valid_millisecs)
+    def __init__(self, node: Node, CrtpLink: CrtpLinkRos):
+        GenericCommanderLogic.__init__(self, CrtpPackerRos, CrtpLink)
+        GenericCommanderServer.__init__(self, node)
 
-    def _cmd_vel(self, msg):
-        self.send_velocity_world_setpoint(msg.vel.x, msg.vel.y, msg.vel.z, msg.yaw_rate)
-        
-    def _cmd_hover(self, msg):
-        self.send_hover_setpoint(msg.vx, msg.vy, msg.yawrate, msg.z_distance)
-        
-    def _cmd_full_state(self, msg):
-        pos = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
-        vel = [msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z]
-        acc = [msg.acc.x, msg.acc.y, msg.acc.z]
-        orientation = [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w ]
-        rollRate = msg.twist.angular.x
-        pitchRate = msg.twist.angular.y
-        yawRate = msg.twist.angular.z
-        self.send_full_state_setpoint(pos, vel, acc, orientation, rollRate, pitchRate, yawRate)
-        
-    def _cmd_position(self, msg):
-        self.send_position_setpoint(msg.x, msg.y, msg.z, msg.yaw)
-        
+    # Override
+    def notify_setpoints_stop(self, remain_valid_millisecs: int) -> None:
+        self.send_notify_setpoints_stop(remain_valid_millisecs)
+
+    # Override
+    def velocity_world_setpoint(
+        self, vx: float, vy: float, vz: float, yawrate: float
+    ) -> None:
+        self.send_velocity_world_setpoint(vx, vy, vz, yawrate)
+
+    # Override
+    def hover_setpoint(
+        self, vx: float, vy: float, yawrate: float, z_distance: float
+    ) -> None:
+        self.send_hover_setpoint(vx, vy, yawrate, z_distance)
+
+    # Override
+    def full_state_setpoint(
+        self,
+        position: List[int],
+        velocity: List[int],
+        acceleration: List[int],
+        orienation: List[int],
+        angular_rate: List[int],
+    ) -> None:
+        roll_rate, pitch_rate, yaw_rate = angular_rate
+        self.send_full_state_setpoint(
+            position,
+            velocity,
+            acceleration,
+            orienation,
+            roll_rate,
+            pitch_rate,
+            yaw_rate,
+        )
+
+    # Override
+    def position_setpoint(self, x: float, y: float, z: float, yaw: float) -> None:
+        self.send_position_setpoint(x, y, z, yaw)
