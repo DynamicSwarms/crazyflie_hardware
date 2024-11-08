@@ -11,8 +11,9 @@ import rclpy
 from rclpy.node import Node
 
 from crazyflie_hardware_gateway_interfaces.srv import Crazyflie
+from geometry_msgs.msg import Point
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 
 class Gateway(Node):
@@ -28,10 +29,10 @@ class Gateway(Node):
         self.crazyflies: Dict[Tuple[int, int], Process] = {}
 
         self.add_service = self.create_service(
-            Crazyflie, "~/add_crazyflie", self.add_crazyflie
+            Crazyflie, "~/add_crazyflie", self._add_crazyflie_callback
         )
         self.remove_service = self.create_service(
-            Crazyflie, "~/remove_crazyflie", self.remove_crazyflie
+            Crazyflie, "~/remove_crazyflie", self._remove_crazyflie_callback
         )
 
     def remove_crazyflie(self, id: int, channel: int) -> bool:
@@ -54,10 +55,31 @@ class Gateway(Node):
         for cf_key in self.crazyflies.keys():
             _ = self.remove_crazyflie(*cf_key)
 
-    def add_crazyflie(self, req, resp):
-        self.get_logger().info("Got called to add Crazyflie with ID: {}".format(req.id))
+    def add_crazyflie(
+        self, channel: int, id: int, initial_position: Point, type: str
+    ) -> bool:
+        self._logger.info("Got called to add Crazyflie with ID: {}".format(id))
+        if (channel, id) in self.crazyflies.keys():
+            self._logger.info("Cannot add Crazyflie, is already in Gateway")
+        asyncio.ensure_future(self._create_cf(channel, id, initial_position, type))
+        return True
 
-        type = req.type.data
+    async def _create_cf(
+        self, channel: int, id: int, initial_position: List[float], type: str
+    ):
+        cmd = self._create_start_command(channel, id, initial_position)
+        self.crazyflies[(channel, id)] = await asyncio.create_subprocess_exec(
+            *cmd, preexec_fn=os.setsid
+        )
+        await self.crazyflies[(channel, id)].wait()
+
+    def _create_start_command(
+        self, channel: int, id: int, initial_position: List[float]
+    ) -> List[str]:
+        crazyflie_path = get_executable_path(
+            package_name="crazyflie_hardware", executable_name="crazyflie"
+        )
+
         markerConfigurationIdx = (
             self.get_parameter("crazyflieTypes." + type + ".markerConfiguration")
             .get_parameter_value()
@@ -69,10 +91,10 @@ class Gateway(Node):
             .integer_value
         )
 
-        initial_position = [
-            req.initial_position.x,
-            req.initial_position.y,
-            req.initial_position.z,
+        initial_position: List[float] = [
+            initial_position.x,
+            initial_position.y,
+            initial_position.z,
         ]
 
         cf_config = os.path.join(
@@ -80,12 +102,14 @@ class Gateway(Node):
             "launch",
             "crazyflie_config.yaml",
         )
-        args = [
+
+        return [
+            crazyflie_path,
             "--ros-args",
             "-p",
-            "id:={}".format(req.id),
+            "id:={}".format(id),
             "-p",
-            "channel:={}".format(req.channel),
+            "channel:={}".format(channel),
             "-p",
             "datarate:={}".format(2),
             "-p",
@@ -95,26 +119,15 @@ class Gateway(Node):
             "--params-file",
             cf_config,
             "-r",
-            "__node:=cf{}".format(req.id),
+            "__node:=cf{}".format(id),
         ]
-
-        asyncio.ensure_future(self.create_cf(req.id, req.channel, args))
-
-        resp.success = True
-        return resp
-
-    async def create_cf(self, id, channel, args):
-        path = get_executable_path(
-            package_name="crazyflie_hardware", executable_name="crazyflie"
-        )
-        cmd = [path] + args
-        self.cfs[(channel, id)] = await asyncio.create_subprocess_exec(*cmd)
-        await self.cfs[(channel, id)].wait()
 
     def _add_crazyflie_callback(
         self, req: Crazyflie.Request, resp: Crazyflie.Response
     ) -> Crazyflie.Response:
-        resp.success = self.add_crazyflie(req.channel, req.id)
+        resp.success = self.add_crazyflie(
+            req.channel, req.id, req.initial_position, req.type.data
+        )
         return resp
 
     def _remove_crazyflie_callback(
