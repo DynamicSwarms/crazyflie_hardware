@@ -1,6 +1,10 @@
-import struct 
-
 from .toc_packer import TocPacker
+from .crtp_packer import CrtpPacker
+
+import struct
+
+from typing import Callable
+
 
 class LoggingPacker(TocPacker):
     PORT_LOGGING = 5
@@ -20,35 +24,27 @@ class LoggingPacker(TocPacker):
     CMD_CREATE_BLOCK_V2 = 6
     CMD_APPEND_BLOCK_V2 = 7
 
-    def __init__(self, CrtpPacker):
-        super().__init__(CrtpPacker, self.PORT_LOGGING)  
-    
+    def __init__(self, crtp_packer_factory: Callable[[int], CrtpPacker]):
+        super().__init__(crtp_packer_factory, self.PORT_LOGGING)
+
     def _create_block_content(self, content):
-        data = struct.pack('<')
-        for el in content: 
+        data = struct.pack("<")
+        for el in content:
             storage_and_fetch, index = el
-            data += struct.pack('<BBB', 
-                                storage_and_fetch,
-                                index & 0xFF,
-                                (index >> 8) & 0xFF 
-                                ) # storage and fetch byte
+            data += struct.pack(
+                "<BBB", storage_and_fetch, index & 0xFF, (index >> 8) & 0xFF
+            )  # storage and fetch byte
         return data
-            
 
     def create_block(self, index, content):
-        data = struct.pack('<BB', self.CMD_CREATE_BLOCK_V2, index)
+        data = struct.pack("<BB", self.CMD_CREATE_BLOCK_V2, index)
         data += self._create_block_content(content)
         return self._prepare_packet(self.CONTROL_CHANNEL, data), True, 2
-    
+
     def start_block(self, index, period):
-        data = struct.pack('<BBB',
-                           self.CMD_START_LOGGING,
-                           index, 
-                           period)
+        data = struct.pack("<BBB", self.CMD_START_LOGGING, index, period)
         return self._prepare_packet(self.CONTROL_CHANNEL, data), True, 2
-    
+
     def stop_block(self, index):
-        data = struct.pack('<BB',
-                           self.CMD_STOP_LOGGING,
-                           index)
+        data = struct.pack("<BB", self.CMD_STOP_LOGGING, index)
         return self._prepare_packet(self.CONTROL_CHANNEL, data), True, 2

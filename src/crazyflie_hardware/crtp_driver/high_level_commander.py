@@ -1,35 +1,56 @@
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.node import Node
 
-from crazyflie_interfaces.msg import SetGroupMask, Takeoff, Land, Stop, GoTo, StartTrajectory, UploadTrajectory # HL_Commander
-
+from crtp_driver.crtp_link_ros import CrtpLinkRos
 from .crtp_packer_ros import CrtpPackerRos
+
 from crtp.logic.hl_commander_logic import HighLevelCommanderLogic
+from crazyflie_interfaces_python.server import HighLevelCommanderServer
 
-class HighLevelCommander(HighLevelCommanderLogic):
-    def __init__(self, node, CrtpLink):
-        super().__init__(CrtpPackerRos, CrtpLink)
 
-        callback_group = MutuallyExclusiveCallbackGroup()
+class HighLevelCommander(HighLevelCommanderServer, HighLevelCommanderLogic):
+    def __init__(self, node: Node, CrtpLink: CrtpLinkRos):
+        HighLevelCommanderLogic.__init__(self, CrtpPackerRos, CrtpLink)
+        HighLevelCommanderServer.__init__(self, node)
 
-        node.create_subscription(SetGroupMask, "~/set_group_mask", self._set_group_mask, 10, callback_group=callback_group)
-        node.create_subscription(Takeoff, "~/takeoff", self._takeoff, 10, callback_group=callback_group)
-        node.create_subscription(Land, "~/land", self._land, 10, callback_group=callback_group)
-        node.create_subscription(GoTo, "~/go_to", self._go_to, 10, callback_group=callback_group)
+    # Override
+    def set_group_mask(self, group_mask: float) -> None:
+        self.send_set_group_mask(group_mask)
 
-    def _set_group_mask(self, msg):
-        self.set_group_mask(msg.group_mask)
-    
-    def _go_to(self, msg):
-        duration = msg.duration.sec + msg.duration.nanosec * 1e-9
-        self.go_to(msg.goal.x, msg.goal.y, msg.goal.z, msg.yaw, duration, msg.relative, msg.group_mask)
-        
-    def _takeoff(self, msg):
-        duration = msg.duration.sec + msg.duration.nanosec * 1e-9
-        self.takeoff(msg.height, duration, msg.group_mask, msg.yaw) 
-        
-    def _land(self, msg):
-        duration = msg.duration.sec + msg.duration.nanosec * 1e-9
-        self.land(msg.height, duration, msg.group_mask, msg.yaw)
-        
-    
+    # Override
+    def go_to(
+        self,
+        group_mask: int,
+        relative: bool,
+        linear: bool,
+        x: float,
+        y: float,
+        z: float,
+        yaw: float,
+        duration_seconds: float,
+    ) -> None:
+        """
+        TODO: Currently there is no implementation for the linear mode
+        """
+        self.send_go_to(x, y, z, yaw, duration_seconds, relative, group_mask)
 
+    # Override
+    def takeoff(
+        self,
+        group_mask: int,
+        height: float,
+        yaw: float,
+        use_current_yaw: bool,
+        duration_seconds: float,
+    ) -> None:
+        self.send_takeoff(height, duration_seconds, group_mask, yaw)
+
+    # Override
+    def land(
+        self,
+        group_mask: int,
+        height: float,
+        yaw: float,
+        use_current_yaw: bool,
+        duration_seconds: float,
+    ) -> None:
+        self.send_land(height, duration_seconds, group_mask, yaw)

@@ -1,14 +1,23 @@
+from .logic import Logic
+from crtp.crtp_link import CrtpLink
 from crtp.packers.generic_commander_packer import GenericCommanderPacker
+from crtp.packers.crtp_packer import CrtpPacker
+
+from typing import Callable
+
 from crtp.utils.encoding import compress_quaternion
 
-class GenericCommanderLogic:
+
+class GenericCommanderLogic(Logic):
     """
     Used for sending control setpoints to the Crazyflie
     """
 
-    def __init__(self, CrtpPacker, CrtpLink):
-        self.link = CrtpLink
-        self.packer = GenericCommanderPacker(CrtpPacker)
+    def __init__(
+        self, crtp_packer_factory: Callable[[int], CrtpPacker], crtp_link: CrtpLink
+    ):
+        super().__init__(crtp_link)
+        self.packer = GenericCommanderPacker(crtp_packer_factory)
 
     def send_notify_setpoints_stop(self, remain_valid_milliseconds=0):
         """
@@ -35,7 +44,6 @@ class GenericCommanderLogic:
         packet = self.packer.send_velocity_world_setpoint(vx, vy, vz, yawrate)
         self.link.send_packet_no_response(packet)
 
-
     def send_zdistance_setpoint(self, roll, pitch, yawrate, zdistance):
         """
         Control mode where the height is send as an absolute setpoint (intended
@@ -48,7 +56,7 @@ class GenericCommanderLogic:
         """
         packet = self.packer.send_zdistance_setpoint(roll, pitch, yawrate, zdistance)
         self.link.send_packet_no_response(packet)
-    
+
     def send_hover_setpoint(self, vx, vy, yawrate, zdistance):
         """
         Control mode where the height is send as an absolute setpoint (intended
@@ -61,8 +69,10 @@ class GenericCommanderLogic:
         """
         packet = self.packer.send_hover_setpoint(vx, vy, yawrate, zdistance)
         self.link.send_packet_no_response(packet)
-    
-    def send_full_state_setpoint(self, pos, vel, acc, orientation, rollrate, pitchrate, yawrate):
+
+    def send_full_state_setpoint(
+        self, pos, vel, acc, orientation, rollrate, pitchrate, yawrate
+    ):
         """
         Control mode where the position, velocity, acceleration, orientation and angular
         velocity are sent as absolute (world) values.
@@ -73,6 +83,7 @@ class GenericCommanderLogic:
         orientation [qx, qy, qz, qw] are the quaternion components of the orientation
         rollrate, pitchrate, yawrate are in degrees/s
         """
+
         def vector_to_mm_16bit(vec):
             return int(vec[0] * 1000), int(vec[1] * 1000), int(vec[2] * 1000)
 
@@ -81,11 +92,9 @@ class GenericCommanderLogic:
         ax, ay, az = vector_to_mm_16bit(acc)
         rr, pr, yr = vector_to_mm_16bit([rollrate, pitchrate, yawrate])
         orient_comp = compress_quaternion(orientation)
-        packet = self.send_full_state_setpoint(x, y, z,
-                                               vx, vy, vz, 
-                                               ax, ay, az, 
-                                               orient_comp, 
-                                               rr, pr, yr)
+        packet = self.send_full_state_setpoint(
+            x, y, z, vx, vy, vz, ax, ay, az, orient_comp, rr, pr, yr
+        )
         self.link.send_packet_no_response(packet)
 
     def send_position_setpoint(self, x, y, z, yaw):
@@ -98,5 +107,3 @@ class GenericCommanderLogic:
         """
         packet = self.packer.send_position_setpoint(x, y, z, yaw)
         self.link.send_packet_no_response(packet)
-
-    

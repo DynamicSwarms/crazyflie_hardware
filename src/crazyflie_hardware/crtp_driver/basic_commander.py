@@ -1,17 +1,15 @@
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.node import Node
 
+from crtp_driver.crtp_link_ros import CrtpLinkRos
 from .crtp_packer_ros import CrtpPackerRos
 from crtp.logic.basic_commander_logic import BasicCommanderLogic
+from crazyflie_interfaces_python.server import RPYTCommanderServer
 
-class BasicCommander(BasicCommanderLogic):
-    def __init__(self, node, CrtpLink):
-        super().__init__(CrtpPackerRos, CrtpLink)
 
-        callback_group = MutuallyExclusiveCallbackGroup()
+class BasicCommander(RPYTCommanderServer, BasicCommanderLogic):
+    def __init__(self, node: Node, CrtpLink: CrtpLinkRos):
+        BasicCommanderLogic.__init__(self, CrtpPackerRos, CrtpLink)
+        RPYTCommanderServer.__init__(self, node)
 
-        # TODO: sendSetpoint not implemented yet
-        #node.create_subscription(SendSetpoint, "~/send_setpoint", self._send_setpoint, 10,callback_group=callback_group) 
-
-    def _send_setpoint(self, msg):
-        self.send_setpoint(msg.roll, msg.pitch, msg.yawrate, msg.thrust)
-        
+    def setpoint(self, roll: float, pitch: float, yawrate: float, thrust: int) -> None:
+        self.send_setpoint(roll, pitch, yawrate, thrust)
