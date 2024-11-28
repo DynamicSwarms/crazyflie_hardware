@@ -10,10 +10,11 @@ from rclpy.qos import (
 from crtp_interfaces.srv import CrtpPacketSend
 from crtp_interfaces.msg import CrtpLinkEnd
 from crtp_interfaces.msg import CrtpPacket
+from crtp_interfaces.msg import CrtpResponse
 
 
 from crtp.crtp_link import CrtpLink
-from typing import Tuple, Callable, List
+from typing import Tuple, Callable, List, Dict
 
 
 class CrtpLinkRos(CrtpLink):
@@ -47,6 +48,23 @@ class CrtpLinkRos(CrtpLink):
         node.create_subscription(
             CrtpLinkEnd, "/crazyradio/crtp_link_end", self._crtp_link_end_callback, 10
         )
+
+        node.create_subscription(
+            CrtpResponse, "crazyradio/crtp_response", self._handle_crtp_response, 10
+        )
+
+        self.callbacks: Dict[int, List[Callable[[CrtpPacket], None]]] = {}
+
+    def add_callback(self, port: int, callback: Callable[[CrtpPacket], None]):
+        if port not in self.callbacks.keys():
+            self.callbacks[port] = []
+        self.callbacks[port].append(callback)
+
+    def _handle_crtp_response(self, msg: CrtpResponse):
+        if msg.channel == self.channel and (msg.address == self.address).all():
+            if msg.packet.port in self.callbacks.keys():
+                for callback in self.callbacks[msg.packet.port]:
+                    callback(msg.packet)
 
     def _prepare_send_request(self) -> CrtpPacketSend.Request:
         req = CrtpPacketSend.Request()
@@ -91,7 +109,9 @@ class CrtpLinkRos(CrtpLink):
         self, packet: CrtpPacket, expects_response: bool, matching_bytes: int
     ):
         fut = self._send_packet(packet, expects_response, matching_bytes)
-        rclpy.spin_until_future_complete(self.node, fut)
+        rclpy.spin_until_future_complete(self.node, fut, timeout_sec=10.0)
+        if fut.result() is None:
+            raise Exception(f"Link did not respond, shutting down {packet}")
         return fut.result().packet
 
     # Override
@@ -108,7 +128,7 @@ class CrtpLinkRos(CrtpLink):
 
         responses = []
         for fut in futures:
-            rclpy.spin_until_future_complete(self.node, fut)
+            rclpy.spin_until_future_complete(self.node, fut, timeout_sec=10.0)
             responses.append(fut.result())
 
         return responses

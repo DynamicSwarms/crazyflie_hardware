@@ -3,7 +3,6 @@ import rclpy
 from rclpy.node import Node
 
 from broadcaster_interfaces.srv import PosiPoseBroadcastObject
-from object_tracker_interfaces.srv import AddTrackerObject, RemoveTrackerObject
 
 from crtp_driver.crtp_link_ros import CrtpLinkRos
 
@@ -18,6 +17,12 @@ from crtp_driver.localization import Localization
 
 from rclpy.parameter import Parameter
 
+from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
+
+from typing import List
+
+SHUTDOWN = False
+
 
 class Crazyflie(Node):
     STATE_INIT = 0
@@ -25,18 +30,10 @@ class Crazyflie(Node):
     STATE_DESTROY = 2
 
     def __init__(self):
-        super().__init__("cf", automatically_declare_parameters_from_overrides=True)
-        self.get_logger().fatal("Crazyflie Launching!")
-        self.id = self.get_parameter("id").get_parameter_value().integer_value
-        self.channel = self.get_parameter("channel").get_parameter_value().integer_value
-        self.datarate = (
-            self.get_parameter("datarate").get_parameter_value().integer_value
-        )
-        self.initial_position = (
-            self.get_parameter("initial_position")
-            .get_parameter_value()
-            .double_array_value
-        )
+        super().__init__("cf")
+        self.__declare_parameters()
+        self.get_logger().fatal(f"Crazyflie Launching!: {self.id}, {self.channel}")
+
         self.address = (0xE7, 0xE7, 0xE7, 0xE7, self.id)
         self.prefix = "cf" + str(self.id)
 
@@ -53,13 +50,13 @@ class Crazyflie(Node):
         for _ in range(10):
             self.console.send_consolepacket()
 
-        self.add_to_tracker()
-
-        self.add_to_broadcaster()
+        if self.send_external_position:
+            self.initialize_tracking()
 
         ## Add Parameters, Logging and Localization which initialize automatically
         self.parameters = Parameters(self, self.crtp_link)
         self.logging = Logging(self, self.crtp_link)
+        self.crtp_link.add_callback(5, self.logging.crtp_callback)
         self.localization = Localization(self, self.crtp_link, self.prefix)
         self.initialize()  # Intialize from default parameters
 
@@ -75,11 +72,38 @@ class Crazyflie(Node):
         self.destroy_node()
 
     def on_link_shutdown(self):
+        global SHUTDOWN
         self.get_logger().info("Callback for Link Shutdown!")
         self.destroy_node()
+        SHUTDOWN = True
         # TODO: Check if this results in any issues in future
 
+    def initialize(self, msg=None):
+        self.get_logger().info("Initializing:")
+        self.get_logger().info("Setting Parameters:")
+
+        default_parameter_names = dict(
+            filter(
+                lambda par: par[0].startswith("default_firmware_params"),
+                self._parameters.items(),
+            )
+        )
+        for param_name in default_parameter_names:
+            param = self.get_parameter(param_name)
+            msg = param.to_parameter_msg()
+            msg.name = msg.name[len("default_firmware_params.") :]
+            self.set_parameters([Parameter.from_parameter_msg(msg)])
+
+        self.get_logger().info("Adding Log Blocks")
+        self.parameters.set_parameter("kalman", "resetEstimation", 1)
+
+    def initialize_tracking(self):
+        self.add_to_tracker()
+        self.add_to_broadcaster()
+
     def add_to_tracker(self):
+        from object_tracker_interfaces.srv import AddTrackerObject, RemoveTrackerObject
+
         # Establish Tracking
         self.add_to_tracker_service = self.create_client(
             AddTrackerObject, "/tracker/add_object"
@@ -119,37 +143,84 @@ class Crazyflie(Node):
         req.data_rate = self.datarate
         self.add_to_broadcaster_service.call_async(req)
 
-    def initialize(self, msg=None):
-        self.get_logger().info("Initializing:")
-        self.get_logger().info("Setting Parameters:")
-
-        default_parameter_names = dict(
-            filter(
-                lambda par: par[0].startswith("default_firmware_params"),
-                self._parameters.items(),
-            )
+    def __declare_parameters(self):
+        self.declare_parameter(
+            name="id", value=0xE7, descriptor=ParameterDescriptor(read_only=True)
         )
-        for param_name in default_parameter_names:
-            param = self.get_parameter(param_name)
-            msg = param.to_parameter_msg()
-            msg.name = msg.name[len("default_firmware_params.") :]
-            self.set_parameters([Parameter.from_parameter_msg(msg)])
+        self.declare_parameter(
+            name="channel", value=80, descriptor=ParameterDescriptor(read_only=True)
+        )
+        self.declare_parameter(
+            name="initial_position",
+            value=[0.0, 0.0, 0.0],
+            descriptor=ParameterDescriptor(read_only=True),
+        )
+        self.declare_parameter(
+            name="datarate", value=2, descriptor=ParameterDescriptor(read_only=True)
+        )
+        self.declare_parameter(name="send_external_position", value=False)
+        self.declare_parameter(name="send_external_pose", value=False)
+        self.add_on_set_parameters_callback(self.__set_parameter_callback)
 
-        self.get_logger().info("Adding Log Blocks")
-        self.logging.add_block(1, None)
-        self.logging.start_block(1, 100)
-        self.parameters.set_parameter("kalman", "resetEstimation", 1)
+        # Parameters from yaml
+        # We need to explicitly iterate over the list of firmware parameters and add them
+        for firmware_param_name, firmware_param_value in filter(
+            lambda item: item[0].startswith("default_firmware_params"),
+            self._parameter_overrides.items(),
+        ):
+            self.declare_parameter(
+                name=firmware_param_name,
+                value=firmware_param_value,
+                descriptor=ParameterDescriptor(dynamic_typing=True, read_only=True),
+            )
+
+    def __set_parameter_callback(self, params: List[Parameter]) -> SetParametersResult:
+        for param in params:
+            if param.name == "send_external_position":
+                if param.value:
+                    self.initialize_tracking()
+        return SetParametersResult(successful=True)
+
+    @property
+    def send_external_position(self) -> bool:
+        return (
+            self.get_parameter("send_external_position")
+            .get_parameter_value()
+            .bool_value
+        )
+
+    @property
+    def id(self) -> int:
+        return self.get_parameter("id").get_parameter_value().integer_value
+
+    @property
+    def channel(self) -> int:
+        return self.get_parameter("channel").get_parameter_value().integer_value
+
+    @property
+    def datarate(self) -> int:
+        return self.get_parameter("datarate").get_parameter_value().integer_value
+
+    @property
+    def initial_position(self) -> List[float]:
+        return (
+            self.get_parameter("initial_position")
+            .get_parameter_value()
+            .double_array_value
+        )
 
 
 def main():
+    global SHUTDOWN
     rclpy.init()
     cf = Crazyflie()
     try:
-        while rclpy.ok():
+        while rclpy.ok() and not SHUTDOWN:
             rclpy.spin_once(cf)
         rclpy.try_shutdown()
-    except:
+    except KeyboardInterrupt:
         pass  # Do not print Message on shutdown because we get closed on demand
+    exit()
 
 
 if __name__ == "__main__":
