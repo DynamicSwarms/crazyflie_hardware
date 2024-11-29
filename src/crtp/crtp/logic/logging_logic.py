@@ -43,13 +43,6 @@ class LoggingLogic(TocLogic):
         self.link.send_packet_no_response(packet)
 
     def add_block(self, id: int, variables: List[str]):
-        # stX = self.toc.get_element_by_complete_name("stateEstimate.x")
-        # stY = self.toc.get_element_by_complete_name("stateEstimate.y")
-        # stZ = self.toc.get_element_by_complete_name("stateEstimate.z")
-        # typeX = LogTocElement.get_id_from_cstring(stX.ctype)
-        # typeY = LogTocElement.get_id_from_cstring(stY.ctype)
-        # typeZ = LogTocElement.get_id_from_cstring(stZ.ctype)
-        # elements = [(typeX, stX.ident), (typeY, stY.ident), (typeZ, stZ.ident)]
         elements: List[Tuple] = []
         unpack_string = ""
         total_bytelength = 0

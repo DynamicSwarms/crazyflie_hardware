@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 import rclpy
-from rclpy.node import Node
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.lifecycle import Node as LifecycleNode
+from rclpy.lifecycle import State, TransitionCallbackReturn
+from lifecycle_msgs.srv import ChangeState
+from lifecycle_msgs.msg import State as LifecycleState
 
 from broadcaster_interfaces.srv import PosiPoseBroadcastObject
 
@@ -16,20 +20,24 @@ from crtp_driver.console import Console
 from crtp_driver.localization import Localization
 
 from rclpy.parameter import Parameter
+from rcl_interfaces.msg import ParameterDescriptor
 
-from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
+from typing import List, Any
 
-from typing import List
-
-SHUTDOWN = False
+from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 
 
-class Crazyflie(Node):
+class Crazyflie(LifecycleNode):
     STATE_INIT = 0
     STATE_RUNNING = 1
     STATE_DESTROY = 2
 
-    def __init__(self):
+    def __init__(self, executor: SingleThreadedExecutor):
+        """Initializes a crazyflie
+
+        Args:
+            executor (SingleThreadedExecutor): The executor used to spin this node, we'll shutdown the executor in order to stop us.
+        """
         super().__init__("cf")
         self.__declare_parameters()
         self.get_logger().fatal(f"Crazyflie Launching!: {self.id}, {self.channel}")
@@ -38,7 +46,19 @@ class Crazyflie(Node):
         self.prefix = "cf" + str(self.id)
 
         self.state = self.STATE_INIT
+        self.executor = executor
 
+        state_transition = self.create_client(
+            ChangeState,
+            f"{self.get_name()}/change_state",
+            callback_group=MutuallyExclusiveCallbackGroup(),
+        )
+        request = ChangeState.Request()
+        request.transition.id = LifecycleState.TRANSITION_STATE_CONFIGURING
+        request.transition.label = "configure"
+        state_transition.call_async(request)
+
+    def configure(self):
         self.crtp_link = CrtpLinkRos(
             self, self.channel, self.address, self.datarate, self.on_link_shutdown
         )
@@ -68,15 +88,8 @@ class Crazyflie(Node):
         self.state = self.STATE_RUNNING
         self.get_logger().info("Initialization complete!")
 
-    def __del__(self):
-        self.destroy_node()
-
     def on_link_shutdown(self):
-        global SHUTDOWN
-        self.get_logger().info("Callback for Link Shutdown!")
-        self.destroy_node()
-        SHUTDOWN = True
-        # TODO: Check if this results in any issues in future
+        self.executor.shutdown(timeout_sec=0.1)
 
     def initialize(self, msg=None):
         self.get_logger().info("Initializing:")
@@ -118,8 +131,9 @@ class Crazyflie(Node):
 
         req = AddTrackerObject.Request()
         req.tf_name.data = self.prefix
-        req.marker_configuration_idx = 4
-        req.max_initial_deviation = 0.4
+        req.marker_configuration_idx = self.marker_configuration_index
+        req.dynamics_configuration_idx = self.dynamics_configuration_index
+        req.max_initial_deviation = self.max_initial_deviation
         (
             req.initial_pose.position.x,
             req.initial_pose.position.y,
@@ -144,23 +158,17 @@ class Crazyflie(Node):
         self.add_to_broadcaster_service.call_async(req)
 
     def __declare_parameters(self):
-        self.declare_parameter(
-            name="id", value=0xE7, descriptor=ParameterDescriptor(read_only=True)
-        )
-        self.declare_parameter(
-            name="channel", value=80, descriptor=ParameterDescriptor(read_only=True)
-        )
-        self.declare_parameter(
-            name="initial_position",
-            value=[0.0, 0.0, 0.0],
-            descriptor=ParameterDescriptor(read_only=True),
-        )
-        self.declare_parameter(
-            name="datarate", value=2, descriptor=ParameterDescriptor(read_only=True)
-        )
-        self.declare_parameter(name="send_external_position", value=False)
-        self.declare_parameter(name="send_external_pose", value=False)
-        self.add_on_set_parameters_callback(self.__set_parameter_callback)
+        self.__declare_readonly_parameter("id", 0xE7)
+        self.__declare_readonly_parameter("channel", 80)
+        self.__declare_readonly_parameter("initial_position", [0.0, 0.0, 0.0])
+        self.__declare_readonly_parameter("datarate", 2)
+
+        # Parameters from crazyflie types.yaml
+        self.__declare_readonly_parameter("send_external_position", False)
+        self.__declare_readonly_parameter("send_external_pose", False)
+        self.__declare_readonly_parameter("max_initial_deviation", 1.0)
+        self.__declare_readonly_parameter("marker_configuration_index", 4)
+        self.__declare_readonly_parameter("dynamics_configuration_index", 0)
 
         # Parameters from yaml
         # We need to explicitly iterate over the list of firmware parameters and add them
@@ -174,19 +182,9 @@ class Crazyflie(Node):
                 descriptor=ParameterDescriptor(dynamic_typing=True, read_only=True),
             )
 
-    def __set_parameter_callback(self, params: List[Parameter]) -> SetParametersResult:
-        for param in params:
-            if param.name == "send_external_position":
-                if param.value:
-                    self.initialize_tracking()
-        return SetParametersResult(successful=True)
-
-    @property
-    def send_external_position(self) -> bool:
-        return (
-            self.get_parameter("send_external_position")
-            .get_parameter_value()
-            .bool_value
+    def __declare_readonly_parameter(self, name: str, value: Any):
+        self.declare_parameter(
+            name=name, value=value, descriptor=ParameterDescriptor(read_only=True)
         )
 
     @property
@@ -209,14 +207,79 @@ class Crazyflie(Node):
             .double_array_value
         )
 
+    @property
+    def send_external_position(self) -> bool:
+        return (
+            self.get_parameter("send_external_position")
+            .get_parameter_value()
+            .bool_value
+        )
+
+    @property
+    def send_external_pose(self) -> bool:
+        return self.get_parameter("send_external_pose").get_parameter_value().bool_value
+
+    @property
+    def max_initial_deviation(self) -> float:
+        return (
+            self.get_parameter("max_initial_deviation")
+            .get_parameter_value()
+            .double_value
+        )
+
+    @property
+    def marker_configuration_index(self) -> int:
+        return (
+            self.get_parameter("marker_configuration_index")
+            .get_parameter_value()
+            .integer_value
+        )
+
+    @property
+    def dynamics_configuration_index(self) -> int:
+        return (
+            self.get_parameter("dynamics_configuration_index")
+            .get_parameter_value()
+            .integer_value
+        )
+
+    def on_configure(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info(
+            f"Node '{self.get_name()}' is in state '{state.label}'. Transitioning to 'configure'"
+        )
+        self.configure()
+        self.get_logger().info("State transition done")
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_activate(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info(
+            f"Node '{self.get_name()}' is in state '{state.label}'. Transitioning to 'activate'"
+        )
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_deactivate(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info(
+            f"Node '{self.get_name()}' is in state '{state.label}'. Transitioning to 'deactivate'"
+        )
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_shutdown(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info(
+            f"Node '{self.get_name()}' is in state '{state.label}'. Transitioning to 'shutdown'"
+        )
+        self.shutdown = True
+        self.cf.close_crazyflie()
+        return TransitionCallbackReturn.SUCCESS
+
 
 def main():
-    global SHUTDOWN
     rclpy.init()
-    cf = Crazyflie()
+    executor = SingleThreadedExecutor()
+
+    cf = Crazyflie(executor)
     try:
-        while rclpy.ok() and not SHUTDOWN:
-            rclpy.spin_once(cf)
+        while rclpy.ok() and not executor._is_shutdown:
+            rclpy.spin_once(cf, timeout_sec=0.1, executor=executor)
         rclpy.try_shutdown()
     except KeyboardInterrupt:
         pass  # Do not print Message on shutdown because we get closed on demand

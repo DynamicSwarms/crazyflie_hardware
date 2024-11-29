@@ -7,6 +7,8 @@ from rclpy.qos import (
     QoSReliabilityPolicy,
     QoSDurabilityPolicy,
 )
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
+
 from crtp_interfaces.srv import CrtpPacketSend
 from crtp_interfaces.msg import CrtpLinkEnd
 from crtp_interfaces.msg import CrtpPacket
@@ -15,6 +17,8 @@ from crtp_interfaces.msg import CrtpResponse
 
 from crtp.crtp_link import CrtpLink
 from typing import Tuple, Callable, List, Dict
+
+from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 
 
 class CrtpLinkRos(CrtpLink):
@@ -28,6 +32,7 @@ class CrtpLinkRos(CrtpLink):
     ):
         super().__init__(channel, address, datarate)
         self.node: Node = node
+        callback_group = MutuallyExclusiveCallbackGroup()
         self.link_end_callback: Callable[[],] = link_end_callback
 
         qos_profile: QoSProfile = QoSProfile(
@@ -37,7 +42,10 @@ class CrtpLinkRos(CrtpLink):
         )
 
         self.send_packet_service = node.create_client(
-            CrtpPacketSend, "/crazyradio/send_crtp_packet", qos_profile=qos_profile
+            CrtpPacketSend,
+            "/crazyradio/send_crtp_packet",
+            qos_profile=qos_profile,
+            callback_group=callback_group,
         )
 
         while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
@@ -46,11 +54,20 @@ class CrtpLinkRos(CrtpLink):
             )
 
         node.create_subscription(
-            CrtpLinkEnd, "/crazyradio/crtp_link_end", self._crtp_link_end_callback, 10
+            CrtpResponse,
+            "crazyradio/crtp_response",
+            self._handle_crtp_response,
+            10,
+            callback_group=callback_group,
         )
 
+        # The Link end has to be in seperate callback group
         node.create_subscription(
-            CrtpResponse, "crazyradio/crtp_response", self._handle_crtp_response, 10
+            msg_type=CrtpLinkEnd,
+            topic="/crazyradio/crtp_link_end",
+            callback=self._crtp_link_end_callback,
+            qos_profile=10,
+            callback_group=MutuallyExclusiveCallbackGroup(),
         )
 
         self.callbacks: Dict[int, List[Callable[[CrtpPacket], None]]] = {}
@@ -109,7 +126,7 @@ class CrtpLinkRos(CrtpLink):
         self, packet: CrtpPacket, expects_response: bool, matching_bytes: int
     ):
         fut = self._send_packet(packet, expects_response, matching_bytes)
-        rclpy.spin_until_future_complete(self.node, fut, timeout_sec=10.0)
+        rclpy.spin_until_future_complete(self.node, fut, executor=self.node.executor)
         if fut.result() is None:
             raise Exception(f"Link did not respond, shutting down {packet}")
         return fut.result().packet
@@ -128,7 +145,9 @@ class CrtpLinkRos(CrtpLink):
 
         responses = []
         for fut in futures:
-            rclpy.spin_until_future_complete(self.node, fut, timeout_sec=10.0)
+            rclpy.spin_until_future_complete(
+                self.node, fut, executor=self.node.executor
+            )
             responses.append(fut.result())
 
         return responses
