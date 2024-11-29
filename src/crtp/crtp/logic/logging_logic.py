@@ -44,12 +44,14 @@ class LoggingLogic(TocLogic):
 
     def add_block(self, id: int, variables: List[str]):
         elements: List[Tuple] = []
-        unpack_string = ""
+        unpack_string = "<"
         total_bytelength = 0
         for variable_name in variables:
             element = self.toc.get_element_by_complete_name(variable_name)
             type_id = LogTocElement.get_id_from_cstring(element.ctype)
-            unpack_string += LogTocElement.get_unpack_string_from_id(type_id)
+            unpack_string += LogTocElement.get_unpack_string_from_id(type_id).strip(
+                "<"
+            )  # only add the key not the >
             total_bytelength += LogTocElement.get_size_from_id(type_id)
             elements.append((type_id, element.ident))
 

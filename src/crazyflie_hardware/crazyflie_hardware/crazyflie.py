@@ -86,7 +86,7 @@ class Crazyflie(LifecycleNode):
         self.get_logger().info("Configuring complete!")
 
     def on_link_shutdown(self):
-        self.executor.shutdown(timeout_sec=0.1)
+        self.__shutdown()
 
     def set_default_parameters(self, msg=None):
         self.get_logger().info("Setting default frimware parameters.")
@@ -208,7 +208,7 @@ class Crazyflie(LifecycleNode):
 
     def on_shutdown(self, state: State) -> TransitionCallbackReturn:
         self.get_logger().info(f"Crazyflie {self.id} shutting down.")
-        self.executor.shutdown(timeout_sec=0.1)
+        self.__shutdown()
         return TransitionCallbackReturn.SUCCESS
 
     def __trigger_state_transition(self, state: LifecycleState, label: str):
@@ -221,6 +221,20 @@ class Crazyflie(LifecycleNode):
         request.transition.id = state
         request.transition.label = label
         state_transition.call_async(request)
+
+    def __shutdown(self):
+        if self.send_external_position:
+            futures = self.localization.stop_external_tracking()
+            # Spin in order to send out service call for external tracking
+            for future in futures:
+                if future is not None:
+                    a = rclpy.spin_until_future_complete(
+                        node=self,
+                        future=future,
+                        executor=self.executor,
+                        timeout_sec=0.1,
+                    )
+        self.executor.shutdown(timeout_sec=0.1)
 
 
 def main():
