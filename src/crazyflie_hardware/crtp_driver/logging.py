@@ -36,7 +36,6 @@ class Logging(LoggingServer, LoggingLogic):
             ]
 
             if block_id in self.block_servers.keys():
-                self.node.get_logger().info(str(values))
                 self.block_servers[block_id].send_data(values)
 
     # Override

@@ -49,8 +49,13 @@ class ResponseListener(Node):
         if port == 15 and channel == 3:
             return
 
-        if not port == 0:
-            self.get_logger().info(string)
+        if port == 0:  # ignore console
+            return
+
+        if port == 5 and channel == 2:  # ignore parameter data
+            return
+
+        self.get_logger().info(string)
         # self.get_logger().info(str(ack))
 
 
