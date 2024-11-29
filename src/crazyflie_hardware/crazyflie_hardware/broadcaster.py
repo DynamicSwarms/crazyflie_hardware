@@ -130,7 +130,7 @@ class PositionBroadcasterCommander(BroadcasterLogic):
             PosiPoseBroadcastObject, "add_posi_pose_object", self._add_object
         )
         self.remove_service = node.create_service(
-            PosiPoseBroadcastObject, "remove_posi_pose_object", self.remove_object
+            PosiPoseBroadcastObject, "remove_posi_pose_object", self._remove_object
         )
 
     def _add_object(self, request, response):

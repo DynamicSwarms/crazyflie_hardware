@@ -63,6 +63,8 @@ class Localization(LocalizationLogic):
         channel: int,
         datarate: int,
     ):
+        self.channel: int = channel
+        self.datarate: int = datarate
         self.add_to_tracker(
             marker_configuration_index,
             dynamics_configuration_index,
@@ -70,6 +72,15 @@ class Localization(LocalizationLogic):
             initial_position,
         )
         self.add_to_broadcaster(channel, datarate)
+
+    def stop_external_tracking(self) -> List:
+        from object_tracker_interfaces.srv import RemoveTrackerObject
+
+        req = RemoveTrackerObject.Request()
+        req.tf_name.data = self.prefix
+        tracker_fut = self.remove_from_tracker_service.call_async(req)
+        broadcaster_fut = self.remove_from_broadcaster(self.channel, self.datarate)
+        return [tracker_fut, broadcaster_fut]
 
     def add_to_tracker(
         self,
@@ -125,3 +136,17 @@ class Localization(LocalizationLogic):
         req.data_rate = datarate
         req.tf_frame_id = self.prefix
         self.add_to_broadcaster_service.call_async(req)
+
+    def remove_from_broadcaster(self, channel: int, datarate: int):
+        self.remove_from_broadcaster_service = self.node.create_client(
+            srv_type=PosiPoseBroadcastObject,
+            srv_name="/remove_posi_pose_object",
+            callback_group=self.callback_group,
+        )
+        if self.remove_from_broadcaster_service.wait_for_service(timeout_sec=0.5):
+            req = PosiPoseBroadcastObject.Request()
+            req.channel = channel
+            req.data_rate = datarate
+            req.tf_frame_id = self.prefix
+            return self.remove_from_broadcaster_service.call_async(req)
+        return None
