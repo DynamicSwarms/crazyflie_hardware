@@ -16,9 +16,7 @@ from crtp_interfaces.msg import CrtpResponse
 
 
 from crtp.crtp_link import CrtpLink
-from typing import Tuple, Callable, List, Dict
-
-from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
+from typing import Callable, List, Dict
 
 
 class CrtpLinkRos(CrtpLink):
@@ -26,11 +24,11 @@ class CrtpLinkRos(CrtpLink):
         self,
         node: Node,
         channel: int,
-        address: Tuple[int],
+        id: int,
         datarate: int,
         link_end_callback: Callable[[], None],
     ):
-        super().__init__(channel, address, datarate)
+        super().__init__(channel, id, datarate)
         self.node: Node = node
         callback_group = MutuallyExclusiveCallbackGroup()
         self.link_end_callback: Callable[[],] = link_end_callback

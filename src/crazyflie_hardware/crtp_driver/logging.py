@@ -2,8 +2,6 @@ from typing import List
 from crazyflie_interfaces_python.server.logblock import LogBlockServer
 from rclpy.node import Node
 from .crtp_link_ros import CrtpLinkRos
-from std_msgs.msg import Int16, Empty
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from .crtp_packer_ros import CrtpPackerRos
 from crtp.logic.logging_logic import LoggingLogic
@@ -12,7 +10,7 @@ import os
 from crtp_interfaces.msg import CrtpPacket
 
 
-from typing import List, Dict, Iterator, Callable
+from typing import List, Dict, Iterator
 
 import struct
 
@@ -23,6 +21,7 @@ class Logging(LoggingServer, LoggingLogic):
         path = os.path.join(p, ".crazyflie", "log")
         LoggingLogic.__init__(self, CrtpPackerRos, crtp_link, path)
         LoggingServer.__init__(self, node)
+        crtp_link.add_callback(5, self.crtp_callback)
 
         self._next_id: Iterator = iter(range(256))
         self.block_servers: Dict[int, LogBlockServer] = {}

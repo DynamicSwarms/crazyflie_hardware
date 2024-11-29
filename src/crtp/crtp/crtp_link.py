@@ -4,9 +4,9 @@ from typing import Tuple, Any, List
 
 
 class CrtpLink(ABC):
-    def __init__(self, channel: int, address: Tuple, datarate: int):
+    def __init__(self, channel: int, id: int, datarate: int):
         self.channel: int = channel
-        self.address: Tuple[int] = address
+        self.address: Tuple[int] = (0xE7, 0xE7, 0xE7, 0xE7, id)
         self.datarate: int = datarate
 
     @abstractmethod
