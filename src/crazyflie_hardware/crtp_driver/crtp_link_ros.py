@@ -7,7 +7,7 @@ from rclpy.qos import (
     QoSReliabilityPolicy,
     QoSDurabilityPolicy,
 )
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from crtp_interfaces.srv import CrtpPacketSend
 from crtp_interfaces.msg import CrtpLinkEnd
@@ -16,7 +16,7 @@ from crtp_interfaces.msg import CrtpResponse
 
 
 from crtp.crtp_link import CrtpLink
-from typing import Callable, List, Dict
+from typing import Tuple, Callable, List, Dict
 
 
 class CrtpLinkRos(CrtpLink):
@@ -24,11 +24,11 @@ class CrtpLinkRos(CrtpLink):
         self,
         node: Node,
         channel: int,
-        id: int,
+        address: Tuple[int],
         datarate: int,
         link_end_callback: Callable[[], None],
     ):
-        super().__init__(channel, id, datarate)
+        super().__init__(channel, address, datarate)
         self.node: Node = node
         callback_group = MutuallyExclusiveCallbackGroup()
         self.link_end_callback: Callable[[],] = link_end_callback

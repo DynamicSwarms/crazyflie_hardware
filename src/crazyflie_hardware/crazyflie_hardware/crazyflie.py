@@ -47,7 +47,11 @@ class Crazyflie(LifecycleNode):
 
     def configure(self):
         self.crtp_link = CrtpLinkRos(
-            self, self.channel, self.id, self.datarate, self.on_link_shutdown
+            self,
+            self.channel,
+            (0xE7, 0xE7, 0xE7, 0xE7, self.id),
+            self.datarate,
+            self.on_link_shutdown,
         )
         self.hardware_commander = LinkLayer(self, self.crtp_link)
         self.console = Console(self, self.crtp_link)
