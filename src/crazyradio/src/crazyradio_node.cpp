@@ -26,10 +26,11 @@ using std::placeholders::_3;
 class CrazyradioNode : public rclcpp::Node
 {
     public: 
-        CrazyradioNode(const rclcpp::NodeOptions & options) : 
-            Node("crazyradio_cpp", options),
-            m_radio(libcrazyradio::Crazyradio(0)),
-            m_links()
+        CrazyradioNode(const rclcpp::NodeOptions & options) 
+            : Node("crazyradio_cpp", options)
+            , m_radio(libcrazyradio::Crazyradio(0))
+            , m_links()
+            , m_radioPeriodMs(2) // 500 Hz
         {
             auto qos = rclcpp::QoS(500);
             qos.reliable();
@@ -49,57 +50,61 @@ class CrazyradioNode : public rclcpp::Node
             link_end_pub = this->create_publisher<crtp_interfaces::msg::CrtpLinkEnd>(
                 "crazyradio/crtp_link_end", 10);
             
-            antenna_timer = this->create_wall_timer(
-                std::chrono::milliseconds(100),
-                std::bind(&CrazyradioNode::antennaCallback, this));
+            radio_timer = this->create_wall_timer(
+                std::chrono::milliseconds(m_radioPeriodMs),
+                std::bind(&CrazyradioNode::radioCallback, this));
                         
             RCLCPP_WARN(this->get_logger(),"Started Crazyradio Node");
         }
     private: 
-        void antennaCallback()
-        {              
+        void radioCallback()
+        {   
+            m_links.relaxLinks(m_radioPeriodMs); 
+            /**
+             * Relax all links because time has passed. The link relaxations allows
+             * for periodic sending of nullpackets, with a maxmim rate for each link.
+             * Nullpackets only get sent if no link want's to send anything.
+             * You can achieve faster polling rate by manually sending nullpackets.
+             * They will not "tense" the link.
+            */
+
             libcrtp::CrtpLinkIdentifier link;
             libcrtp::CrtpPort port;
 
-            while (m_links.getHighestPriorityLink(&link, &port))
+            if (m_links.getHighestPriorityLink(&link, &port))
             {
                 sendPacketFromPort(&link, port);
-            }            
-            
-            /*
-            * Send out nullpackets, should we only do this, if there are packets to be responded to?
-            * Keep logging in mind
-            */
-            if (m_links.getRandomLink(&link) && !link.isBroadcast)
+            } else if (m_links.getRandomRelaxedNonBroadcastLink(&link)) 
             {
                 libcrtp::CrtpPacket packet = libcrtp::nullPacket;
                 m_links.linkAddPacket(&link, &packet, NULL);
-            }
+                if (sendPacketFromPort(&link, packet.port)) 
+                {
+                    m_links.linkTense(&link);
+                }
+            } 
+
         }
 
-        void sendPacketFromPort(libcrtp::CrtpLinkIdentifier * link, libcrtp::CrtpPort port)
+        bool sendPacketFromPort(libcrtp::CrtpLinkIdentifier * link, libcrtp::CrtpPort port)
         {
             libcrtp::CrtpPacket outPacket;
             libcrtp::CrtpPacket responsePacket;       
-            bool linkShallEnd = false;
-            if (! m_links.linkGetPacket(link, port, &outPacket)) return; // Something went wrong when choosing packet  
+            if (! m_links.linkGetPacket(link, port, &outPacket)) return false; // Something went wrong when choosing packet  
 
-            bool successfullSend = this->sendCrtpPacket(link, &outPacket, &responsePacket);
-
-            if (successfullSend) 
+            if (this->sendCrtpPacket(link, &outPacket, &responsePacket)) 
             {
                 m_links.linkNotifySuccessfullMessage(link, port);
                 handleReponsePacket(link, &responsePacket);
-            } else 
-            {
-                linkShallEnd = m_links.linkNotifyFailedMessage(link);
-            }
+                return true;
+            } 
 
-            if (linkShallEnd)
+            if (m_links.linkNotifyFailedMessage(link))
             {   
                 crtpLinkEndCallback(link);
                 m_links.removeLink(link);
             }
+            return false;
         }
 
         void handleReponsePacket(libcrtp::CrtpLinkIdentifier * link,  libcrtp::CrtpPacket * responsePacket) 
@@ -229,7 +234,8 @@ class CrazyradioNode : public rclcpp::Node
 
         rclcpp::CallbackGroup::SharedPtr crtp_send_callback_group;
 
-        rclcpp::TimerBase::SharedPtr antenna_timer; 
+        rclcpp::TimerBase::SharedPtr radio_timer; 
+        uint8_t m_radioPeriodMs;
 
         rclcpp::Service<crtp_interfaces::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_service;
         rclcpp::Publisher<crtp_interfaces::msg::CrtpResponse>::SharedPtr send_response_pub;

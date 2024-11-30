@@ -50,7 +50,21 @@ class CrtpLink
         void notifySuccessfullMessage(CrtpPort port);
         /*Notifies about a failed send attempt, returns true if link shall die*/
         bool notifyFailedMessage();
-        double getLinkQuality();
+
+
+
+
+        /**
+         * Relax and tense the link.
+         * This ensures that the rate of nullpackets is limited. 
+        */
+        void tense();
+        void relaxMs(uint8_t ms);
+
+        // Check if the link is relaxed and nullpacket can be sent
+        bool isRelaxed() const;
+
+        double getLinkQuality() const;
 
         uint8_t getChannel() const;
         uint64_t getAddress() const;
@@ -65,6 +79,9 @@ class CrtpLink
 
         uint8_t m_failedMessagesMaximum;
         uint8_t m_failedMessagesCount;
+
+        uint32_t m_relaxationCountMs;
+        uint32_t m_relaxationPeriodMs;
 
         std::map<CrtpPort, CrtpPacketQueue> m_crtpPortQueues;
 };
@@ -88,6 +105,9 @@ class CrtpLinkContainer
         bool getHighestPriorityLink(CrtpLinkIdentifier * link, CrtpPort * port) const;
 
         bool getRandomLink(CrtpLinkIdentifier * link) const;
+        bool getRandomRelaxedNonBroadcastLink(CrtpLinkIdentifier * link) const;
+
+        void relaxLinks(uint8_t ms);
 
         /**
         * In order to call link functions with link identifiers we need these wrappers
@@ -97,8 +117,11 @@ class CrtpLinkContainer
         void linkNotifySuccessfullMessage(CrtpLinkIdentifier * link_id, CrtpPort port);
         bool linkNotifyFailedMessage(CrtpLinkIdentifier * link_id);
         bool linkReleasePacket(CrtpLinkIdentifier  * link_id, CrtpPacket * responsePacket, CrtpResponseCallback & callback);
+        void linkTense(CrtpLinkIdentifier * link_id);
+        void linkRelaxMs(CrtpLinkIdentifier * link_id, uint8_t ms);
 
     private: 
+        void copyLinkIdentifier(CrtpLinkIdentifier * from_link, CrtpLinkIdentifier * to_link) const;
         void linkToIdentifier(const CrtpLink * link, CrtpLinkIdentifier * link_id) const;
         bool linkFromIdentifier(CrtpLink ** link, CrtpLinkIdentifier * link_id);
         std::map<std::pair<uint8_t, uint64_t>, libcrtp::CrtpLink> m_links;
@@ -106,4 +129,4 @@ class CrtpLinkContainer
         mutable std::mutex m_linksMutex;
 };
 
-}; // namespace libcrtp
+} // namespace libcrtp

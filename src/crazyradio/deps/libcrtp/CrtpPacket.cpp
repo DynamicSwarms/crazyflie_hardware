@@ -28,4 +28,4 @@ uint8_t CrtpPacket::getDataLength() const
     return m_data_length;
 }
 
-}; // namespace libcrtp
+} // namespace libcrtp
