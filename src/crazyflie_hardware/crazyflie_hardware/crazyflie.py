@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import rclpy
-from rclpy.node import Node
-
-from broadcaster_interfaces.srv import PosiPoseBroadcastObject
-from object_tracker_interfaces.srv import AddTrackerObject, RemoveTrackerObject
-
-from crtp_driver.crtp_link_ros import CrtpLinkRos
+from rclpy.executors import SingleThreadedExecutor
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.lifecycle import Node as LifecycleNode
+from rclpy.lifecycle import State, TransitionCallbackReturn
+from lifecycle_msgs.srv import ChangeState
+from lifecycle_msgs.msg import State as LifecycleState
+from rclpy.parameter import Parameter
+from rcl_interfaces.msg import ParameterDescriptor
 
 from crtp_driver.high_level_commander import HighLevelCommander
 from crtp_driver.basic_commander import BasicCommander
@@ -16,34 +18,40 @@ from crtp_driver.logging import Logging
 from crtp_driver.console import Console
 from crtp_driver.localization import Localization
 
-from rclpy.parameter import Parameter
+from crtp_driver.crtp_link_ros import CrtpLinkRos
+
+from typing import List, Any
 
 
-class Crazyflie(Node):
-    STATE_INIT = 0
-    STATE_RUNNING = 1
-    STATE_DESTROY = 2
+class Crazyflie(LifecycleNode):
 
-    def __init__(self):
-        super().__init__("cf", automatically_declare_parameters_from_overrides=True)
-        self.get_logger().fatal("Crazyflie Launching!")
-        self.id = self.get_parameter("id").get_parameter_value().integer_value
-        self.channel = self.get_parameter("channel").get_parameter_value().integer_value
-        self.datarate = (
-            self.get_parameter("datarate").get_parameter_value().integer_value
-        )
-        self.initial_position = (
-            self.get_parameter("initial_position")
-            .get_parameter_value()
-            .double_array_value
-        )
-        self.address = (0xE7, 0xE7, 0xE7, 0xE7, self.id)
+    def __init__(self, executor: SingleThreadedExecutor):
+        """Initializes a crazyflie
+
+        Args:
+            executor (SingleThreadedExecutor): The executor used to spin this node, we'll shutdown the executor in order to stop us.
+        """
+        super().__init__("cf")
+        self.executor = executor
+        self.__declare_parameters()
+
+        self.get_logger().info(f"Crazyflie Launching!: {self.id}, {self.channel}")
         self.prefix = "cf" + str(self.id)
 
-        self.state = self.STATE_INIT
+        self.__trigger_state_transition(
+            LifecycleState.TRANSITION_STATE_CONFIGURING, "configure"
+        )
+        self.__trigger_state_transition(
+            LifecycleState.TRANSITION_STATE_ACTIVATING, "activate"
+        )
 
+    def configure(self):
         self.crtp_link = CrtpLinkRos(
-            self, self.channel, self.address, self.datarate, self.on_link_shutdown
+            self,
+            self.channel,
+            (0xE7, 0xE7, 0xE7, 0xE7, self.id),
+            self.datarate,
+            self.on_link_shutdown,
         )
         self.hardware_commander = LinkLayer(self, self.crtp_link)
         self.console = Console(self, self.crtp_link)
@@ -53,75 +61,35 @@ class Crazyflie(Node):
         for _ in range(10):
             self.console.send_consolepacket()
 
-        self.add_to_tracker()
-
-        self.add_to_broadcaster()
-
         ## Add Parameters, Logging and Localization which initialize automatically
         self.parameters = Parameters(self, self.crtp_link)
         self.logging = Logging(self, self.crtp_link)
         self.localization = Localization(self, self.crtp_link, self.prefix)
-        self.initialize()  # Intialize from default parameters
 
+        # Start localization services / broadcasting if wished for
+        if self.send_external_position:
+            self.localization.start_external_tracking(
+                self.marker_configuration_index,
+                self.dynamics_configuration_index,
+                self.max_initial_deviation,
+                self.initial_position,
+                self.channel,
+                self.datarate,
+            )
+
+        self.set_default_parameters()
         # Add functionalities after initialization, ensuring we cannot takeoff before initialization
         self.hl_commander = HighLevelCommander(self, self.crtp_link)
         self.basic_commander = BasicCommander(self, self.crtp_link)
         self.generic_commander = GenericCommander(self, self.crtp_link)
 
-        self.state = self.STATE_RUNNING
-        self.get_logger().info("Initialization complete!")
-
-    def __del__(self):
-        self.destroy_node()
+        self.get_logger().info("Configuring complete!")
 
     def on_link_shutdown(self):
-        self.get_logger().info("Callback for Link Shutdown!")
-        self.destroy_node()
-        # TODO: Check if this results in any issues in future
+        self.__shutdown()
 
-    def add_to_tracker(self):
-        # Establish Tracking
-        self.add_to_tracker_service = self.create_client(
-            AddTrackerObject, "/tracker/add_object"
-        )
-        self.remove_from_tracker_service = self.create_client(
-            RemoveTrackerObject, "/tracker/remove_object"
-        )
-        while not self.add_to_tracker_service.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info(
-                "Add to Tracker Service not available, waiting again..."
-            )
-
-        req = AddTrackerObject.Request()
-        req.tf_name.data = self.prefix
-        req.marker_configuration_idx = 4
-        req.max_initial_deviation = 0.4
-        (
-            req.initial_pose.position.x,
-            req.initial_pose.position.y,
-            req.initial_pose.position.z,
-        ) = self.initial_position
-        self.add_to_tracker_service.call_async(req)
-
-    def add_to_broadcaster(self):
-        # Establish Broadcasting
-        self.add_to_broadcaster_service = self.create_client(
-            PosiPoseBroadcastObject, "/add_posi_pose_object"
-        )
-        while not self.add_to_broadcaster_service.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info(
-                "Add to Broadcaster Service not available, waiting again..."
-            )
-
-        req = PosiPoseBroadcastObject.Request()
-        req.channel = self.channel
-        req.tf_frame_id = self.prefix
-        req.data_rate = self.datarate
-        self.add_to_broadcaster_service.call_async(req)
-
-    def initialize(self, msg=None):
-        self.get_logger().info("Initializing:")
-        self.get_logger().info("Setting Parameters:")
+    def set_default_parameters(self, msg=None):
+        self.get_logger().info("Setting default frimware parameters.")
 
         default_parameter_names = dict(
             filter(
@@ -135,21 +103,152 @@ class Crazyflie(Node):
             msg.name = msg.name[len("default_firmware_params.") :]
             self.set_parameters([Parameter.from_parameter_msg(msg)])
 
-        self.get_logger().info("Adding Log Blocks")
-        self.logging.add_block(1, None)
-        self.logging.start_block(1, 100)
         self.parameters.set_parameter("kalman", "resetEstimation", 1)
+
+    def __declare_parameters(self):
+        self.__declare_readonly_parameter("id", 0xE7)
+        self.__declare_readonly_parameter("channel", 80)
+        self.__declare_readonly_parameter("initial_position", [0.0, 0.0, 0.0])
+        self.__declare_readonly_parameter("datarate", 2)
+
+        # Parameters from crazyflie types.yaml
+        self.__declare_readonly_parameter("send_external_position", False)
+        self.__declare_readonly_parameter("send_external_pose", False)
+        self.__declare_readonly_parameter("max_initial_deviation", 1.0)
+        self.__declare_readonly_parameter("marker_configuration_index", 4)
+        self.__declare_readonly_parameter("dynamics_configuration_index", 0)
+
+        # Parameters from yaml
+        # We need to explicitly iterate over the list of firmware parameters and add them
+        for firmware_param_name, firmware_param_value in filter(
+            lambda item: item[0].startswith("default_firmware_params"),
+            self._parameter_overrides.items(),
+        ):
+            self.declare_parameter(
+                name=firmware_param_name,
+                value=firmware_param_value,
+                descriptor=ParameterDescriptor(dynamic_typing=True, read_only=True),
+            )
+
+    def __declare_readonly_parameter(self, name: str, value: Any):
+        self.declare_parameter(
+            name=name, value=value, descriptor=ParameterDescriptor(read_only=True)
+        )
+
+    @property
+    def id(self) -> int:
+        return self.get_parameter("id").get_parameter_value().integer_value
+
+    @property
+    def channel(self) -> int:
+        return self.get_parameter("channel").get_parameter_value().integer_value
+
+    @property
+    def datarate(self) -> int:
+        return self.get_parameter("datarate").get_parameter_value().integer_value
+
+    @property
+    def initial_position(self) -> List[float]:
+        return (
+            self.get_parameter("initial_position")
+            .get_parameter_value()
+            .double_array_value
+        )
+
+    @property
+    def send_external_position(self) -> bool:
+        return (
+            self.get_parameter("send_external_position")
+            .get_parameter_value()
+            .bool_value
+        )
+
+    @property
+    def send_external_pose(self) -> bool:
+        return self.get_parameter("send_external_pose").get_parameter_value().bool_value
+
+    @property
+    def max_initial_deviation(self) -> float:
+        return (
+            self.get_parameter("max_initial_deviation")
+            .get_parameter_value()
+            .double_value
+        )
+
+    @property
+    def marker_configuration_index(self) -> int:
+        return (
+            self.get_parameter("marker_configuration_index")
+            .get_parameter_value()
+            .integer_value
+        )
+
+    @property
+    def dynamics_configuration_index(self) -> int:
+        return (
+            self.get_parameter("dynamics_configuration_index")
+            .get_parameter_value()
+            .integer_value
+        )
+
+    # Lifecycle Overrides
+    def on_configure(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info(f"Crazyflie {self.id} configuring.")
+        self.configure()
+        # The configuration cannot fail directly. There will however be a "on link shutdown" called.
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_activate(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info(f"Crazyflie {self.id} transitioned to active.")
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_deactivate(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info(f"Crazyflie {self.id} deactivating (not implemented)")
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_shutdown(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info(f"Crazyflie {self.id} shutting down.")
+        self.__shutdown()
+        return TransitionCallbackReturn.SUCCESS
+
+    def __trigger_state_transition(self, state: LifecycleState, label: str):
+        state_transition = self.create_client(
+            ChangeState,
+            f"{self.get_name()}/change_state",
+            callback_group=MutuallyExclusiveCallbackGroup(),
+        )
+        request = ChangeState.Request()
+        request.transition.id = state
+        request.transition.label = label
+        state_transition.call_async(request)
+
+    def __shutdown(self):
+        if self.send_external_position:
+            futures = self.localization.stop_external_tracking()
+            # Spin in order to send out service call for external tracking
+            for future in futures:
+                if future is not None:
+                    a = rclpy.spin_until_future_complete(
+                        node=self,
+                        future=future,
+                        executor=self.executor,
+                        timeout_sec=0.1,
+                    )
+        self.executor.shutdown(timeout_sec=0.1)
 
 
 def main():
     rclpy.init()
-    cf = Crazyflie()
+    executor = SingleThreadedExecutor()
+
+    cf = Crazyflie(executor)
     try:
-        while rclpy.ok():
-            rclpy.spin_once(cf)
+        while rclpy.ok() and not executor._is_shutdown:
+            rclpy.spin_once(cf, timeout_sec=0.1, executor=executor)
         rclpy.try_shutdown()
-    except:
+    except KeyboardInterrupt:
         pass  # Do not print Message on shutdown because we get closed on demand
+    exit()
 
 
 if __name__ == "__main__":
