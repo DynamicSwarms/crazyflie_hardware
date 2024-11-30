@@ -24,6 +24,8 @@ CrtpLink::CrtpLink(
     , m_isBroadcast(((address >> 4 * 8) & 0xFF) == 0xFF) // Broadcasting Packet if 0xFF   
     , m_failedMessagesMaximum(100)
     , m_failedMessagesCount(0)
+    , m_relaxationCountMs(0)
+    , m_relaxationPeriodMs(10) // At most 100 Hz
 {
 }
 
@@ -69,6 +71,12 @@ CrtpPort CrtpLink::getPriorityPort() const
     return CrtpPort::NO_PORT;
 }
 
+void CrtpLink::notifySuccessfullMessage(CrtpPort port)
+{
+    m_crtpPortQueues[port].sendPacketSuccess();
+    m_failedMessagesCount = 0;
+}
+
 bool CrtpLink::notifyFailedMessage()
 {
     m_failedMessagesCount++;
@@ -79,13 +87,23 @@ bool CrtpLink::notifyFailedMessage()
     return false;
 }
 
-void CrtpLink::notifySuccessfullMessage(CrtpPort port)
+void CrtpLink::tense()
 {
-    m_crtpPortQueues[port].sendPacketSuccess();
-    m_failedMessagesCount = 0;
+    m_relaxationCountMs = 0;
 }
 
-double CrtpLink::getLinkQuality()
+void CrtpLink::relaxMs(uint8_t ms)
+{
+    m_relaxationCountMs += ms;
+}
+
+bool CrtpLink::isRelaxed() const
+{
+    return m_relaxationCountMs >= m_relaxationPeriodMs;
+}
+
+
+double CrtpLink::getLinkQuality() const
 {
     return 1.0 - ((double)m_failedMessagesCount / (double)m_failedMessagesMaximum);
 }
@@ -121,6 +139,15 @@ CrtpLinkContainer::CrtpLinkContainer()
 CrtpLinkContainer::~CrtpLinkContainer()
 {
     /* Maybe have to close links properly */
+}
+
+void CrtpLinkContainer::copyLinkIdentifier(CrtpLinkIdentifier * from_link, CrtpLinkIdentifier * to_link) const
+{
+    to_link->channel = from_link->channel;
+    to_link->address = from_link->address;
+    to_link->datarate = from_link->datarate;
+    to_link->isBroadcast = from_link->isBroadcast;
+
 }
 
 void CrtpLinkContainer::linkToIdentifier(const CrtpLink * link, CrtpLinkIdentifier *  link_id) const
@@ -212,6 +239,43 @@ bool CrtpLinkContainer::getRandomLink(CrtpLinkIdentifier * link) const
     return false;
 }
 
+bool CrtpLinkContainer::getRandomRelaxedNonBroadcastLink(CrtpLinkIdentifier * link) const
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    // Filter for relaxed links
+    std::vector<libcrtp::CrtpLinkIdentifier> relaxed_links;
+
+    libcrtp::CrtpLinkIdentifier link_id;
+    // Iterate over the original map
+    for (const auto& entry : m_links) {
+        if (entry.second.isRelaxed() && !entry.second.isBroadcast()) {
+            linkToIdentifier(&entry.second, &link_id);
+            relaxed_links.push_back(link_id);
+        }
+    }
+
+    if (relaxed_links.size())
+    {
+        auto it = relaxed_links.begin();
+        std::advance(it, rand() % relaxed_links.size());
+        copyLinkIdentifier(&(*it), link);
+        return true;
+    }
+    return false;
+
+}
+
+void CrtpLinkContainer::relaxLinks(uint8_t ms)
+{
+
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    for (auto& [key, link_] : m_links) 
+    {       
+        link_.relaxMs(ms);
+    }
+}
+
+
 void CrtpLinkContainer::linkAddPacket(CrtpLinkIdentifier * link_id, CrtpPacket * packet, CrtpResponseCallback callback)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
@@ -265,5 +329,25 @@ bool CrtpLinkContainer::linkReleasePacket(CrtpLinkIdentifier * link_id,
     return false;
 }
 
+void CrtpLinkContainer::linkTense(CrtpLinkIdentifier * link_id)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    CrtpLink * link;
+    if (linkFromIdentifier(&link, link_id))
+    {
+        link->tense();
+    }
+}
 
-}; // namespace libcrtp
+void CrtpLinkContainer::linkRelaxMs(CrtpLinkIdentifier * link_id, uint8_t ms)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    CrtpLink * link;
+    if (linkFromIdentifier(&link, link_id))
+    {
+        link->relaxMs(ms);
+    }
+}
+
+
+} // namespace libcrtp

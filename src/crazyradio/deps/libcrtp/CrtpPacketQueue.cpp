@@ -83,4 +83,4 @@ bool CrtpPacketQueue::packetsMatch(CrtpPacket * packet, CrtpPacket * response)
     return true;
 }
 
-}; // namespace libcrtp
+} // namespace libcrtp

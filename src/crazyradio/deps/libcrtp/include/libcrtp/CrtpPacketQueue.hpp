@@ -35,4 +35,4 @@ class CrtpPacketQueue
 
 };
 
-}; // namespace libcrtp
+} // namespace libcrtp

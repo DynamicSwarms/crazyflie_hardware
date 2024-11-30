@@ -42,4 +42,4 @@ namespace libcrtp {
 
 
     using CrtpResponseCallback = std::function<void(CrtpPacket*)>;
-}; // namespace libcrtp
+} // namespace libcrtp
