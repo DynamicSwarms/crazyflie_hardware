@@ -38,7 +38,7 @@ class TocLogic(Logic):
         if cache_data:
             self.toc.toc = cache_data
         else:
-            self.download_toc_items()
+            self.send_download_toc_items()
 
     def send_get_toc_info(self):
         packet, expects_response, matching_bytes = self.packer.get_toc_info()
