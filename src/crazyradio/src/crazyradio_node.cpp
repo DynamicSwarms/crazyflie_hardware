@@ -107,7 +107,7 @@ class CrazyradioNode : public rclcpp::Node
                 double linkQuality = m_links.linkGetLinkQuality(link);
                 if (linkQuality < 0.5) 
                 {
-                    RCLCPP_WARN(this->get_logger(),"Link Quality for CF 0x%X low! (%d %)", (uint8_t)(link->address & 0xFF), (uint8_t)(linkQuality * 100));
+                    RCLCPP_WARN(this->get_logger(),"Link Quality for CF 0x%X low! (%d %%)", (uint8_t)(link->address & 0xFF), (uint8_t)(linkQuality * 100));
                 }
             }
             return false;
