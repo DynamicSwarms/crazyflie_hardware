@@ -4,3 +4,4 @@ geometry_msgs/Point initial_position # The initial_position we expect the crazyf
 string type "default"   # The crazyflie type as described by a yaml. e.g tracked, default
 ---
 bool success # True if the call was succesfull
+string msg # If no success this is the reason

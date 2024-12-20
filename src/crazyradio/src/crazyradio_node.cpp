@@ -47,9 +47,15 @@ class CrazyradioNode : public rclcpp::Node
             send_response_pub = this->create_publisher<crtp_interfaces::msg::CrtpResponse>(
                 "crazyradio/crtp_response", 10);
             
-            link_end_pub = this->create_publisher<crtp_interfaces::msg::CrtpLinkEnd>(
+
+            link_end_pub = this->create_publisher<crtp_interfaces::msg::CrtpLink>(
                 "crazyradio/crtp_link_end", 10);
             
+            link_close_sub = this->create_subscription<crtp_interfaces::msg::CrtpLink>(
+                "crazyradio/close_crtp_link", 10,
+                std::bind(&CrazyradioNode::closeLinkCallback, this, _1)
+            );
+
             radio_timer = this->create_wall_timer(
                 std::chrono::milliseconds(m_radioPeriodMs),
                 std::bind(&CrazyradioNode::radioCallback, this));
@@ -141,8 +147,10 @@ class CrazyradioNode : public rclcpp::Node
 
         void crtpLinkEndCallback(libcrtp::CrtpLinkIdentifier * link)
         {
-            auto msg = crtp_interfaces::msg::CrtpLinkEnd();
+            auto msg = crtp_interfaces::msg::CrtpLink();
+            msg.channel = link->channel;
             for (int i = 0; i < 5; i++) msg.address[4-i] = (link->address & ((uint64_t)0xFF << i * 8 )     ) >> i * 8;
+            msg.datarate = link->datarate;
             link_end_pub->publish(msg);
         }
 
@@ -176,6 +184,16 @@ class CrazyradioNode : public rclcpp::Node
             return false;  
         }
 
+        void closeLinkCallback(const crtp_interfaces::msg::CrtpLink::SharedPtr msg)
+        {
+            uint64_t address = 0;
+            for (int i = 0; i < 5; i++) address |= (uint64_t)msg->address[i] << (8 * (4 - i));
+            libcrtp::CrtpLinkIdentifier link;
+            link.channel = msg->channel;
+            link.address = address;
+            link.datarate =  msg->datarate;
+            m_links.removeLink(&link);
+        }
 
         void sendCrtpPacketCallback(
             const std::shared_ptr<rclcpp::Service<crtp_interfaces::srv::CrtpPacketSend>> service_handle,
@@ -184,8 +202,8 @@ class CrazyradioNode : public rclcpp::Node
         {
             // Insert Link
             uint64_t address = 0;
-            for (int i = 0; i < 5; i++) address |= (uint64_t)request->address[i] << (8 * (4 - i));
-            m_links.addLink(request->channel, address, request->datarate);
+            for (int i = 0; i < 5; i++) address |= (uint64_t)request->link.address[i] << (8 * (4 - i));
+            m_links.addLink(request->link.channel, address, request->link.datarate);
             
             // Create Packet 
             libcrtp::CrtpPacket packet = {
@@ -199,7 +217,7 @@ class CrazyradioNode : public rclcpp::Node
             for (int i = 0; i < request->packet.data_length; i++) packet.data[i] = request->packet.data[i];          
 
             // Start thread which puts packet onto the queue and waits for response, if this is necessary            
-            std::thread t([this, packet, channel = request->channel, address,service_handle, header]() mutable {
+            std::thread t([this, packet, channel = request->link.channel, address,service_handle, header]() mutable {
                 using namespace std::chrono_literals;
 
                 volatile bool callback_called = false;
@@ -246,7 +264,8 @@ class CrazyradioNode : public rclcpp::Node
 
         rclcpp::Service<crtp_interfaces::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_service;
         rclcpp::Publisher<crtp_interfaces::msg::CrtpResponse>::SharedPtr send_response_pub;
-        rclcpp::Publisher<crtp_interfaces::msg::CrtpLinkEnd>::SharedPtr link_end_pub;
+        rclcpp::Publisher<crtp_interfaces::msg::CrtpLink>::SharedPtr link_end_pub;
+        rclcpp::Subscription<crtp_interfaces::msg::CrtpLink>::SharedPtr link_close_sub;
 
         std::mutex m_radioMutex;
 };

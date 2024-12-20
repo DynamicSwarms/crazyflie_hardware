@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import rclpy
+from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from rclpy.lifecycle import Node as LifecycleNode
+from rclpy.lifecycle import LifecycleNodeMixin
 from rclpy.lifecycle import State, TransitionCallbackReturn
 from lifecycle_msgs.srv import ChangeState
 from lifecycle_msgs.msg import State as LifecycleState
@@ -16,16 +17,17 @@ from crtp_driver.link_layer import LinkLayer
 from crtp_driver.parameters import Parameters
 from crtp_driver.logging import Logging
 from crtp_driver.console import Console
-from crtp_driver.localization import Localization
+from crtp_driver.localization import Localization, LocalizationException
 
 from crtp_driver.crtp_link_ros import CrtpLinkRos
 
 from typing import List, Any
 
 import signal
+import traceback
 
 
-class Crazyflie(LifecycleNode):
+class Crazyflie(Node, LifecycleNodeMixin):
 
     def __init__(self, executor: SingleThreadedExecutor):
         """Initializes a crazyflie
@@ -33,21 +35,16 @@ class Crazyflie(LifecycleNode):
         Args:
             executor (SingleThreadedExecutor): The executor used to spin this node, we'll shutdown the executor in order to stop us.
         """
-        super().__init__("cf")
+        Node.__init__(self, "cf")
+        LifecycleNodeMixin.__init__(
+            self, callback_group=MutuallyExclusiveCallbackGroup()
+        )
+        self.get_logger().info("Crazyflie alive!")
         self.executor = executor
         self.__declare_parameters()
 
-        self.get_logger().info(f"Crazyflie Launching!: {self.id}, {self.channel}")
-        self.prefix = "cf" + str(self.id)
-
-        self.__trigger_state_transition(
-            LifecycleState.TRANSITION_STATE_CONFIGURING, "configure"
-        )
-        self.__trigger_state_transition(
-            LifecycleState.TRANSITION_STATE_ACTIVATING, "activate"
-        )
-
-    def configure(self):
+    def configure(self) -> bool:
+        self.get_logger().info(f"Crazyflie {self.id}, {self.channel} configuring.")
         self.crtp_link = CrtpLinkRos(
             self,
             self.channel,
@@ -57,27 +54,31 @@ class Crazyflie(LifecycleNode):
         )
         self.hardware_commander = LinkLayer(self, self.crtp_link)
         self.console = Console(self, self.crtp_link)
+        self.localization = Localization(self, self.crtp_link, self.prefix)
 
-        # Establish Connection
-        # We need to send highest priority packets because some packages might get lost in the beginning
+        if self.send_external_position:
+            """Start Localization services and broadcasting.
+            This needs to be done before Connection establishment,
+            because if this fails we do not want to connect.
+            """
+            self.localization.start_external_tracking(
+                marker_configuration_index=self.marker_configuration_index,
+                dynamics_configuration_index=self.dynamics_configuration_index,
+                max_initial_deviation=self.max_initial_deviation,
+                initial_position=self.initial_position,
+                channel=self.channel,
+                datarate=self.datarate,
+            )
+
+        # Establish Connection:
+        # Send hightest priority packets, which ensures these packets are sent before any other.
+        # This needs to be done because sometimes a few of the first packets sent are getting lost.
         for _ in range(10):
             self.console.send_consolepacket()
 
         ## Add Parameters, Logging and Localization which initialize automatically
         self.parameters = Parameters(self, self.crtp_link)
         self.logging = Logging(self, self.crtp_link)
-        self.localization = Localization(self, self.crtp_link, self.prefix)
-
-        # Start localization services / broadcasting if wished for
-        if self.send_external_position:
-            self.localization.start_external_tracking(
-                self.marker_configuration_index,
-                self.dynamics_configuration_index,
-                self.max_initial_deviation,
-                self.initial_position,
-                self.channel,
-                self.datarate,
-            )
 
         self.set_default_parameters()
         # Add functionalities after initialization, ensuring we cannot takeoff before initialization
@@ -193,12 +194,28 @@ class Crazyflie(LifecycleNode):
             .integer_value
         )
 
+    @property
+    def prefix(self) -> str:
+        return f"cf{self.id}"
+
     # Lifecycle Overrides
     def on_configure(self, state: State) -> TransitionCallbackReturn:
-        self.get_logger().info(f"Crazyflie {self.id} configuring.")
-        self.configure()
-        # The configuration cannot fail directly. There will however be a "on link shutdown" called.
-        return TransitionCallbackReturn.SUCCESS
+        LifecycleNodeMixin.on_configure(self, state)
+        try:
+            self.configure()
+            return TransitionCallbackReturn.SUCCESS
+        except (TimeoutError, LocalizationException) as ex:
+            self.get_logger().info(
+                "Crazyflie configuration failed, because: "
+                + str(ex)
+                + "Transitioning to unconfigured."
+            )
+            return TransitionCallbackReturn.FAILURE
+        except Exception:
+            # The lifecycle implementation catches Errors but does not process them and doesnt warn user.
+            # We therefore catch them here and present user feedback
+            self.get_logger().info(str(traceback.format_exc()))
+            return TransitionCallbackReturn.ERROR
 
     def on_activate(self, state: State) -> TransitionCallbackReturn:
         self.get_logger().info(f"Crazyflie {self.id} transitioned to active.")
@@ -225,17 +242,26 @@ class Crazyflie(LifecycleNode):
         state_transition.call_async(request)
 
     def shutdown(self):
-        if self.send_external_position:
-            futures = self.localization.stop_external_tracking()
-            # Spin in order to send out service call for external tracking
-            for future in futures:
-                if future is not None:
-                    rclpy.spin_until_future_complete(
-                        node=self,
-                        future=future,
-                        executor=self.executor,
-                        timeout_sec=0.1,
-                    )
+        """
+        We need to check properly what is already initialized and what isnt
+        """
+        if (
+            self._state_machine.current_state[0]
+            is not LifecycleState.PRIMARY_STATE_UNCONFIGURED
+        ):
+            if self.send_external_position:
+                futures = self.localization.stop_external_tracking()
+                # Spin in order to send out service call for external tracking
+                for future in futures:
+                    if future is not None:
+                        rclpy.spin_until_future_complete(
+                            node=self,
+                            future=future,
+                            executor=self.executor,
+                            timeout_sec=0.1,
+                        )
+
+            self.crtp_link.close_link()
         self.executor.shutdown(timeout_sec=0.1)
 
 
