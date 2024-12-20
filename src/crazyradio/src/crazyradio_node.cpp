@@ -103,6 +103,12 @@ class CrazyradioNode : public rclcpp::Node
             {   
                 crtpLinkEndCallback(link);
                 m_links.removeLink(link);
+            } else {
+                double linkQuality = m_links.linkGetLinkQuality(link);
+                if (linkQuality < 0.5) 
+                {
+                    RCLCPP_WARN(this->get_logger(),"Link Quality for CF 0x%X low! (%d %)", (uint8_t)(link->address & 0xFF), (uint8_t)(linkQuality * 100));
+                }
             }
             return false;
         }
@@ -148,11 +154,12 @@ class CrazyradioNode : public rclcpp::Node
             libcrazyradio::Crazyradio::Ack ack;
         
             m_radio.sendCrtpPacket(link, packet, ack);
+            // RCLCPP_WARN(this->get_logger(),"%X; [%d; %d]!", (uint8_t)(link->address & 0xFF), packet->port, packet->channel );
             if (link->isBroadcast) 
             {
                 return true;
             }
-            if (!ack.ack)       RCLCPP_WARN(this->get_logger(),"Crazyflie with id 0x%X not reachable!", (uint8_t)(link->address & 0xFF) );
+            if (!ack.ack) return false; // RCLCPP_WARN(this->get_logger(),"Crazyflie with id 0x%X not reachable!", (uint8_t)(link->address & 0xFF) );
             else if (!ack.size) {
                 /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
                 *  The message however gets succesfully received by the crazyflie.
