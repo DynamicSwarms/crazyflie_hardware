@@ -329,7 +329,7 @@ bool CrtpLinkContainer::linkReleasePacket(CrtpLinkIdentifier * link_id,
     return false;
 }
 
-double linkGetLinkQuality(CrtpLinkIdentifier * link_id)
+double CrtpLinkContainer::linkGetLinkQuality(CrtpLinkIdentifier * link_id)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
     CrtpLink * link;
