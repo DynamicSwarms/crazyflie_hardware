@@ -39,7 +39,6 @@ class Crazyflie(Node, LifecycleNodeMixin):
         LifecycleNodeMixin.__init__(
             self, callback_group=MutuallyExclusiveCallbackGroup()
         )
-        self.get_logger().info("Crazyflie alive!")
         self.executor = executor
         self.__declare_parameters()
 
@@ -92,7 +91,7 @@ class Crazyflie(Node, LifecycleNodeMixin):
         self.shutdown()
 
     def set_default_parameters(self, msg=None):
-        self.get_logger().info("Setting default frimware parameters.")
+        self.get_logger().debug("Setting default firmware parameters.")
 
         default_parameter_names = dict(
             filter(

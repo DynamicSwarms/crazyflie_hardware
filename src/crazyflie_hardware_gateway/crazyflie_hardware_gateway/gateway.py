@@ -355,16 +355,18 @@ def run_crazyflie_loop(event_loop: asyncio.AbstractEventLoop):
     asyncio.set_event_loop(event_loop)
 
     async def keep_alive():
-        while True:
-            await asyncio.sleep(1)  # Keep the loop alive
+        try:
+            while True:
+                await asyncio.sleep(1)  # Keep the loop alive
+        except asyncio.CancelledError:
+            pass
 
-    asyncio.ensure_future(keep_alive())
+    alive_task = asyncio.ensure_future(keep_alive())
     # If there is no future in the loop it cannot be stopped...
 
     event_loop.run_forever()
-    for i, fut in enumerate(asyncio.all_tasks(event_loop)):
-        if i == 0:
-            continue  # the keep alive cannot die
+    alive_task.cancel()
+    for fut in asyncio.all_tasks(event_loop):
         event_loop.run_until_complete(fut)
     event_loop.close()
 
@@ -399,8 +401,12 @@ def main():
         crazyflie_event_loop.stop()
         gateway_event_loop.stop()
 
+    print("This")
     crazyflie_thread.join()
+    print("That")
     gateway_thread.join()
+    print("What")
+    exit()
 
 
 if __name__ == "__main__":
