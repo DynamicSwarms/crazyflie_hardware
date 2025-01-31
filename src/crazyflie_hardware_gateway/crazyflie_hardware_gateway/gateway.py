@@ -166,7 +166,7 @@ class Gateway(Node):
         self._logger.info(f"Crazyflie (channel={channel}, id={id}) exited.")
 
         # Clean up the crazyflie entry from the dictionary
-        if (channel, id) in self.crazyflies:
+        if (channel, id) in self.crazyflies.keys():
             del self.crazyflies[(channel, id)]
 
     async def _create_cf(
