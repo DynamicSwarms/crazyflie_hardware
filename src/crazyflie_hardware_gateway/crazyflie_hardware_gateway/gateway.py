@@ -117,18 +117,20 @@ class Gateway(Node):
         """
         self._logger.info("Got called to add Crazyflie with ID: {}".format(id))
         if (channel, id) in self.crazyflies.keys():
+            self._logger.debug("Crazyflie already in gateway. ID: {}".format(id))
             cf_state: Optional[LifecycleState] = self._get_state(channel, id)
-            if (
-                cf_state is not None
-                and cf_state.id == LifecycleState.PRIMARY_STATE_UNCONFIGURED
-            ):
-                success = self._transition_crazyflie(
-                    channel,
-                    id,
-                    LifecycleState.TRANSITION_STATE_CONFIGURING,
-                    "configure",
-                )
-                return success
+            if cf_state is not None:
+                if cf_state.id == LifecycleState.PRIMARY_STATE_UNCONFIGURED:
+                    success = self._transition_crazyflie(
+                        channel,
+                        id,
+                        LifecycleState.TRANSITION_STATE_CONFIGURING,
+                        "configure",
+                    )
+                    return success
+                if cf_state.id == LifecycleState.PRIMARY_STATE_ACTIVE:
+                    # Called to add a crazyflie which is already properly initialized.
+                    return True
             raise GatewayError("Cannot add Crazyflie, is already in Gateway!")
         else:
             wait_future = asyncio.run_coroutine_threadsafe(
@@ -144,22 +146,33 @@ class Gateway(Node):
                 lambda fut: self._on_crazyflie_exit(fut, channel, id)
             )
 
-            timeout = 2.0
             key = (channel, id)
-            while timeout > 0.0:
-                if key in self.crazyflies.keys():
-                    if self.crazyflies[key].change_state.wait_for_service(
-                        timeout_sec=0.1
-                    ):
-                        break
-                else:
-                    time.sleep(0.1)
-                timeout -= 0.1
+            if self._wait_for_change_state_service(key, timeout=2.0):
+                success = self._transition_crazyflie(
+                    channel,
+                    id,
+                    LifecycleState.TRANSITION_STATE_CONFIGURING,
+                    "configure",
+                )
+                return success
+            else:
+                raise GatewayError(
+                    f"Crazyflie {key} did not provide change_state service."
+                )
 
-            success = self._transition_crazyflie(
-                channel, id, LifecycleState.TRANSITION_STATE_CONFIGURING, "configure"
-            )
-            return success
+    def _wait_for_change_state_service(
+        self, key: Tuple[int, int], timeout: float
+    ) -> bool:
+        while timeout > 0.0:
+            if (
+                key in self.crazyflies.keys()
+                and self.crazyflies[key].change_state.service_is_ready()
+            ):
+                return True
+
+            time.sleep(0.1)
+            timeout -= 0.1
+        return False
 
     def _on_crazyflie_exit(self, fut: asyncio.Future, channel: int, id: int):
         """Callback invoked when a crazyflie subprocess exits."""
