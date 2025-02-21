@@ -117,6 +117,7 @@ class CrtpLinkContainer
         void linkNotifySuccessfullMessage(CrtpLinkIdentifier * link_id, CrtpPort port);
         bool linkNotifyFailedMessage(CrtpLinkIdentifier * link_id);
         bool linkReleasePacket(CrtpLinkIdentifier  * link_id, CrtpPacket * responsePacket, CrtpResponseCallback & callback);
+        double linkGetLinkQuality(CrtpLinkIdentifier * link_id);
         void linkTense(CrtpLinkIdentifier * link_id);
         void linkRelaxMs(CrtpLinkIdentifier * link_id, uint8_t ms);
 

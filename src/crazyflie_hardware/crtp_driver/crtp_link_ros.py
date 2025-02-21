@@ -10,7 +10,7 @@ from rclpy.qos import (
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from crtp_interfaces.srv import CrtpPacketSend
-from crtp_interfaces.msg import CrtpLinkEnd
+from crtp_interfaces.msg import CrtpLink as CrtpLinkMsg
 from crtp_interfaces.msg import CrtpPacket
 from crtp_interfaces.msg import CrtpResponse
 
@@ -46,9 +46,9 @@ class CrtpLinkRos(CrtpLink):
             callback_group=callback_group,
         )
 
-        while not self.send_packet_service.wait_for_service(timeout_sec=1.0):
-            node.get_logger().info(
-                "Send CRTP Packet Service not available, waiting again..."
+        if not self.send_packet_service.wait_for_service(timeout_sec=1.0):
+            raise TimeoutError(
+                "Send CRTP Packet Service was not available. Make sure to have crazyradio node runs."
             )
 
         node.create_subscription(
@@ -61,11 +61,18 @@ class CrtpLinkRos(CrtpLink):
 
         # The Link end has to be in seperate callback group
         node.create_subscription(
-            msg_type=CrtpLinkEnd,
+            msg_type=CrtpLinkMsg,
             topic="/crazyradio/crtp_link_end",
             callback=self._crtp_link_end_callback,
             qos_profile=10,
             callback_group=MutuallyExclusiveCallbackGroup(),
+        )
+
+        self.link_close_pub = node.create_publisher(
+            msg_type=CrtpLinkMsg,
+            topic="/crazyradio/close_crtp_link",
+            qos_profile=10,
+            callback_group=callback_group,
         )
 
         self.callbacks: Dict[int, List[Callable[[CrtpPacket], None]]] = {}
@@ -75,6 +82,13 @@ class CrtpLinkRos(CrtpLink):
             self.callbacks[port] = []
         self.callbacks[port].append(callback)
 
+    def close_link(self):
+        msg = CrtpLinkMsg()
+        msg.channel = self.channel
+        msg.address = self.address
+        msg.datarate = self.datarate
+        self.link_close_pub.publish(msg)
+
     def _handle_crtp_response(self, msg: CrtpResponse):
         if msg.channel == self.channel and (msg.address == self.address).all():
             if msg.packet.port in self.callbacks.keys():
@@ -83,9 +97,9 @@ class CrtpLinkRos(CrtpLink):
 
     def _prepare_send_request(self) -> CrtpPacketSend.Request:
         req = CrtpPacketSend.Request()
-        req.channel = self.channel
-        req.address = self.address
-        req.datarate = self.datarate
+        req.link.channel = self.channel
+        req.link.address = self.address
+        req.link.datarate = self.datarate
         return req
 
     def _send_packet(
@@ -100,7 +114,7 @@ class CrtpLinkRos(CrtpLink):
         req.packet = packet
         return self.send_packet_service.call_async(req)
 
-    def _crtp_link_end_callback(self, msg: CrtpLinkEnd):
+    def _crtp_link_end_callback(self, msg: CrtpLinkMsg):
         address = msg.address
         if (address == self.address).all():
             self.node.get_logger().info("Address matches, killing us!")

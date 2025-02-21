@@ -2,6 +2,8 @@
 import os
 import asyncio
 from asyncio.subprocess import Process
+
+from threading import Thread
 from signal import SIGINT
 
 from ament_index_python.packages import get_package_share_directory
@@ -9,37 +11,60 @@ from ros2run.api import get_executable_path
 
 import rclpy
 from rclpy.node import Node
+from rclpy.client import Client
+from rclpy import Future
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from crazyflie_hardware_gateway_interfaces.srv import Crazyflie
+from crazyflie_hardware_gateway_interfaces.srv import AddCrazyflie, RemoveCrazyflie
 from geometry_msgs.msg import Point
+from lifecycle_msgs.srv import ChangeState, GetState
+from lifecycle_msgs.msg import State as LifecycleState, TransitionEvent
 
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Optional
+from dataclasses import dataclass
+from threading import Thread
+import time
+
+
+class GatewayError(Exception):
+    pass
+
+
+@dataclass
+class CrazyflieInstance:
+    get_state: Client
+    change_state: Client
+    process: Optional[Process] = None
 
 
 class Gateway(Node):
-
-    def __init__(self):
+    def __init__(self, event_loop):
         super().__init__(
             "crazyflie_hardware_gateway",
             automatically_declare_parameters_from_overrides=True,
         )
+        self._event_loop = event_loop
         self._logger = self.get_logger()
         self._logger.info("Started Hardware-Gateway")
 
-        self.crazyflies: Dict[Tuple[int, int], Process] = {}
+        self.crazyflies: Dict[Tuple[int, int], CrazyflieInstance] = {}
+        self.crazyflie_callback_group = MutuallyExclusiveCallbackGroup()
 
+        callback_group = MutuallyExclusiveCallbackGroup()
         self.add_service = self.create_service(
-            srv_type=Crazyflie,
+            srv_type=AddCrazyflie,
             srv_name="~/add_crazyflie",
             callback=self._add_crazyflie_callback,
+            callback_group=callback_group,
         )
         self.remove_service = self.create_service(
-            srv_type=Crazyflie,
+            srv_type=RemoveCrazyflie,
             srv_name="~/remove_crazyflie",
             callback=self._remove_crazyflie_callback,
+            callback_group=callback_group,
         )
 
-    def remove_crazyflie(self, channel: int, id: int) -> bool:
+    def remove_crazyflie(self, channel: int, id: int) -> Tuple[bool, str]:
         """Remove a crazyflie.
 
         Removes the crazyflie. This Stops the Crazyflies process with a SIGINT.
@@ -54,15 +79,16 @@ class Gateway(Node):
         """
         self.get_logger().info("Removing Crazyflie with ID: {}".format(id))
         if (channel, id) in self.crazyflies.keys():
-            process = self.crazyflies[(channel, id)]
+            process = self.crazyflies[(channel, id)].process
             os.killpg(os.getpgid(process.pid), SIGINT)
-            return True
-        self._logger.info(
+            return (True, "Success")
+        msg = (
             "Couldn't remove crazyflie with Channel: {}, ID: {}; was not active".format(
                 channel, id
             )
         )
-        return False
+        self._logger.info(msg)
+        return (False, msg)
 
     def remove_all_crazyflies(self):
         """Removes all crazyflies which were started with the gateway."""
@@ -91,27 +117,69 @@ class Gateway(Node):
         """
         self._logger.info("Got called to add Crazyflie with ID: {}".format(id))
         if (channel, id) in self.crazyflies.keys():
-            self._logger.info("Cannot add Crazyflie, is already in Gateway")
-            return False
-        wait_future = asyncio.ensure_future(
-            self._create_cf(
-                channel,
-                id,
-                initial_position,
-                type,
+            self._logger.debug("Crazyflie already in gateway. ID: {}".format(id))
+            cf_state: Optional[LifecycleState] = self._get_state(channel, id)
+            if cf_state is not None:
+                if cf_state.id == LifecycleState.PRIMARY_STATE_UNCONFIGURED:
+                    success = self._transition_crazyflie(
+                        channel,
+                        id,
+                        LifecycleState.TRANSITION_STATE_CONFIGURING,
+                        "configure",
+                    )
+                    return success
+                if cf_state.id == LifecycleState.PRIMARY_STATE_ACTIVE:
+                    # Called to add a crazyflie which is already properly initialized.
+                    return True
+            raise GatewayError("Cannot add Crazyflie, is already in Gateway!")
+        else:
+            wait_future = asyncio.run_coroutine_threadsafe(
+                self._create_cf(
+                    channel,
+                    id,
+                    initial_position,
+                    type,
+                ),
+                loop=self._event_loop,
             )
-        )
-        wait_future.add_done_callback(
-            lambda fut: self._on_crazyflie_exit(fut, channel, id)
-        )
-        return True
+            wait_future.add_done_callback(
+                lambda fut: self._on_crazyflie_exit(fut, channel, id)
+            )
+
+            key = (channel, id)
+            if self._wait_for_change_state_service(key, timeout=2.0):
+                success = self._transition_crazyflie(
+                    channel,
+                    id,
+                    LifecycleState.TRANSITION_STATE_CONFIGURING,
+                    "configure",
+                )
+                return success
+            else:
+                raise GatewayError(
+                    f"Crazyflie {key} did not provide change_state service."
+                )
+
+    def _wait_for_change_state_service(
+        self, key: Tuple[int, int], timeout: float
+    ) -> bool:
+        while timeout > 0.0:
+            if (
+                key in self.crazyflies.keys()
+                and self.crazyflies[key].change_state.service_is_ready()
+            ):
+                return True
+
+            time.sleep(0.1)
+            timeout -= 0.1
+        return False
 
     def _on_crazyflie_exit(self, fut: asyncio.Future, channel: int, id: int):
         """Callback invoked when a crazyflie subprocess exits."""
         self._logger.info(f"Crazyflie (channel={channel}, id={id}) exited.")
 
         # Clean up the crazyflie entry from the dictionary
-        if (channel, id) in self.crazyflies:
+        if (channel, id) in self.crazyflies.keys():
             del self.crazyflies[(channel, id)]
 
     async def _create_cf(
@@ -121,16 +189,31 @@ class Gateway(Node):
         initial_position: List[float],
         type: str,
     ):
+        change_state_client = self.create_client(
+            srv_type=ChangeState,
+            srv_name=f"cf{id}/change_state",
+            callback_group=self.crazyflie_callback_group,
+        )
+        get_state_client = self.create_client(
+            srv_type=GetState,
+            srv_name=f"cf{id}/get_state",
+            callback_group=self.crazyflie_callback_group,
+        )
+
         cmd = self._create_start_command(
             channel,
             id,
             initial_position,
             type,
         )
-        self.crazyflies[(channel, id)] = await asyncio.create_subprocess_exec(
-            *cmd, preexec_fn=os.setsid
+
+        process = await asyncio.create_subprocess_exec(*cmd, preexec_fn=os.setsid)
+
+        self.crazyflies[(channel, id)] = CrazyflieInstance(
+            get_state_client, change_state_client, process
         )
-        await self.crazyflies[(channel, id)].wait()
+
+        await self.crazyflies[(channel, id)].process.wait()
 
     def _create_start_command(
         self,
@@ -175,21 +258,32 @@ class Gateway(Node):
         return cmd
 
     def _add_crazyflie_callback(
-        self, req: Crazyflie.Request, resp: Crazyflie.Response
-    ) -> Crazyflie.Response:
-        resp.success = self.add_crazyflie(
-            req.channel,
-            req.id,
-            [req.initial_position.x, req.initial_position.y, req.initial_position.z],
-            req.type,
-        )
+        self, req: AddCrazyflie.Request, resp: AddCrazyflie.Response
+    ) -> AddCrazyflie.Response:
+        try:
+            resp.success = self.add_crazyflie(
+                req.channel,
+                req.id,
+                [
+                    req.initial_position.x,
+                    req.initial_position.y,
+                    req.initial_position.z,
+                ],
+                req.type,
+            )
+            if not resp.success:
+                resp.msg = "See Crazyflie log for more detail!"
+                self.remove_crazyflie(req.channel, req.id)
+        except (TimeoutError, GatewayError) as ex:
+            resp.success = False
+            resp.msg = str(ex)
 
         return resp
 
     def _remove_crazyflie_callback(
-        self, req: Crazyflie.Request, resp: Crazyflie.Response
-    ) -> Crazyflie.Response:
-        resp.success = self.remove_crazyflie(req.channel, req.id)
+        self, req: RemoveCrazyflie.Request, resp: RemoveCrazyflie.Response
+    ) -> RemoveCrazyflie.Response:
+        resp.success, resp.msg = self.remove_crazyflie(req.channel, req.id)
         return resp
 
     def __get_send_external_position(self, type: str) -> bool:
@@ -223,10 +317,44 @@ class Gateway(Node):
             .string_value
         )
 
+    def _transition_crazyflie(
+        self, channel: int, cf_id: int, state: LifecycleState, label: str
+    ) -> bool:
+        request = ChangeState.Request()
+        request.transition.id = state
+        request.transition.label = label
+        if (channel, cf_id) in self.crazyflies.keys():
+            fut = self.crazyflies[(channel, cf_id)].change_state.call_async(request)
+            rclpy.spin_until_future_complete(node=self, future=fut, timeout_sec=10.0)
+            response: Optional[ChangeState.Response] = fut.result()
+            if fut.done():
+                response: ChangeState.Response
+                return response.success
+            else:
+                raise TimeoutError("Service call for transition timed out.")
+        else:
+            raise GatewayError(
+                f"Crazyflie with ch: {channel}, id: {cf_id} not available."
+            )
 
-async def run_node():
+    def _get_state(self, channel: int, cf_id: int) -> Optional[LifecycleState]:
+        request = GetState.Request()
+        if (channel, cf_id) in self.crazyflies.keys():
+            fut: Future = self.crazyflies[(channel, cf_id)].get_state.call_async(
+                request
+            )
+            rclpy.spin_until_future_complete(node=self, future=fut, timeout_sec=1.0)
+            response: Optional[GetState.Response] = fut.result()
+            if fut.done():
+                response: GetState.Response
+                return response.current_state
+            else:
+                raise TimeoutError("Service call for getting the state timed out.")
+
+
+async def run_node(cf_eventloop):
     rclpy.init()
-    gateway = Gateway()
+    gateway = Gateway(cf_eventloop)
     try:
         while rclpy.ok():
             await asyncio.sleep(0.01)
@@ -236,16 +364,62 @@ async def run_node():
         gateway.remove_all_crazyflies()
 
 
+def run_crazyflie_loop(event_loop: asyncio.AbstractEventLoop):
+    asyncio.set_event_loop(event_loop)
+
+    async def keep_alive():
+        try:
+            while True:
+                await asyncio.sleep(1)  # Keep the loop alive
+        except asyncio.CancelledError:
+            pass
+
+    alive_task = asyncio.ensure_future(keep_alive())
+    # If there is no future in the loop it cannot be stopped...
+
+    event_loop.run_forever()
+    alive_task.cancel()
+    for fut in asyncio.all_tasks(event_loop):
+        event_loop.run_until_complete(fut)
+    event_loop.close()
+
+
+def run_gateway_loop(
+    event_loop: asyncio.AbstractEventLoop,
+    crazyflie_event_loop: asyncio.AbstractEventLoop,
+):
+    asyncio.set_event_loop(event_loop)
+    node = asyncio.ensure_future(run_node(crazyflie_event_loop), loop=event_loop)
+    event_loop.run_forever()
+    node.cancel()
+    event_loop.run_until_complete(node)
+    event_loop.close()
+
+
 def main():
-    event_loop = asyncio.get_event_loop()
-    node = asyncio.ensure_future(run_node())
+    gateway_event_loop = asyncio.new_event_loop()
+    crazyflie_event_loop = asyncio.new_event_loop()
+
+    crazyflie_thread = Thread(target=run_crazyflie_loop, args=(crazyflie_event_loop,))
+    gateway_thread = Thread(
+        target=run_gateway_loop, args=(gateway_event_loop, crazyflie_event_loop)
+    )
+    crazyflie_thread.start()
+    gateway_thread.start()
+
     try:
-        event_loop.run_forever()
+        while True:
+            time.sleep(0.5)
     except KeyboardInterrupt:
-        node.cancel()
-        event_loop.run_until_complete(node)
-    finally:
-        event_loop.close()
+        crazyflie_event_loop.stop()
+        gateway_event_loop.stop()
+
+    print("This")
+    crazyflie_thread.join()
+    print("That")
+    gateway_thread.join()
+    print("What")
+    exit()
 
 
 if __name__ == "__main__":

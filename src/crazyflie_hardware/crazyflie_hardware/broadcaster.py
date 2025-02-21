@@ -6,6 +6,8 @@ from typing import List
 
 import rclpy
 from rclpy.node import Node
+from rclpy.duration import Duration
+
 from broadcaster_interfaces.srv import PosiPoseBroadcastObject
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
@@ -50,7 +52,10 @@ class Broadcaster(Node):
         for frame in self.broadcaster_commander.frame_channels.keys():
             try:
                 t = self.tf_buffer.lookup_transform(
-                    self.world, frame, rclpy.time.Time()
+                    target_frame=self.world,
+                    source_frame=frame,
+                    time=rclpy.time.Time(),
+                    timeout=Duration(seconds=0.01),
                 )
             except TransformException as ex:
                 continue
@@ -85,7 +90,7 @@ class BroadcasterLogic:
                 self.frame_channels[frame] = [channel]
             # Add a link if there is no link for this channel
             if not channel in (link.channel for link in self.crtp_links):
-                self.node.get_logger().info("Adding channel")
+                self.node.get_logger().debug(f"Adding channel {channel}")
                 self.crtp_links.append(
                     CrtpLinkRos(self.node, channel, self.address, data_rate, None)
                 )
@@ -171,9 +176,12 @@ def main(args=None):
     rclpy.init(args=args)
     bc = Broadcaster()
 
-    while rclpy.ok():
-        rclpy.spin_once(bc)
-    rclpy.try_shutdown()
+    try:
+        while rclpy.ok():
+            rclpy.spin_once(bc, timeout_sec=1.0)
+        rclpy.try_shutdown()
+    except KeyboardInterrupt:
+        exit()
 
 
 if __name__ == "__main__":
