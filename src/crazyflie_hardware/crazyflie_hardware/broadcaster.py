@@ -10,8 +10,7 @@ from rclpy.duration import Duration
 
 from broadcaster_interfaces.srv import PosiPoseBroadcastObject
 from tf2_ros import TransformException
-from tf2_ros.buffer import Buffer
-from tf2_ros.transform_listener import TransformListener
+from crazyflie_interfaces_python.positions import CfPositionBuffer, CfPositionListener
 
 from crtp_driver.crtp_packer_ros import CrtpPackerRos
 from crtp_driver.crtp_link_ros import CrtpLinkRos
@@ -34,8 +33,8 @@ class Broadcaster(Node):
         self.position_only = True  # self.declare_parameter('position_only', True).get_parameter_value().bool_value
         self.hz = self.declare_parameter("hz", 10).get_parameter_value().integer_value
 
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.cf_buffer = CfPositionBuffer(self)
+        self.cf_listener = CfPositionListener(self.cf_buffer, self)
 
         self.timer = self.create_timer(1.0 / self.hz, self.run)
         # https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/src/crazyswarm_server.cpp 810 Paar infos über broadcasting Adresse
@@ -50,20 +49,14 @@ class Broadcaster(Node):
 
     def _get_external_positions(self):
         for frame in self.broadcaster_commander.frame_channels.keys():
-            try:
-                t = self.tf_buffer.lookup_transform(
-                    target_frame=self.world,
-                    source_frame=frame,
-                    time=rclpy.time.Time(),
-                    timeout=Duration(seconds=0.01),
-                )
-            except TransformException as ex:
+            pose_stamped = self.cf_buffer.get_position(frame)
+            if pose_stamped is None:
                 continue
             id_ = self._get_id_of_frame(frame)
             pos = [
-                t.transform.translation.x * 1000,
-                t.transform.translation.y * 1000,
-                t.transform.translation.z * 1000,
+                pose_stamped.pose.position.x * 1000,
+                pose_stamped.pose.position.y * 1000,
+                pose_stamped.pose.position.z * 1000,
             ]
             yield id_, pos
 
