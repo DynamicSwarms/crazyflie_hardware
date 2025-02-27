@@ -84,7 +84,7 @@ CrtpPacket HighLevelCommanderPacker::takeoff(uint8_t group_mask, float absolute_
     std::memcpy(&data[6], &target_yaw, 4);
     data[10] = use_current_yaw;
     std::memcpy(&data[11], &duration_s, 4);
-
+        
     return prepare_packet(data);
 }
 

@@ -8,6 +8,6 @@ CrtpPacket CrtpPacker::prepare_packet(int channel, const std::vector<uint8_t>& d
     packet.port = this->port;
     packet.channel = channel;
     copy(data.begin(), data.end(), packet.data);
-
+    packet.data_length = data.size();
     return packet;
 }
