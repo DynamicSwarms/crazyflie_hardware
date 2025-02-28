@@ -5,13 +5,21 @@ GenericCommander::GenericCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNo
     : GenericCommanderLogic(link)
     , node(node)
 {
+    callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto sub_opt = rclcpp::SubscriptionOptions();
+    sub_opt.callback_group = callback_group;
+
     notify_setpoints_stop_sub = node->create_subscription<crazyflie_interfaces::msg::NotifySetpointsStop>(
-                "~/notify_setpoints_stop", 10,
-                std::bind(&GenericCommander::notify_setpoints_stop_callback, this, _1));
+                "~/notify_setpoints_stop", 
+                10,
+                std::bind(&GenericCommander::notify_setpoints_stop_callback, this, _1),
+                sub_opt);
 
     cmd_position_sub = node->create_subscription<crazyflie_interfaces::msg::Position>(
-                "~/cmd_position", 10,
-                std::bind(&GenericCommander::cmd_position_callback, this, _1));
+                "~/cmd_position", 
+                10,
+                std::bind(&GenericCommander::cmd_position_callback, this, _1),
+                sub_opt);
     RCLCPP_WARN(node->get_logger(), "Generic Commander initialized");
 
 };

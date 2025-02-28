@@ -5,13 +5,21 @@ HighLevelCommander::HighLevelCommander(std::shared_ptr<rclcpp_lifecycle::Lifecyc
     : HighLevelCommanderLogic(link)
     , node(node)
 {
+    callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto sub_opt = rclcpp::SubscriptionOptions();
+    sub_opt.callback_group = callback_group;
+
     land_sub = node->create_subscription<crazyflie_interfaces::msg::Land>(
-                "~/land", 10,
-                std::bind(&HighLevelCommander::land_callback, this, _1));
+                "~/land", 
+                10,
+                std::bind(&HighLevelCommander::land_callback, this, _1),
+                sub_opt);
 
     takeoff_sub = node->create_subscription<crazyflie_interfaces::msg::Takeoff>(
-                "~/takeoff", 10,
-                std::bind(&HighLevelCommander::takeoff_callback, this, _1));
+                "~/takeoff", 
+                10,
+                std::bind(&HighLevelCommander::takeoff_callback, this, _1),
+                sub_opt);
     RCLCPP_WARN(node->get_logger(), "High Level Commander initialized");
 };
 
