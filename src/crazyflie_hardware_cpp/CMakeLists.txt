@@ -16,7 +16,8 @@ find_package(crtp_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(crtp_interfaces REQUIRED)
 find_package(crazyflie_interfaces REQUIRED)
-
+find_package(rclcpp_lifecycle REQUIRED)
+find_package(lifecycle_msgs REQUIRED)
 
 add_executable(crazyflie src/crazyflie.cpp)
 target_include_directories(crazyflie PUBLIC
@@ -28,6 +29,7 @@ target_compile_features(crazyflie PUBLIC c_std_99 cxx_std_17)  # Require C99 and
 
 set(CRTP_DRIVER_SRCS
   src/crtp_driver_cpp/hl_commander.cpp
+  src/crtp_link_ros.cpp
 )
 
 add_library(crtp_driver_cpp ${CRTP_DRIVER_SRCS})
@@ -39,7 +41,9 @@ target_include_directories(crtp_driver_cpp PUBLIC
 ament_target_dependencies(crtp_driver_cpp 
   rclcpp
   crtp_cpp
-  crazyflie_interfaces)
+  crazyflie_interfaces
+  crtp_interfaces
+  rclcpp_lifecycle)
 
 target_link_libraries(crazyflie
                     crtp_driver_cpp)
@@ -47,7 +51,9 @@ target_link_libraries(crazyflie
 ament_target_dependencies(crazyflie
   crtp_cpp
   rclcpp
-  crtp_interfaces)
+  crtp_interfaces
+  rclcpp_lifecycle
+  lifecycle_msgs)
 
 
 install(TARGETS crazyflie
