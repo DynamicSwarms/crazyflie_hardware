@@ -87,15 +87,39 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
         return pkt;
 
     } else {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service add_two_ints");
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed single request responded");
     }
 
     return CrtpPacket();
 }
-std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpRequest>)
-{
-    std::vector<CrtpPacket> vec;
-    return vec;
+std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpRequest> requests)
+{ 
+    RCLCPP_WARN(node->get_logger(), "Sending batch! %d", requests.size());
+    std::vector<rclcpp::Client<crtp_interfaces::srv::CrtpPacketSend>::SharedFuture> results;
+
+    auto req = std::make_shared<crtp_interfaces::srv::CrtpPacketSend::Request>();
+    for (const auto& request : requests) {
+        fill_crtp_request(req, request);
+        auto res = send_crtp_packet_client->async_send_request(req);
+        results.push_back(res);
+    }
+
+    std::vector<CrtpPacket> response_packets;
+    for (const auto& result : results) {
+        using namespace std::chrono_literals;
+
+        auto status = result.wait_for(3s);  //not spinning here!
+        if (status == std::future_status::ready)
+        {
+            auto pkt = response_to_packet(result.get());
+            response_packets.push_back(pkt);
+        } else {
+            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed in batch request");
+        }
+    }
+    RCLCPP_WARN(node->get_logger(), "Batch finished with! %d", response_packets.size());
+
+    return response_packets;
 }
 
     std::shared_ptr<rclcpp::Node> node;

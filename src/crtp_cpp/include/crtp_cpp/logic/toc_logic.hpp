@@ -30,7 +30,7 @@ public:
     TocLogic(CrtpLink* crtp_link, const std::string& path, uint8_t port);
 
     bool load_from_file(uint32_t crc);
-    void write_to_file(uint32_t crc);
+    void write_to_file();
     /**
      * @brief Initializes the TOC by fetching or downloading items.
      */

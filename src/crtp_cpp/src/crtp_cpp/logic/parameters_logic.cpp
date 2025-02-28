@@ -7,21 +7,21 @@
 
 // Constructor from comma-separated string
 ParamTocEntry::ParamTocEntry(const std::string& csv) {
-    std::istringstream ss(csv);
+    std::istringstream lineStream(csv);
     std::string token;
     // Parse ID
-    std::getline(ss, token, ',');
+    std::getline(lineStream, token, ',');
     id = static_cast<uint16_t>(std::stoi(token));
-    // Parse Group
-    std::getline(ss, group, ',');
-    // Parse Name
-    std::getline(ss, name, ',');
     // Parse Type
-    std::getline(ss, token, ',');
+    std::getline(lineStream, token, ',');
     type = (ParamType)static_cast<uint8_t>(std::stoi(token));
     // Parse Readonly
-    std::getline(ss, token, ',');
+    std::getline(lineStream, token, ',');
     readonly = token == "1";
+    // Parse Group
+    std::getline(lineStream, group, '.');
+    // Parse Name
+    std::getline(lineStream, name, ',');  
 }
 
 ParamTocEntry::ParamTocEntry(const std::vector<uint8_t>& data)
@@ -37,7 +37,7 @@ ParamTocEntry::ParamTocEntry(const std::vector<uint8_t>& data)
 
 std::string ParamTocEntry::toString() const {
     std::ostringstream ss;
-    ss << id << "," << group << "," << name << "," << type << "," << (readonly ? "true" : "false");
+    ss << id << "," <<  type << "," << readonly << ","  << group << "." << name;
     return ss.str();
 }
 

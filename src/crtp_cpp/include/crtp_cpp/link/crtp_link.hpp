@@ -33,7 +33,7 @@ public:
 
   virtual void send_packet_no_response(CrtpRequest packet) {};
   virtual std::optional<CrtpPacket> send_packet(CrtpRequest request){}  ;
-  virtual std::vector<CrtpPacket> send_batch_request(const std::vector<CrtpRequest>){} ;
+  virtual std::vector<CrtpPacket> send_batch_request(const std::vector<CrtpRequest> requests){} ;
 
 protected:
   int channel;

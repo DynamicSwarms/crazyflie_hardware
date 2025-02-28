@@ -15,14 +15,26 @@ TocLogic<T>::TocLogic(CrtpLink* crtp_link, const std::string& path, uint8_t port
 
 template <class T>
 bool TocLogic<T>::load_from_file(uint32_t crc) {
-    
-    return false;
+    std::string fileName = std::to_string(crc) + ".csv";
+    std::ifstream infile(fileName);
+    if (!infile.good()) return false;
+
+    toc_entries.clear();
+    std::string line;
+    while (std::getline(infile, line)) {
+        toc_entries.push_back(T(line));
+    }
+    return true;
 }
 
 template <class T>
-void TocLogic<T>::write_to_file(uint32_t crc)
+void TocLogic<T>::write_to_file()
 {
-    std::string fileName = "winni_log" + std::to_string(crc) + ".csv";
+    if (!nbr_of_items.has_value() || !crc.has_value()) {
+        send_download_toc_items();
+    }
+
+    std::string fileName = std::to_string(crc.value()) + ".csv_";
     std::string fileNameTemp = fileName + ".tmp";
     std::ofstream output(fileNameTemp);
     for (const auto& entry : toc_entries) {
@@ -39,7 +51,7 @@ void TocLogic<T>::initialize_toc() {
     bool cached = load_from_file(crc);
     if (!cached) {
         send_download_toc_items();
-        write_to_file(crc);
+        write_to_file();
     }
 }
 

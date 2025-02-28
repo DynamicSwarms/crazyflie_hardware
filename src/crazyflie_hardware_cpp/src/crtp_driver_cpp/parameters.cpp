@@ -27,6 +27,11 @@ Parameters::Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, Cr
 void Parameters::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {
     ParametersLogic::send_download_toc_items();
+    ParametersLogic::write_to_file();
+
+    //auto [nbr_of_items, crc] = ParametersLogic::send_get_toc_info();
+    //bool success = ParametersLogic::load_from_file(crc);
+    //RCLCPP_WARN(node->get_logger(), "%d", success);
 }
 
 void Parameters::get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg)
