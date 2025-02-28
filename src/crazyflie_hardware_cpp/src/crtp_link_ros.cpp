@@ -1,4 +1,7 @@
 #include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
+#include <iostream>
+#include <chrono>
+
 
 
 RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate) 
@@ -32,7 +35,25 @@ void RosLink::fill_crtp_request(std::shared_ptr<crtp_interfaces::srv::CrtpPacket
         req->packet.data[i] = request.packet.data[i];
     }
     req->packet.data_length = request.packet.data_length;
+
+    req->expects_response = request.expects_response; 
+    req->matching_bytes = request.matching_bytes; 
 }
+
+CrtpPacket RosLink::response_to_packet(std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Response> response)
+{
+    CrtpPacket packet;
+    packet.port = response->packet.port;
+    packet.channel = response->packet.channel;
+    packet.data_length = response->packet.data_length;
+
+    for (int i = 0; i < response->packet.data_length; i++) 
+    {
+        packet.data[i] = response->packet.data[i];
+    }
+    return packet;
+}
+
 
 
 void RosLink::send_packet_no_response(CrtpRequest request) 
@@ -46,10 +67,29 @@ void RosLink::send_packet_no_response(CrtpRequest request)
 
 std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
 {
+    RCLCPP_WARN(node->get_logger(), "Sending with response! p: %d, ch: %d, dl: %d, d1: %d er;%d, mb:%d",request.packet.port, request.packet.channel, request.packet.data_length, request.packet.data[0], request.expects_response, request.matching_bytes);
+
     auto req = std::make_shared<crtp_interfaces::srv::CrtpPacketSend::Request>();
     fill_crtp_request(req, request);
 
-    RCLCPP_WARN(node->get_logger(), "Sending with response! %d", request.packet.data_length);
+    auto result = send_crtp_packet_client->async_send_request(req);
+
+    using namespace std::chrono_literals;
+
+    auto status = result.wait_for(3s);  //not spinning here!
+    if (status == std::future_status::ready)
+    {
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Success");
+        auto rr = result.get();
+        auto pkt = response_to_packet(rr);
+        auto r = rr->packet;
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "p:%d,ch:%d, dl:%d, d1:%d, d2:%d, d3:%d", r.port, r.channel, r.data_length, r.data[0], r.data[1], r.data[2] );
+        return pkt;
+
+    } else {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service add_two_ints");
+    }
+
     return CrtpPacket();
 }
 std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpRequest>)

@@ -27,7 +27,7 @@ class ResponseListener(Node):
         #    for i in range(data_length):
         #        string = string + chr(data[i])
         elif port == 2 and channel == 0 and data_length:  ## log to ask
-            string = string + "see cf"
+            string = string + str(data)
             # for i in range(data_length):
             #    if data[i] >= 65 and data[i] <= 122: #only allow chars
             #        string = string + chr(data[i])

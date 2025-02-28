@@ -18,6 +18,8 @@ public:
     std::vector<CrtpPacket> send_batch_request(const std::vector<CrtpRequest>)override;
 private: 
     void fill_crtp_request(std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Request> req, const CrtpRequest& request);
+    CrtpPacket response_to_packet(std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Response> response);
+
 
 
 private:

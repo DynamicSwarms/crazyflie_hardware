@@ -14,6 +14,8 @@
 
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/hl_commander.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/generic_commander.hpp"
+#include "crazyflie_hardware_cpp/crtp_driver_cpp/parameters.hpp"
+
 
 #include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
 
@@ -31,6 +33,7 @@ class Commander
       , link(node, channel, address, datarate)
       , hl_commander(node, &link)
       , generic_commander(node, &link)
+      , parameters(node, &link)
     {
 
     } 
@@ -39,6 +42,7 @@ class Commander
   RosLink link; 
   HighLevelCommander hl_commander;
   GenericCommander generic_commander;
+  Parameters parameters;
 };
 
 class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
@@ -165,9 +169,10 @@ int main(int argc, char ** argv)
   rclcpp::init(argc, argv);
   rclcpp::NodeOptions options;
   auto node = std::make_shared<CrazyflieNode>(options);
-  rclcpp::executors::SingleThreadedExecutor executor;
+  rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(node->get_node_base_interface());
   executor.spin();
+  rclcpp::spin(node->get_node_base_interface());
   rclcpp::shutdown();
   return 0;
 }
