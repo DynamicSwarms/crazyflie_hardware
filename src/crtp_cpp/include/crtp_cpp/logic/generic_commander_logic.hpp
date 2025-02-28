@@ -95,32 +95,3 @@ private:
 
 };
 
-uint32_t GenericCommanderLogic::compress_quaternion(float const q[4]) {
-    // we send the values of the quaternion's smallest 3 elements.
-    unsigned i_largest = 0;
-    for (unsigned i = 1; i < 4; ++i) {
-        if (fabsf(q[i]) > fabsf(q[i_largest])) {
-        i_largest = i;
-        }
-    }
-
-    // since -q represents the same rotation as q,
-    // transform the quaternion so the largest element is positive.
-    // this avoids having to send its sign bit.
-    unsigned negate = q[i_largest] < 0;
-
-    // 1/sqrt(2) is the largest possible value
-    // of the second-largest element in a unit quaternion.
-
-    // do compression using sign bit and 9-bit precision per element.
-    uint32_t comp = i_largest;
-    for (unsigned i = 0; i < 4; ++i) {
-        if (i != i_largest) {
-        unsigned negbit = (q[i] < 0) ^ negate;
-        unsigned mag = ((1 << 9) - 1) * (fabsf(q[i]) / (float)M_SQRT1_2) + 0.5f;
-        comp = (comp << 10) | (negbit << 9) | mag;
-        }
-    }
-
-    return comp;
-}

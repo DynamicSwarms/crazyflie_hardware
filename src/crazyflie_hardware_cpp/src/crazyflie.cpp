@@ -6,38 +6,39 @@
 
 
 #include "crtp_cpp/packer/toc_packer.hpp"
-
 #include "crtp_cpp/logic/toc_logic.hpp"
-
 
 #include "crtp_cpp/logic/generic_commander_logic.hpp"
 #include "crtp_cpp/logic/hl_commander_logic.hpp"
-
 #include "crtp_cpp/logic/console_logic.hpp"
-//#include "crtp_cpp/logic/hl_commander_logic.hpp"
-//#include "crtp_cpp/logic/link_layer_logic.hpp"
-
 
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/hl_commander.hpp"
+#include "crazyflie_hardware_cpp/crtp_driver_cpp/generic_commander.hpp"
+
 #include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
 
 
+
+//#include "crtp_cpp/logic/hl_commander_logic.hpp"
+//#include "crtp_cpp/logic/link_layer_logic.hpp"
 
 
 class Commander
 {
   public: 
-    Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel) 
+    Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate) 
       : node(node)
-      , link(node, channel, std::make_tuple(10), 250)
+      , link(node, channel, address, datarate)
       , hl_commander(node, &link)
+      , generic_commander(node, &link)
     {
 
     } 
 
   std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
   RosLink link; 
-  HighLevelCommanderDriver hl_commander;
+  HighLevelCommander hl_commander;
+  GenericCommander generic_commander;
 };
 
 class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
@@ -49,9 +50,34 @@ class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
     CrazyflieNode(const rclcpp::NodeOptions & options)
       : rclcpp_lifecycle::LifecycleNode("crazyflie", options)
     {
-      this->declare_parameter("channel", 80); // Make readonly
-      channel = this->get_parameter("channel").as_int();
+      rcl_interfaces::msg::ParameterDescriptor readonly_descriptor;
+      readonly_descriptor.read_only = true;
 
+      this->declare_parameter("id", 0xE7, readonly_descriptor); 
+      this->declare_parameter("channel", 80, readonly_descriptor);
+      std::vector<double> default_initial_position = {0.0,0.0,0.0};
+      this->declare_parameter("initial_position", default_initial_position, readonly_descriptor); 
+      this->declare_parameter("datarate", 2, readonly_descriptor);
+
+      // Parameters from crazyflie types.yaml
+      this->declare_parameter("send_external_position", false, readonly_descriptor);
+      this->declare_parameter("send_external_pose", false, readonly_descriptor); 
+      this->declare_parameter("max_initial_deviation", 1.0, readonly_descriptor);
+      this->declare_parameter("marker_configuration_index", 4, readonly_descriptor); 
+      this->declare_parameter("dynamics_configuration_index",0, readonly_descriptor);
+      
+      id =  get_parameter("id").as_int();
+      channel = get_parameter("channel").as_int();
+      initial_position = get_parameter("initial_position").as_double_array();
+      datarate = get_parameter("datarate").as_int();
+      send_external_position = get_parameter("send_external_position").as_bool();
+      send_external_pose = get_parameter("send_external_pose").as_bool();
+      max_initial_deviation = get_parameter("max_initial_deviation").as_double();
+      marker_configuration_index = get_parameter("marker_configuration_index").as_int();
+      dynamics_configuration_index = get_parameter("dynamics_configuration_index").as_int();
+
+      address = {0xE7, 0xE7, 0xE7, 0xE7, id};
+      
       timer = this->create_wall_timer(
         std::chrono::milliseconds(1000),
         std::bind(&CrazyflieNode::timer_callback, this));
@@ -61,7 +87,7 @@ class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
     {
       //!!! Makeshared not in constructor
       auto node_ptr = this->shared_from_this();
-      commander = std::make_unique<Commander>(node_ptr, channel);
+      commander = std::make_unique<Commander>(node_ptr, channel, address, datarate);
     }
     void timer_callback()
     {   
@@ -110,11 +136,22 @@ class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
     }
 
 
-
-
+    
     rclcpp::TimerBase::SharedPtr timer; 
     std::unique_ptr<Commander> commander;
-    int channel; 
+
+
+    std::array<uint8_t, 5> address;
+    
+    uint8_t id;
+    int channel;
+    std::vector<double> initial_position;
+    int datarate;
+    bool send_external_position;
+    bool send_external_pose;
+    double max_initial_deviation;
+    int marker_configuration_index;
+    int dynamics_configuration_index;
 
 };
 

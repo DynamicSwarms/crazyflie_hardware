@@ -17,7 +17,7 @@
 class Link : public CrtpLink
 {
 public:
-  Link(int channel, std::tuple<int> address, int datarate) : CrtpLink(channel, address, datarate)
+  Link(int channel, std::array<uint8_t, 5> address, int datarate) : CrtpLink(channel, address, datarate)
   {
   }
 
@@ -47,7 +47,7 @@ int main(int argc, char ** argv)
   (void) argc;
   (void) argv;
 
-  Link link(10, std::make_tuple(10), 250);
+  Link link(10, {1, 2,3, 4, 5}, 250);
   HighLevelCommanderLogic logic(&link);
   logic.send_stop(5);
 

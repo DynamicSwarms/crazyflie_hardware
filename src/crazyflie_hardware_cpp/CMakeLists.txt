@@ -29,6 +29,7 @@ target_compile_features(crazyflie PUBLIC c_std_99 cxx_std_17)  # Require C99 and
 
 set(CRTP_DRIVER_SRCS
   src/crtp_driver_cpp/hl_commander.cpp
+  src/crtp_driver_cpp/generic_commander.cpp
   src/crtp_link_ros.cpp
 )
 

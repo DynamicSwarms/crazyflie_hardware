@@ -7,9 +7,9 @@
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 
-class HighLevelCommanderDriver : public HighLevelCommanderLogic {
+class HighLevelCommander : public HighLevelCommanderLogic {
 public:
-    HighLevelCommanderDriver(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link);
+    HighLevelCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link);
 private: 
 
     void land_callback(const crazyflie_interfaces::msg::Land::SharedPtr msg);

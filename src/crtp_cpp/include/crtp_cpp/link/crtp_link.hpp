@@ -28,7 +28,7 @@ struct CrtpRequest
 
 class CrtpLink {
 public:
-  CrtpLink(int channel, std::tuple<int> address, int datarate);
+  CrtpLink(int channel, std::array<uint8_t, 5> address, int datarate);
 
 
   virtual void send_packet_no_response(CrtpRequest packet) {};
@@ -37,6 +37,6 @@ public:
 
 protected:
   int channel;
-  std::tuple<int> address;
+  std::array<uint8_t, 5> address;
   int datarate;
 };

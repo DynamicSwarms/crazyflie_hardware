@@ -1,7 +1,7 @@
 #include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
 
 
-RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::tuple<int> address, int datarate) 
+RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate) 
       : CrtpLink(channel, address, datarate)
       , node(node)
     {
@@ -16,6 +16,7 @@ void RosLink::send_packet_no_response(CrtpRequest request)
 {
     auto req = std::make_shared<crtp_interfaces::srv::CrtpPacketSend::Request>();
     req->link.channel = channel; 
+    req->link.address = address;
     req->link.datarate = datarate;
     req->packet.port = request.packet.port;
     req->packet.channel = request.packet.channel;

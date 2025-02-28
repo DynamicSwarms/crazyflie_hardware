@@ -7,7 +7,7 @@
 class RosLink : public CrtpLink
 {
 public:
-    RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::tuple<int> address, int datarate);
+    RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate);
 
     void send_packet_no_response(CrtpRequest request) override;
 
