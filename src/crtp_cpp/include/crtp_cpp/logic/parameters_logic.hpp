@@ -14,9 +14,18 @@ struct ParamTocEntry : public TocEntry{
     bool readonly;
 
     ParamTocEntry();
+    /**
+     * @brief Construct a ParamToc Entry from data received from crazyflie.
+    */
     ParamTocEntry(const std::vector<uint8_t>& data);
+
+    /**
+     * @brief Construct a ParamTocEntry from a string. This is for saving to a file and loading again. (toString is the reverse)
+    */
     ParamTocEntry(const std::string& line);
-    std::string toString() const ;
+    std::string toString() const;
+    bool isInteger() const;
+    bool isDouble() const;
 };
 
 /**
@@ -39,7 +48,7 @@ public:
      * @param name The parameter name.
      * @param value The parameter value.
      */
-    void send_set_parameter(const std::string& group, const std::string& name, double value);
+    bool send_set_parameter(const std::string& group, const std::string& name, std::variant<int, double> value);
 
 private:
     ParametersPacker packer;

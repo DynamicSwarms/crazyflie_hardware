@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include <functional>
+#include <variant>
 
 enum ParamType {
     // Format: 0bXXXXYYYY (Bit positions are described below)
@@ -49,8 +50,11 @@ public:
 
     
 
-    CrtpRequest set_parameter(uint16_t id, ParamValue value, ParamType type);
+    CrtpPacket set_parameter(uint16_t id, ParamType type, std::variant<int, double> value);
 
 protected:
     CrtpPacket prepare_packet(const std::vector<uint8_t>& data, uint8_t channel);
+
+
+    uint16_t double_to_fp16(double d);
 };

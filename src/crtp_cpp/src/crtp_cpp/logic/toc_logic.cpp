@@ -34,7 +34,7 @@ void TocLogic<T>::write_to_file()
         send_download_toc_items();
     }
 
-    std::string fileName = std::to_string(crc.value()) + ".csv_";
+    std::string fileName = std::to_string(crc.value()) + ".csv";
     std::string fileNameTemp = fileName + ".tmp";
     std::ofstream output(fileNameTemp);
     for (const auto& entry : toc_entries) {

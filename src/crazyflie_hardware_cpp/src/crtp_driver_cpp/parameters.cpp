@@ -20,9 +20,58 @@ Parameters::Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, Cr
                 10,
                 std::bind(&Parameters::get_toc_info_callback, this, _1),
                 sub_opt);
-    RCLCPP_WARN(node->get_logger(), "Parameters  initialized");
 
-};
+    this->initialize_parameters();
+    RCLCPP_WARN(node->get_logger(), "Parameters  initialized");
+}
+
+void Parameters::initialize_parameters()
+{
+    this->initialize_toc(); // Load toc from cf or from file
+    
+    for (const auto& entry : ParametersLogic::toc_entries) {
+        auto group = entry.group;
+        auto name = entry.name;
+        std::ostringstream ss;
+        ss << group << "." << name;
+        if (entry.isInteger())
+        { 
+            node->declare_parameter(ss.str(), rclcpp::PARAMETER_INTEGER);
+        } else if (entry.isDouble()) {
+            node->declare_parameter(ss.str(), rclcpp::PARAMETER_DOUBLE);
+        }
+    }
+    param_callback_handle = node->add_on_set_parameters_callback(std::bind(&Parameters::set_parameter_callback, this, std::placeholders::_1));
+}
+
+
+rcl_interfaces::msg::SetParametersResult Parameters::set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters)
+{
+    // This gets called if a parameter gets set. We want to set it on the crazyflie as well.
+
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+
+    for (const auto &param : parameters) {
+        std::string param_name = param.get_name();
+        size_t dot = param_name.find('.');
+
+        if (dot != std::string::npos) {
+            std::string group = param_name.substr(0, dot);
+            std::string name = param_name.substr(dot + 1);
+
+            
+            if (param.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER) {
+                 result.successful = send_set_parameter(group, name, std::variant<int, double>((int)param.as_int()));
+            } else if (param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+                 result.successful = send_set_parameter(group, name, std::variant<int, double>(param.as_double()));
+            }
+        }   
+
+        if (!result.successful) return result;    
+    }
+    return result;
+}
 
 void Parameters::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {

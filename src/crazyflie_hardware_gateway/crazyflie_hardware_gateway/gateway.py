@@ -223,7 +223,7 @@ class Gateway(Node):
         type: str,
     ) -> List[str]:
         crazyflie_path = get_executable_path(
-            package_name="crazyflie_hardware", executable_name="crazyflie"
+            package_name="crazyflie_hardware_cpp", executable_name="crazyflie"
         )
 
         send_external_position = self.__get_send_external_position(type)

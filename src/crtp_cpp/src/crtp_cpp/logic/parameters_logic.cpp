@@ -35,10 +35,21 @@ ParamTocEntry::ParamTocEntry(const std::vector<uint8_t>& data)
     readonly = type_info & (0x00 | (1 <<  6));    // 1 Bit if ReadOnly
 }
 
-std::string ParamTocEntry::toString() const {
+std::string ParamTocEntry::toString() const 
+{
     std::ostringstream ss;
     ss << id << "," <<  type << "," << readonly << ","  << group << "." << name;
     return ss.str();
+}
+
+bool ParamTocEntry::isInteger() const 
+{
+    return (type & 0x04) == 0; // If IsNonInt bit (3rd bit) is 0, it's an integer
+}
+
+bool ParamTocEntry::isDouble() const 
+{
+    return (type & 0x04) != 0; // If IsNonInt bit (3rd bit) is 1, it's a float
 }
 
 
@@ -53,25 +64,14 @@ ParametersLogic::ParametersLogic(CrtpLink* crtp_link, const std::string& path)
 
 
 
-void ParametersLogic::send_set_parameter(const std::string& group, const std::string& name, double value) {
-    /**
-    auto toc_element = toc.get_element(group, name);
-
-    if (toc_element == nullptr) {
-        throw std::runtime_error("Parameter not found: " + group + "." + name);
+bool ParametersLogic::send_set_parameter(const std::string& group, const std::string& name, std::variant<int, double> value) {
+    for (const auto& entry : ParametersLogic::toc_entries) {
+        if (entry.group == group && entry.name == name) {
+            CrtpRequest request;
+            request.packet = packer.set_parameter(entry.id, entry.type, value);
+            link->send_packet_no_response(request);
+            return true;
+        }
     }
-
-    uint16_t id = toc_element->ident;
-    int value_nr;
-    char pytype = toc_element->pytype;
-
-    if (pytype == 'f' || pytype == 'd') {
-        value_nr = static_cast<int>(value); // Assuming value is a double, casting to int
-    } else {
-        value_nr = static_cast<int>(value);
-    }
-
-    auto packet = packer.set_parameter(id, pytype, value_nr);
-    link->send_packet_no_response(&packet);
-    */
+    return false;
 }

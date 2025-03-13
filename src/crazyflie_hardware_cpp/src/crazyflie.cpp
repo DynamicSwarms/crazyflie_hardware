@@ -15,6 +15,8 @@
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/hl_commander.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/generic_commander.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/parameters.hpp"
+#include "crazyflie_hardware_cpp/crtp_driver_cpp/console.hpp"
+
 
 
 #include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
@@ -31,6 +33,7 @@ class Commander
     Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate) 
       : node(node)
       , link(node, channel, address, datarate)
+      , console(node, &link)
       , hl_commander(node, &link)
       , generic_commander(node, &link)
       , parameters(node, &link)
@@ -40,6 +43,7 @@ class Commander
 
   std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
   RosLink link; 
+  Console console;
   HighLevelCommander hl_commander;
   GenericCommander generic_commander;
   Parameters parameters;
@@ -107,8 +111,9 @@ class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
     on_configure(const rclcpp_lifecycle::State &)
     {
+    RCLCPP_INFO(get_logger(), "configuring");
+
     this->init();
-    RCLCPP_INFO(get_logger(), "on_configure() is called.");
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
     }
 

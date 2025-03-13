@@ -4,6 +4,8 @@
 #include "crtp_cpp/logic/parameters_logic.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
+
 #include "std_msgs/msg/empty.hpp"
 
 class Parameters : public ParametersLogic {
@@ -13,6 +15,10 @@ private:
 
     void download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg);
     void get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg);
+
+    void initialize_parameters();
+
+    rcl_interfaces::msg::SetParametersResult set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters);
     
 
 private: 
@@ -21,4 +27,5 @@ private:
     std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr downdload_toc_sub;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr get_toc_info_sub;
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle;
 };
