@@ -38,7 +38,19 @@ class Commander
       , generic_commander(node, &link)
       , parameters(node, &link)
     {
+      RCLCPP_WARN(node->get_logger(), "Setting default Parameters");
 
+
+      std::map<std::string, rclcpp::Parameter> default_params;
+      node->get_node_parameters_interface()->get_parameters_by_prefix("default_firmware_params", default_params);
+      for (const auto & param : default_params) 
+      {
+          rclcpp::Parameter set_param(param.first, param.second.get_parameter_value());
+          node->set_parameter(set_param);          
+              
+      }
+      rclcpp::Parameter set_param("kalman.resetEstimation",1);
+      node->set_parameter(set_param);          
     } 
 
   std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
@@ -73,6 +85,8 @@ class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
       this->declare_parameter("max_initial_deviation", 1.0, readonly_descriptor);
       this->declare_parameter("marker_configuration_index", 4, readonly_descriptor); 
       this->declare_parameter("dynamics_configuration_index",0, readonly_descriptor);
+
+
       
       id =  get_parameter("id").as_int();
       channel = get_parameter("channel").as_int();
@@ -84,6 +98,26 @@ class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
       marker_configuration_index = get_parameter("marker_configuration_index").as_int();
       dynamics_configuration_index = get_parameter("dynamics_configuration_index").as_int();
 
+
+      rcl_interfaces::msg::ParameterDescriptor descriptor;
+      descriptor.dynamic_typing = true;
+      descriptor.read_only = true;
+      for (const auto & pair : this->get_node_parameters_interface()->get_parameter_overrides()) {
+        size_t dot = pair.first.find('.');
+        if (dot != std::string::npos) {
+            std::string ns = pair.first.substr(0, dot);
+            std::string name = pair.first.substr(dot + 1);
+
+            if (ns == "default_firmware_params") {
+              this->declare_parameter(
+              pair.first,
+              pair.second,
+              descriptor,
+              true);
+            }
+        }
+      }
+
       address = {0xE7, 0xE7, 0xE7, 0xE7, id};
       
       timer = this->create_wall_timer(
@@ -93,6 +127,9 @@ class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
     }
     void init()
     {
+
+      
+
       //!!! Makeshared not in constructor
       auto node_ptr = this->shared_from_this();
       commander = std::make_unique<Commander>(node_ptr, channel, address, datarate);
