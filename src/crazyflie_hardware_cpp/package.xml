@@ -8,6 +8,8 @@
   <license>TODO: License declaration</license>
 
   <depend>crazyflie_interfaces</depend>
+  <depend>broadcaster_interfaces</depend>
+  <depend>object_tracker_interfaces</depend>
   <depend>crtp_cpp</depend>
   <depend>rclcpp</depend>
 

@@ -16,6 +16,8 @@ find_package(crtp_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(crtp_interfaces REQUIRED)
 find_package(crazyflie_interfaces REQUIRED)
+find_package(object_tracker_interfaces REQUIRED)
+find_package(broadcaster_interfaces REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 
@@ -32,6 +34,7 @@ set(CRTP_DRIVER_SRCS
   src/crtp_driver_cpp/generic_commander.cpp
   src/crtp_driver_cpp/parameters.cpp
   src/crtp_driver_cpp/console.cpp  
+  src/crtp_driver_cpp/localization.cpp
   src/crtp_link_ros.cpp
 )
 
@@ -45,6 +48,8 @@ ament_target_dependencies(crtp_driver_cpp
   rclcpp
   crtp_cpp
   crazyflie_interfaces
+  object_tracker_interfaces
+  broadcaster_interfaces
   crtp_interfaces
   rclcpp_lifecycle)
 

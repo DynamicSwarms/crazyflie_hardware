@@ -16,6 +16,7 @@
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/generic_commander.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/parameters.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/console.hpp"
+#include "crazyflie_hardware_cpp/crtp_driver_cpp/localization.hpp"
 
 
 
@@ -37,6 +38,7 @@ class Commander
       , hl_commander(node, &link)
       , generic_commander(node, &link)
       , parameters(node, &link)
+      , localization(node, &link, get_tf_name(address))
     {
       RCLCPP_WARN(node->get_logger(), "Setting default Parameters");
 
@@ -50,8 +52,26 @@ class Commander
               
       }
       rclcpp::Parameter set_param("kalman.resetEstimation",1);
-      node->set_parameter(set_param);          
+      node->set_parameter(set_param);    
+
+      RCLCPP_WARN(node->get_logger(), "Setting up tracking services.");
+      int id =  node->get_parameter("id").as_int();
+      std::vector<double> initial_position = node->get_parameter("initial_position").as_double_array();
+      bool send_external_position = node->get_parameter("send_external_position").as_bool();
+      bool send_external_pose = node->get_parameter("send_external_pose").as_bool();
+      double max_initial_deviation = node->get_parameter("max_initial_deviation").as_double();
+      int marker_configuration_index = node->get_parameter("marker_configuration_index").as_int();
+      int dynamics_configuration_index = node->get_parameter("dynamics_configuration_index").as_int();
+     
+      localization.start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
     } 
+  
+private:
+    std::string get_tf_name(const std::array<uint8_t, 5>& address) {
+        std::stringstream ss;
+        ss << "cf" << static_cast<int>(address[4]); // Assuming the ID is in the last element of the address
+        return ss.str();
+    }
 
   std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
   RosLink link; 
@@ -59,6 +79,7 @@ class Commander
   HighLevelCommander hl_commander;
   GenericCommander generic_commander;
   Parameters parameters;
+  Localization localization;
 };
 
 class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode

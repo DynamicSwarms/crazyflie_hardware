@@ -79,7 +79,7 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
     auto status = result.wait_for(3s);  //not spinning here!
     if (status == std::future_status::ready)
     {
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Success");
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Single Send Success");
         auto rr = result.get();
         auto pkt = response_to_packet(rr);
         auto r = rr->packet;

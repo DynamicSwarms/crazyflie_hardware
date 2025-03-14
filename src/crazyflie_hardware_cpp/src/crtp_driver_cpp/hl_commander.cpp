@@ -20,16 +20,33 @@ HighLevelCommander::HighLevelCommander(std::shared_ptr<rclcpp_lifecycle::Lifecyc
                 10,
                 std::bind(&HighLevelCommander::takeoff_callback, this, _1),
                 sub_opt);
+    
+
+    goto_sub = node->create_subscription<crazyflie_interfaces::msg::GoTo>(
+                "~/go_to", 
+                10,
+                std::bind(&HighLevelCommander::goto_callback, this, _1),
+                sub_opt);
+
+
     RCLCPP_WARN(node->get_logger(), "High Level Commander initialized");
 };
 
 void HighLevelCommander::land_callback(const crazyflie_interfaces::msg::Land::SharedPtr msg)
 {
     RCLCPP_WARN(node->get_logger(), "%f", msg->height);
-    HighLevelCommanderLogic::send_takeoff(msg->height, 1.0, msg->group_mask, msg->yaw);
+    HighLevelCommanderLogic::send_land(msg->height, (double)(msg->duration.sec + msg->duration.nanosec * 1e-9), msg->group_mask, msg->yaw);
+
 }
 
 void HighLevelCommander::takeoff_callback(const crazyflie_interfaces::msg::Takeoff::SharedPtr msg)
 {
-    HighLevelCommanderLogic::send_land(msg->height, 1.0, msg->group_mask, msg->yaw);
+    
+    HighLevelCommanderLogic::send_takeoff(msg->height, (double)(msg->duration.sec + msg->duration.nanosec * 1e-9), msg->group_mask, msg->yaw);
+}
+
+void HighLevelCommander::goto_callback(const crazyflie_interfaces::msg::GoTo::SharedPtr msg)
+{
+    
+    HighLevelCommanderLogic::send_go_to(msg->goal.x, msg->goal.y, msg->goal.z, msg->yaw, (double)(msg->duration.sec + msg->duration.nanosec * 1e-9),msg->relative,  msg->group_mask);
 }
