@@ -7,19 +7,28 @@
 RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate) 
       : CrtpLink(channel, address, datarate)
       , node(node)
-    {
-      callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-      auto qos = rclcpp::QoS(500);
-      qos.reliable();
-      qos.keep_all();
-      qos.durability_volatile();
+{
+    callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto qos = rclcpp::QoS(500);
+    qos.reliable();
+    qos.keep_all();
+    qos.durability_volatile();
 
 
-      send_crtp_packet_client = node->create_client<crtp_interfaces::srv::CrtpPacketSend>(
-            "crazyradio/send_crtp_packet", 
-            qos.get_rmw_qos_profile(),
-            callback_group);
+    send_crtp_packet_client = node->create_client<crtp_interfaces::srv::CrtpPacketSend>(
+        "crazyradio/send_crtp_packet", 
+        qos.get_rmw_qos_profile(),
+        callback_group);
+
+    send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500));
+    while (!send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500))) {
+        if (!rclcpp::ok()) {
+            RCLCPP_ERROR(node->get_logger(), "Interrupted while waiting for the service. Exiting.");
+            return;
+        }
+        RCLCPP_INFO(node->get_logger(), "Service not available, waiting again...");
     }
+}
 
 
 
@@ -79,15 +88,15 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
     auto status = result.wait_for(3s);  //not spinning here!
     if (status == std::future_status::ready)
     {
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Single Send Success");
+        RCLCPP_WARN(node->get_logger(), "Single Send Success");
         auto rr = result.get();
         auto pkt = response_to_packet(rr);
         auto r = rr->packet;
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "p:%d,ch:%d, dl:%d, d1:%d, d2:%d, d3:%d", r.port, r.channel, r.data_length, r.data[0], r.data[1], r.data[2] );
+        RCLCPP_WARN(node->get_logger(),"p:%d,ch:%d, dl:%d, d1:%d, d2:%d, d3:%d", r.port, r.channel, r.data_length, r.data[0], r.data[1], r.data[2] );
         return pkt;
 
     } else {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed single request responded");
+        RCLCPP_WARN(node->get_logger(), "Failed single request responded");
     }
 
     return CrtpPacket();

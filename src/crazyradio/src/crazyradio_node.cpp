@@ -162,7 +162,7 @@ class CrazyradioNode : public rclcpp::Node
             libcrazyradio::Crazyradio::Ack ack;
         
             m_radio.sendCrtpPacket(link, packet, ack);
-            // RCLCPP_WARN(this->get_logger(),"%X; [%d; %d]!", (uint8_t)(link->address & 0xFF), packet->port, packet->channel );
+            //RCLCPP_WARN(this->get_logger(),"%X; [%d; %d]!", (uint8_t)(link->address & 0xFF), packet->port, packet->channel );
             if (link->isBroadcast) 
             {
                 return true;
@@ -204,7 +204,7 @@ class CrazyradioNode : public rclcpp::Node
             uint64_t address = 0;
             for (int i = 0; i < 5; i++) address |= (uint64_t)request->link.address[i] << (8 * (4 - i));
             m_links.addLink(request->link.channel, address, request->link.datarate);
-            
+
             // Create Packet 
             libcrtp::CrtpPacket packet = {
                     (libcrtp::CrtpPort)request->packet.port,
@@ -237,6 +237,7 @@ class CrazyradioNode : public rclcpp::Node
 
                 libcrtp::CrtpLinkIdentifier link;
                 if (this->m_links.getLinkIdentifier(&link, channel, address)) { // release if not 
+                    //RCLCPP_WARN(this->get_logger(),"Add Packet %X; [%d; %d]!", (uint8_t)(link.address & 0xFF), packet.port, packet.channel );
                     if (packet.expectsResponse) 
                     {
                         this->m_links.linkAddPacket(&link, &packet, response_callback);
