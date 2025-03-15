@@ -1,9 +1,16 @@
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/logging.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+
 using std::placeholders::_1;
+
+#define PM_BLOCK_ID 0
+#define POSE_BLOCK_ID 1
 
 Logging::Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link)
     : LoggingLogic(link, std::string("mein_pfad"))
     , node(node)
+    , log_pm(false)
+    , log_pose(false)
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_opt = rclcpp::SubscriptionOptions();
@@ -20,11 +27,29 @@ Logging::Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
                 10,
                 std::bind(&Logging::get_toc_info_callback, this, _1),
                 sub_opt);
-
-    
-
+  
     this->initialize_logging();
     RCLCPP_WARN(node->get_logger(), "Logging  initialized");
+}
+
+void Logging::start_logging_pose()
+{     
+    std::vector<std::string> variables = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimateZ.quat"};
+    LoggingLogic::add_block(POSE_BLOCK_ID, variables);
+    LoggingLogic::start_block(POSE_BLOCK_ID, 10); // 10 Hz
+   
+    log_pose_pub = node->create_publisher<crazyflie_interfaces::msg::PoseStampedArray>("/cf_positions", 10);
+    log_pose = true;
+}
+
+void Logging::start_logging_pm()
+{
+    std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state"};
+    LoggingLogic::add_block(PM_BLOCK_ID, variables);
+    LoggingLogic::start_block(PM_BLOCK_ID, 100); // 1 Hz
+
+    log_pm_pub = node->create_publisher<crazyflie_interfaces::msg::GenericLogData>("~/pm", 10);
+    log_pm = true;
 }
 
 void Logging::crtp_response_callback(const CrtpPacket& packet)
@@ -39,21 +64,44 @@ void Logging::crtp_response_callback(const CrtpPacket& packet)
         std::vector<uint8_t> data_payload(packet.data + 4, packet.data + packet.data_length); // Copy data after the first 4 bytes.
 
         std::vector<float> values = LoggingLogic::unpack_block(block_id, data_payload);
+        std::vector<double> double_values(values.begin(), values.end());
 
-        if (values.size()) RCLCPP_WARN(node->get_logger(), "LogBlock ID:%d , %f", block_id, values[0]);
+        if (block_id == PM_BLOCK_ID && log_pm && values.size() == 3) {
+            auto msg = crazyflie_interfaces::msg::GenericLogData();
+            msg.values = double_values;
+            log_pm_pub->publish(msg);
+        }
+        if (block_id == POSE_BLOCK_ID && log_pose && values.size() == 4)
+        {
+            auto posearray = crazyflie_interfaces::msg::PoseStampedArray();
+            float q[4];
+            quatdecompress(values[3], q);
+            geometry_msgs::msg::PoseStamped pose;
+            pose.header.stamp = node->get_clock()->now();
+            pose.header.frame_id = node->get_name();
+
+            pose.pose.position.x = values[0];
+            pose.pose.position.y = values[1];
+            pose.pose.position.z = values[2];
+
+            pose.pose.orientation.x = q[0];      
+            pose.pose.orientation.y = q[1];
+            pose.pose.orientation.z = q[2];
+            pose.pose.orientation.w = q[3];
+            posearray.poses.push_back(pose);
+
+            log_pose_pub->publish(posearray);
+        }
+        //if (values.size()) RCLCPP_WARN(node->get_logger(), "LogBlock ID:%d , %f", block_id, values[0]);
 
     }
-    RCLCPP_WARN(node->get_logger(), "Logging received a packet with channel %X", packet.channel);
+    //RCLCPP_WARN(node->get_logger(), "Logging received a packet with channel %X", packet.channel);
 }
 
 void Logging::initialize_logging()
 {   
     LoggingLogic::reset();
     initialize_toc(); // Load toc from cf or from file
-
-    std::vector<std::string> variables = {"pm.vbat"};
-    LoggingLogic::add_block(1, variables);
-    LoggingLogic::start_block(1, 100); // 1Hz
 }
 
 

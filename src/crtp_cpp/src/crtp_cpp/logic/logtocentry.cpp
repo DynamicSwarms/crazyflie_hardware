@@ -3,7 +3,7 @@
 #include <iostream> 
 #include <sstream>
 #include <cstring>
-
+#include <math.h>
 
 #define PORT_LOGGING 5
 
@@ -89,7 +89,7 @@ float LogTocEntry::to_float(const std::vector<uint8_t>& data) const
       case LogTypeFloat: {
           float value;
           std::memcpy(&value, data.data(), sizeof(value)); // Direct float conversion
-          return value;
+          return static_cast<float>(value);
       }
       case LogTypeFP16: {
           // FP16 to float conversion (requires additional handling)
@@ -145,3 +145,24 @@ float LogTocEntry::fp16_to_float(uint16_t fp16) const
     return float_result;
 }
 
+void quatdecompress(uint32_t comp, float q[4])
+{
+	float const SMALL_MAX = 1.0 / sqrt(2);
+	unsigned const mask = (1 << 9) - 1;
+
+	int const i_largest = comp >> 30;
+	float sum_squares = 0;
+	for (int i = 3; i >= 0; --i) {
+		if (i != i_largest) {
+			unsigned mag = comp & mask;
+			unsigned negbit = (comp >> 9) & 0x1;
+			comp = comp >> 10;
+			q[i] = SMALL_MAX * ((float)mag) / mask;
+			if (negbit == 1) {
+				q[i] = -q[i];
+			}
+			sum_squares += q[i] * q[i];
+		}
+	}
+	q[i_largest] = sqrtf(1.0f - sum_squares);
+}

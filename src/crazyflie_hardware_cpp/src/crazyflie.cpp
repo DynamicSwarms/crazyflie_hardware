@@ -58,8 +58,15 @@ class Commander
       double max_initial_deviation = node->get_parameter("max_initial_deviation").as_double();
       int marker_configuration_index = node->get_parameter("marker_configuration_index").as_int();
       int dynamics_configuration_index = node->get_parameter("dynamics_configuration_index").as_int();
-     
-      localization.start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
+
+      if (send_external_position) 
+      {
+        localization.start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
+      } else {
+        logging.start_logging_pose();
+      }
+      logging.start_logging_pm();
+
     } 
   
 private:
