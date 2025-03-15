@@ -15,16 +15,11 @@
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/hl_commander.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/generic_commander.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/parameters.hpp"
+#include "crazyflie_hardware_cpp/crtp_driver_cpp/logging.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/console.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/localization.hpp"
-
-
-
 #include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
 
-
-
-//#include "crtp_cpp/logic/hl_commander_logic.hpp"
 //#include "crtp_cpp/logic/link_layer_logic.hpp"
 
 
@@ -38,6 +33,7 @@ class Commander
       , hl_commander(node, &link)
       , generic_commander(node, &link)
       , parameters(node, &link)
+      , logging(node, &link)
       , localization(node, &link, get_tf_name(address))
     {
       RCLCPP_WARN(node->get_logger(), "Setting default Parameters");
@@ -79,6 +75,7 @@ private:
   HighLevelCommander hl_commander;
   GenericCommander generic_commander;
   Parameters parameters;
+  Logging logging;
   Localization localization;
 };
 

@@ -33,6 +33,7 @@ set(CRTP_DRIVER_SRCS
   src/crtp_driver_cpp/hl_commander.cpp
   src/crtp_driver_cpp/generic_commander.cpp
   src/crtp_driver_cpp/parameters.cpp
+  src/crtp_driver_cpp/logging.cpp
   src/crtp_driver_cpp/console.cpp  
   src/crtp_driver_cpp/localization.cpp
   src/crtp_link_ros.cpp

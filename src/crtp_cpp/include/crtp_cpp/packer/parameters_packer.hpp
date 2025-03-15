@@ -48,8 +48,6 @@ class ParametersPacker : public TocPacker {
 public:
     ParametersPacker();
 
-    
-
     CrtpPacket set_parameter(uint16_t id, ParamType type, std::variant<int, double> value);
 
 protected:

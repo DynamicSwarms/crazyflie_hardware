@@ -1,40 +1,19 @@
 #pragma once
 
+#include "crtp_cpp/packer/toc_packer.hpp"
 #include <vector>
-#include <cstdint> // For uint8_t, uint16_t, etc.
-#include "crtp_cpp/packer/toc_packer.hpp" // Assuming this is already converted
-#include "crtp_cpp/logic/toc_logic.hpp"
-
+#include <cstdint>
 #include <tuple>
 
-
 enum LogType {
-  LogTypeUint8 = 0x01,
+  LogTypeUint8  = 0x01,
   LogTypeUint16 = 0x02, 
   LogTypeUint32 = 0x03, 
-  LogTypeInt8 = 0x04,
-  LogTypeInt16 = 0x05,
-  LogTypeInt32 = 0x06,
-  LogTypeFloat = 0x07,
-  LogTypeFP16 = 0x08,
-};
-
-struct LogTocEntry : public TocEntry {
-  uint16_t id;
-  std::string group;
-  std::string name;
-  LogType type;
-
-
-  float fp16_to_float(uint16_t fp16) const;
-
-  uint8_t size() const;
-  float to_float(const std::vector<uint8_t>& data) const;
-
-  LogTocEntry();
-  LogTocEntry(const std::vector<uint8_t>& data);
-  LogTocEntry(const std::string& line);
-  std::string toString() const ;
+  LogTypeInt8   = 0x04,
+  LogTypeInt16  = 0x05,
+  LogTypeInt32  = 0x06,
+  LogTypeFloat  = 0x07,
+  LogTypeFP16   = 0x08,
 };
 
 union LogValue {
@@ -54,13 +33,15 @@ public:
 
   LoggingPacker(); // Constructor
 
-  CrtpRequest create_block(uint8_t index, const std::vector<std::pair<uint8_t, uint16_t>>& content);
+  CrtpRequest create_block(uint8_t block_id, const std::vector<std::pair<uint8_t, uint16_t>>& variables);
   CrtpRequest start_block(uint8_t index, uint8_t period);
   CrtpRequest stop_block(uint8_t index);
 
+  CrtpRequest reset();
+
 
 private:
-  std::vector<uint8_t> _create_block_content(const std::vector<std::pair<uint8_t, uint16_t>>& content);
+  std::vector<uint8_t> create_block_content(const std::vector<std::pair<uint8_t, uint16_t>>& variables);
 
 protected:
     CrtpPacket prepare_control_packet(const std::vector<uint8_t>& data);

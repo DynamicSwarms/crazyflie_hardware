@@ -37,6 +37,8 @@ set(${PROJECT_NAME}_SRCS
   src/crtp_cpp/logic/logic.cpp
   src/crtp_cpp/logic/parameters_logic.cpp
   src/crtp_cpp/logic/toc_logic.cpp
+
+  src/crtp_cpp/logic/logtocentry.cpp
 )  
 
 add_library(${PROJECT_NAME} ${${PROJECT_NAME}_SRCS})

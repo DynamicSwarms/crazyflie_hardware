@@ -26,7 +26,7 @@ ParamTocEntry::ParamTocEntry(const std::string& csv) {
 
 ParamTocEntry::ParamTocEntry(const std::vector<uint8_t>& data)
 {
-    std::memcpy(&id, data.data() + 1, 2);   // Two bytes of ident
+    std::memcpy(&id, data.data() + 1, 2);         // Two bytes of ident
     uint8_t type_info = data[3];                  // One byte of typeInfo    
     group  = std::string(reinterpret_cast<const char*>(data.data() + 4)); // std::string will read unil \0 terminated 
     name = std::string(reinterpret_cast<const char*>(data.data() + 4 + group.size() + 1));
@@ -56,12 +56,6 @@ bool ParamTocEntry::isDouble() const
 ParametersLogic::ParametersLogic(CrtpLink* crtp_link, const std::string& path)
     : TocLogic<ParamTocEntry>(crtp_link, path, PORT_PARAMETER),
       packer(ParametersPacker()) {}
-
-
-
-
-
-
 
 
 bool ParametersLogic::send_set_parameter(const std::string& group, const std::string& name, std::variant<int, double> value) {

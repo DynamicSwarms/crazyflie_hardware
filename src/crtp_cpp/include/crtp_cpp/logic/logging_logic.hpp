@@ -10,17 +10,19 @@
 #include "crtp_cpp/packer/crtp_packer.hpp"
 #include "crtp_cpp/packer/logging_packer.hpp"
 #include "crtp_cpp/logic/toc_logic.hpp"     
-
+#include "crtp_cpp/logic/logtocentry.hpp"
 
 class LoggingLogic : public TocLogic<LogTocEntry> {
 public:
     LoggingLogic(CrtpLink * crtp_link, const std::string& path);
 
-    std::vector<float> unpack_block(int block_id, const std::vector<uint8_t>& data);
     void start_block(int id, int period_ms_d10);
     void stop_block(int id);
     void add_block(int id, const std::vector<std::string>& variables);
+    void reset();
 
+private:
+    std::vector<float> unpack_block(int block_id, const std::vector<uint8_t>& data);
 private:
     LoggingPacker packer;
     std::map<int, std::vector<LogTocEntry>> blocks; // Map for blocks
