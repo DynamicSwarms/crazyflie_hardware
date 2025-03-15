@@ -21,15 +21,42 @@ Logging::Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
                 std::bind(&Logging::get_toc_info_callback, this, _1),
                 sub_opt);
 
+    
+
     this->initialize_logging();
     RCLCPP_WARN(node->get_logger(), "Logging  initialized");
+}
+
+void Logging::crtp_response_callback(const CrtpPacket& packet)
+{
+    if (packet.channel == LOGDATA_CHANNEL && packet.data_length >= 4) 
+    {
+        uint8_t block_id = packet.data[0];
+        uint8_t ts1 = packet.data[1];
+        uint8_t ts2 = packet.data[2];
+        uint8_t ts3 = packet.data[3];
+
+        std::vector<uint8_t> data_payload(packet.data + 4, packet.data + packet.data_length); // Copy data after the first 4 bytes.
+
+        std::vector<float> values = LoggingLogic::unpack_block(block_id, data_payload);
+
+        if (values.size()) RCLCPP_WARN(node->get_logger(), "LogBlock ID:%d , %f", block_id, values[0]);
+
+    }
+    RCLCPP_WARN(node->get_logger(), "Logging received a packet with channel %X", packet.channel);
 }
 
 void Logging::initialize_logging()
 {   
     LoggingLogic::reset();
     initialize_toc(); // Load toc from cf or from file
+
+    std::vector<std::string> variables = {"pm.vbat"};
+    LoggingLogic::add_block(1, variables);
+    LoggingLogic::start_block(1, 100); // 1Hz
 }
+
+
 
 void Logging::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {

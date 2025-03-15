@@ -1,6 +1,7 @@
 #include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
 #include <iostream>
 #include <chrono>
+using std::placeholders::_1;
 
 
 
@@ -9,6 +10,7 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
       , node(node)
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    
     auto qos = rclcpp::QoS(500);
     qos.reliable();
     qos.keep_all();
@@ -28,6 +30,29 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
         }
         RCLCPP_INFO(node->get_logger(), "Service not available, waiting again...");
     }
+
+    
+    auto sub_opt = rclcpp::SubscriptionOptions();
+    sub_opt.callback_group = callback_group;
+    link_end_sub = node->create_subscription<crtp_interfaces::msg::CrtpLink>(
+        "/crazyradio/crtp_link_end",
+        10, 
+        std::bind(&RosLink::crtp_link_end_callback, this, _1),
+        sub_opt);
+
+    crtp_response_sub = node->create_subscription<crtp_interfaces::msg::CrtpResponse>(
+        "crazyradio/crtp_response",
+        10, 
+        std::bind(&RosLink::crtp_response_callback, this, _1),
+        sub_opt);
+
+    auto pub_opt = rclcpp::PublisherOptions();
+    pub_opt.callback_group = callback_group;
+    link_close_pub = node->create_publisher<crtp_interfaces::msg::CrtpLink>(
+                "/crazyradio/close_crtp_link",
+                10,
+                pub_opt);
+
 }
 
 
@@ -63,6 +88,57 @@ CrtpPacket RosLink::response_to_packet(std::shared_ptr<crtp_interfaces::srv::Crt
     return packet;
 }
 
+CrtpPacket RosLink::ros_packet_to_packet(const crtp_interfaces::msg::CrtpPacket& ros_packet)
+{
+    CrtpPacket packet;
+    packet.port = ros_packet.port;
+    packet.channel = ros_packet.channel;
+    packet.data_length = ros_packet.data_length;
+    for (int i = 0; i < ros_packet.data_length; i++) 
+    {
+        packet.data[i] = ros_packet.data[i];
+    }
+    return packet;
+}
+
+
+void RosLink::close_link() 
+{
+    auto msg = crtp_interfaces::msg::CrtpLink();
+    msg.channel = channel;
+    msg.address = address;
+    msg.datarate = datarate;
+    link_close_pub->publish(msg);
+}
+
+void RosLink::add_callback(uint8_t port, const CrtpCallbackType& callback)
+{
+    callbacks[port].push_back(callback);
+}
+
+void RosLink::crtp_link_end_callback(const crtp_interfaces::msg::CrtpLink::SharedPtr msg)
+{
+    if (msg->address == address)
+    {
+        RCLCPP_WARN(node->get_logger(), "Address matches, killing us!");
+        RCLCPP_WARN(node->get_logger(), "Killing not implemented.");    
+    }
+}
+
+void RosLink::crtp_response_callback(const crtp_interfaces::msg::CrtpResponse::SharedPtr msg)
+{
+    if (msg->channel == channel && msg->address == address)
+    {
+        auto it = callbacks.find(msg->packet.port);
+        if (it != callbacks.end()) {
+            for (const auto& callback : it->second) {
+                CrtpPacket crtp_packet = ros_packet_to_packet(msg->packet);
+                callback(crtp_packet);
+            }
+        }  
+    }
+}
+
 
 
 void RosLink::send_packet_no_response(CrtpRequest request) 
@@ -85,7 +161,7 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
 
     using namespace std::chrono_literals;
 
-    auto status = result.wait_for(3s);  //not spinning here!
+    auto status = result.wait_for(1s); 
     if (status == std::future_status::ready)
     {
         RCLCPP_WARN(node->get_logger(), "Single Send Success");
@@ -117,18 +193,15 @@ std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpReques
     for (const auto& result : results) {
         using namespace std::chrono_literals;
 
-        auto status = result.wait_for(3s);  //not spinning here!
+        auto status = result.wait_for(1s);
         if (status == std::future_status::ready)
         {
             auto pkt = response_to_packet(result.get());
             response_packets.push_back(pkt);
         } else {
-            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed in batch request");
+            RCLCPP_WARN(node->get_logger(), "Failed batch request");
         }
     }
     RCLCPP_WARN(node->get_logger(), "Batch finished with! %d", response_packets.size());
-
     return response_packets;
 }
-
-    std::shared_ptr<rclcpp::Node> node;

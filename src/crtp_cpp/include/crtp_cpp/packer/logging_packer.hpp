@@ -5,6 +5,14 @@
 #include <cstdint>
 #include <tuple>
 
+#define PORT_LOGGING 5
+
+// Channels used for the logging port
+#define TOC_CHANNEL 0
+#define CONTROL_CHANNEL 1
+#define LOGDATA_CHANNEL 2
+
+
 enum LogType {
   LogTypeUint8  = 0x01,
   LogTypeUint16 = 0x02, 

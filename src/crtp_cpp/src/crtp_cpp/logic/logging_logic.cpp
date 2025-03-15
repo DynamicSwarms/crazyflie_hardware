@@ -10,8 +10,8 @@ LoggingLogic::LoggingLogic(
 ) : TocLogic<LogTocEntry>(crtp_link, path, PORT_LOGGING),
     packer(LoggingPacker()) 
 {
+    link->add_callback(PORT_LOGGING, std::bind(&LoggingLogic::crtp_response_callback, this, std::placeholders::_1));
 }
-
 
 void LoggingLogic::start_block(int id, int period_ms_d10) {
     link->send_packet_no_response(packer.start_block(id, period_ms_d10));

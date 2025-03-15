@@ -2,12 +2,6 @@
 #include <tuple>
 #include <cstring> // Add this line
 
-#define PORT_LOGGING 5
-
-// Channels used for the logging port
-#define TOC_CHANNEL 0
-#define CONTROL_CHANNEL 1
-#define LOGDATA_CHANNEL 2
 
 // Commands used when accessing the Log configurations
 #define CMD_CREATE_BLOCK 0
