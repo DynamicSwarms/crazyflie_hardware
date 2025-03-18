@@ -7,6 +7,7 @@
 #include <functional>
 #include <tuple>
 #include <optional>
+#include <string>
 
 struct TocEntry {
     public:
