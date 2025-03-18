@@ -133,6 +133,7 @@ class CrazyradioNode : public rclcpp::Node
 
         void sendCrtpUnresponded(libcrtp::CrtpPacket * packet, libcrtp::CrtpLinkIdentifier * link)
         {
+            if (packet->port == libcrtp::CrtpPort::LINK_LAYER && !packet->dataLength) return;
             auto resp = crtp_interfaces::msg::CrtpResponse();
             
             resp.channel = link->channel;           

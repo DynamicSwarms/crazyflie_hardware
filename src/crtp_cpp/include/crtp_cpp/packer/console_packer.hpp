@@ -4,12 +4,16 @@
 #include <vector>
 #include <cstdint>
 
-class ConsolePacker : public CrtpPacker {
+#define PORT_CONSOLE 0
+#define CHANNEL_CONSOLE 0
+
+class ConsolePacker : public CrtpPacker
+{
 public:
     ConsolePacker();
 
     CrtpPacket consolepacket();
 
 protected:
-    CrtpPacket prepare_packet(const std::vector<uint8_t>& data);
+    CrtpPacket prepare_packet(const std::vector<uint8_t> &data);
 };

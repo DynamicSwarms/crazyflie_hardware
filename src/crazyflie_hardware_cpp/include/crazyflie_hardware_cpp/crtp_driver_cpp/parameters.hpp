@@ -8,21 +8,20 @@
 
 #include "std_msgs/msg/empty.hpp"
 
-class Parameters : public ParametersLogic {
+class Parameters : public ParametersLogic
+{
 public:
-    Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link);
-private: 
+    Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link);
+    void initialize_parameters();
 
+private:
     void download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg);
     void get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg);
 
-    void initialize_parameters();
-
     rcl_interfaces::msg::SetParametersResult set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters);
-    
 
-private: 
-    rclcpp::CallbackGroup::SharedPtr callback_group; 
+private:
+    rclcpp::CallbackGroup::SharedPtr callback_group;
 
     std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr downdload_toc_sub;

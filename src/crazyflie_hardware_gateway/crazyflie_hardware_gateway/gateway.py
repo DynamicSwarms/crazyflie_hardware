@@ -79,6 +79,9 @@ class Gateway(Node):
         """
         self.get_logger().info("Removing Crazyflie with ID: {}".format(id))
         if (channel, id) in self.crazyflies.keys():
+            self.destroy_client(self.crazyflies[(channel, id)].change_state)
+            self.destroy_client(self.crazyflies[(channel, id)].get_state)
+
             process = self.crazyflies[(channel, id)].process
             os.killpg(os.getpgid(process.pid), SIGINT)
             return (True, "Success")
@@ -147,7 +150,7 @@ class Gateway(Node):
             )
 
             key = (channel, id)
-            if self._wait_for_change_state_service(key, timeout=2.0):
+            if self._wait_for_change_state_service(key, timeout=3.0):
                 success = self._transition_crazyflie(
                     channel,
                     id,
@@ -160,26 +163,14 @@ class Gateway(Node):
                     f"Crazyflie {key} did not provide change_state service."
                 )
 
-    def _wait_for_change_state_service(
-        self, key: Tuple[int, int], timeout: float
-    ) -> bool:
-        while timeout > 0.0:
-            if (
-                key in self.crazyflies.keys()
-                and self.crazyflies[key].change_state.service_is_ready()
-            ):
-                return True
-
-            time.sleep(0.1)
-            timeout -= 0.1
-        return False
-
     def _on_crazyflie_exit(self, fut: asyncio.Future, channel: int, id: int):
         """Callback invoked when a crazyflie subprocess exits."""
         self._logger.info(f"Crazyflie (channel={channel}, id={id}) exited.")
 
         # Clean up the crazyflie entry from the dictionary
         if (channel, id) in self.crazyflies.keys():
+            self.destroy_client(self.crazyflies[(channel, id)].change_state)
+            self.destroy_client(self.crazyflies[(channel, id)].get_state)
             del self.crazyflies[(channel, id)]
 
     async def _create_cf(
@@ -317,6 +308,20 @@ class Gateway(Node):
             .string_value
         )
 
+    def _wait_for_change_state_service(
+        self, key: Tuple[int, int], timeout: float
+    ) -> bool:
+        while timeout > 0.0:
+            if (
+                key in self.crazyflies.keys()
+                and self.crazyflies[key].change_state.service_is_ready()
+            ):
+                return True
+
+            time.sleep(0.1)
+            timeout -= 0.1
+        return False
+
     def _transition_crazyflie(
         self, channel: int, cf_id: int, state: LifecycleState, label: str
     ) -> bool:
@@ -325,13 +330,19 @@ class Gateway(Node):
         request.transition.label = label
         if (channel, cf_id) in self.crazyflies.keys():
             fut = self.crazyflies[(channel, cf_id)].change_state.call_async(request)
-            rclpy.spin_until_future_complete(node=self, future=fut, timeout_sec=10.0)
-            response: Optional[ChangeState.Response] = fut.result()
+            timeout = 0.0
+            while not fut.done() and timeout < 10.0:
+                rclpy.spin_until_future_complete(node=self, future=fut, timeout_sec=0.1)
+                if not self._wait_for_change_state_service((channel, cf_id), 0.1):
+                    raise TimeoutError("Crazyflie died during transition.")
+                timeout += 0.1
+
             if fut.done():
+                response: Optional[ChangeState.Response] = fut.result()
                 response: ChangeState.Response
                 return response.success
-            else:
-                raise TimeoutError("Service call for transition timed out.")
+
+            raise TimeoutError("Service call for transition timed out.")
         else:
             raise GatewayError(
                 f"Crazyflie with ch: {channel}, id: {cf_id} not available."

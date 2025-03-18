@@ -6,15 +6,17 @@
 
 #include "std_msgs/msg/string.hpp"
 
-class Console : public ConsoleLogic {
+class Console : public ConsoleLogic
+{
 public:
-    Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link);
-private: 
+    Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link);
 
+private:
     void console_message(const std::string);
+    void crtp_response_callback(const CrtpPacket &packet) override;
 
-private: 
-    rclcpp::CallbackGroup::SharedPtr callback_group; 
+private:
+    rclcpp::CallbackGroup::SharedPtr callback_group;
 
     std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr console_publisher;

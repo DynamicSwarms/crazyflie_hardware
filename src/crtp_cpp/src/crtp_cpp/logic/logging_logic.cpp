@@ -14,15 +14,15 @@ LoggingLogic::LoggingLogic(
 }
 
 void LoggingLogic::start_block(int id, int period_ms_d10) {
-    link->send_packet_no_response(packer.start_block(id, period_ms_d10));
+    link->send_packet(packer.start_block(id, period_ms_d10));
 }
 
 void LoggingLogic::stop_block(int id) {
-    link->send_packet_no_response(packer.stop_block(id));
+    link->send_packet(packer.stop_block(id));
 }
 
 void LoggingLogic::reset() {
-    link->send_packet_no_response(packer.reset());
+    link->send_packet(packer.reset());
 }
 
 void LoggingLogic::add_block(int id, const std::vector<std::string>& variables) {
@@ -45,7 +45,7 @@ void LoggingLogic::add_block(int id, const std::vector<std::string>& variables) 
         }
     }    
     
-    link->send_packet_no_response(packer.create_block(id, vars));
+    link->send_packet(packer.create_block(id, vars));
 }
 
 std::vector<float> LoggingLogic::unpack_block(int block_id, const std::vector<uint8_t>& data) {
