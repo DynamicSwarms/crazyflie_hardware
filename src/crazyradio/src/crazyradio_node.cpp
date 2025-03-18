@@ -13,7 +13,6 @@
 
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
 #include "crtp_interfaces/msg/crtp_response.hpp"
-#include "crtp_interfaces/msg/crtp_link_end.hpp"
 
 #include <condition_variable>
 #include <mutex>
