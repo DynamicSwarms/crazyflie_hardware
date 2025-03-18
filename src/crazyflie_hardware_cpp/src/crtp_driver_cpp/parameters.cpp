@@ -20,7 +20,7 @@ Parameters::Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, Cr
         std::bind(&Parameters::get_toc_info_callback, this, _1),
         sub_opt);
 
-    RCLCPP_WARN(node->get_logger(), "Parameters  initialized");
+    RCLCPP_DEBUG(node->get_logger(), "Parameters  initialized");
 }
 
 void Parameters::initialize_parameters()

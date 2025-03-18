@@ -67,8 +67,7 @@ public:
     }
     catch (const std::exception &exc)
     {
-      RCLCPP_INFO(node->get_logger(), "Caught exception during commander setup:");
-      RCLCPP_INFO(node->get_logger(), "%s", exc.what());
+      RCLCPP_INFO(node->get_logger(), "Caught exception during commander setup: %s", exc.what());
       configured = false;
     }
   }
@@ -210,7 +209,7 @@ public:
 
   void shutdown_cleanly()
   {
-    RCLCPP_WARN(get_logger(), "Shutting down cleanly.");
+    RCLCPP_DEBUG(get_logger(), "Shutting down cleanly.");
     rclcpp::shutdown();
   }
 

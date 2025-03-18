@@ -2,15 +2,12 @@
 using std::placeholders::_1;
 using namespace std::chrono_literals;
 
-
-Localization::Localization(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link, std::string tf_name)
-    : LocalizationLogic(link)
-    , node(node)
-    , tf_name(tf_name)
+Localization::Localization(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link, std::string tf_name)
+    : LocalizationLogic(link), node(node), tf_name(tf_name)
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-        
-    RCLCPP_WARN(node->get_logger(), "Localization initialized");  
+
+    RCLCPP_DEBUG(node->get_logger(), "Localization initialized");
 }
 
 void Localization::console_message(const std::string)
@@ -19,11 +16,11 @@ void Localization::console_message(const std::string)
 }
 
 bool Localization::start_external_tracking(int marker_configuration_index,
-    int dynamics_configuration_index, 
-    double max_initial_deviation, 
-    std::vector<double> initial_position,
-    int channel,
-    int datarate)
+                                           int dynamics_configuration_index,
+                                           double max_initial_deviation,
+                                           std::vector<double> initial_position,
+                                           int channel,
+                                           int datarate)
 {
     bool tracker_success = add_to_tracker(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position);
 
@@ -33,17 +30,18 @@ bool Localization::start_external_tracking(int marker_configuration_index,
 
 bool Localization::add_to_tracker(
     int marker_configuration_index,
-    int dynamics_configuration_index, 
+    int dynamics_configuration_index,
     double max_initial_deviation,
     std::vector<double> initial_position)
 {
-    rclcpp::Client<object_tracker_interfaces::srv::AddTrackerObject>::SharedPtr client = 
+    rclcpp::Client<object_tracker_interfaces::srv::AddTrackerObject>::SharedPtr client =
         node->create_client<object_tracker_interfaces::srv::AddTrackerObject>(
-            "/tracker/add_object", 
+            "/tracker/add_object",
             rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
             callback_group);
 
-    if (!client->wait_for_service(1s)) {
+    if (!client->wait_for_service(1s))
+    {
         RCLCPP_WARN(node->get_logger(), "Tracking Service not available!");
         return false;
     }
@@ -57,23 +55,28 @@ bool Localization::add_to_tracker(
     request->initial_pose.position.y = initial_position[1];
     request->initial_pose.position.z = initial_position[2];
     auto result = client->async_send_request(request);
-    
+
     RCLCPP_WARN(node->get_logger(), "wait for service success");
 
     using namespace std::chrono_literals;
 
-    auto status = result.wait_for(3s);  //not spinning here!
+    auto status = result.wait_for(3s); // not spinning here!
     if (status == std::future_status::ready)
     {
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Service call success!");
         auto res = result.get();
-        if (res->success) {
+        if (res->success)
+        {
             RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Add to tracker success!");
             return true;
-        } else {
+        }
+        else
+        {
             RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Add to tracker failed!");
         }
-    } else {
+    }
+    else
+    {
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Service call timed out!");
     }
 
@@ -82,13 +85,14 @@ bool Localization::add_to_tracker(
 
 bool Localization::add_to_broadcaster(int channel, int datarate)
 {
-    rclcpp::Client<broadcaster_interfaces::srv::PosiPoseBroadcastObject>::SharedPtr client = 
+    rclcpp::Client<broadcaster_interfaces::srv::PosiPoseBroadcastObject>::SharedPtr client =
         node->create_client<broadcaster_interfaces::srv::PosiPoseBroadcastObject>(
-            "/add_posi_pose_object", 
+            "/add_posi_pose_object",
             rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
             callback_group);
 
-    if (!client->wait_for_service(1s)) {
+    if (!client->wait_for_service(1s))
+    {
         RCLCPP_WARN(node->get_logger(), "Broadcast Service not available!");
         return false;
     }
@@ -97,28 +101,32 @@ bool Localization::add_to_broadcaster(int channel, int datarate)
     request->channel = channel;
     request->data_rate = datarate;
     request->tf_frame_id = tf_name;
-    
+
     auto result = client->async_send_request(request);
-    
+
     RCLCPP_WARN(node->get_logger(), "wait for service success");
 
     using namespace std::chrono_literals;
 
-    auto status = result.wait_for(3s);  //not spinning here!
+    auto status = result.wait_for(3s); // not spinning here!
     if (status == std::future_status::ready)
     {
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Service call success!");
         auto res = result.get();
-        if (res->success) {
+        if (res->success)
+        {
             RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Broadcast success!");
             return true;
-        } else {
+        }
+        else
+        {
             RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Add to Broadcast failed!");
         }
-    } else {
+    }
+    else
+    {
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Service call timed out!");
     }
 
     return false;
-
 }

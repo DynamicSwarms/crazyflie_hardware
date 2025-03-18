@@ -26,7 +26,7 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
             RCLCPP_ERROR(node->get_logger(), "Interrupted while waiting for the service. Exiting.");
             return;
         }
-        RCLCPP_INFO(node->get_logger(), "Crazyradio not available, waiting again...");
+        RCLCPP_DEBUG(node->get_logger(), "Crazyradio not available, waiting again...");
     }
 
     auto sub_opt = rclcpp::SubscriptionOptions();
@@ -113,7 +113,7 @@ void RosLink::crtp_link_end_callback(const crtp_interfaces::msg::CrtpLink::Share
 {
     if (msg->address == address)
     {
-        RCLCPP_WARN(node->get_logger(), "Link closed. Shutting down!");
+        RCLCPP_WARN(node->get_logger(), "Connection lost, trying to shut down!");
         node->shutdown(); // This works only if we are configured.
     }
 }
@@ -161,8 +161,8 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
     }
     else
     {
-        RCLCPP_WARN(node->get_logger(), "Failed single request responded");
-        throw std::runtime_error("Failed single request responded!");
+        RCLCPP_DEBUG(node->get_logger(), "Failed single request responded");
+        throw std::runtime_error("Communication failed!");
     }
 
     return CrtpPacket();

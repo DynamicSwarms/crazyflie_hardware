@@ -25,7 +25,7 @@ Logging::Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
         std::bind(&Logging::get_toc_info_callback, this, _1),
         sub_opt);
 
-    RCLCPP_WARN(node->get_logger(), "Logging  initialized");
+    RCLCPP_DEBUG(node->get_logger(), "Logging  initialized");
 }
 
 void Logging::start_logging_pose()

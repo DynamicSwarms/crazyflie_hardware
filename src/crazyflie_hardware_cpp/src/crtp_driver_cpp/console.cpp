@@ -15,7 +15,7 @@ Console::Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
         ConsoleLogic::send_consolepacket();
     }
 
-    RCLCPP_WARN(node->get_logger(), "Console initialized");
+    RCLCPP_DEBUG(node->get_logger(), "Console initialized");
 }
 
 void Console::crtp_response_callback(const CrtpPacket &packet)
