@@ -31,7 +31,6 @@ HighLevelCommander::HighLevelCommander(std::shared_ptr<rclcpp_lifecycle::Lifecyc
 
 void HighLevelCommander::land_callback(const crazyflie_interfaces::msg::Land::SharedPtr msg)
 {
-    RCLCPP_WARN(node->get_logger(), "%f", msg->height);
     HighLevelCommanderLogic::send_land(msg->height, (double)(msg->duration.sec + msg->duration.nanosec * 1e-9), msg->group_mask, msg->yaw);
 }
 

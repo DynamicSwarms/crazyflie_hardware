@@ -217,7 +217,9 @@ public:
   {
     RCLCPP_DEBUG(get_logger(), "Shutting down cleanly.");
     if (commander_initialized) {
-      commander->stop_external_tracking();
+      if (!commander->stop_external_tracking()) {
+        RCLCPP_INFO(get_logger(), "Failed stopping external positioning.");
+      }
     }
     rclcpp::shutdown();
   }

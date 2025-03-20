@@ -18,8 +18,14 @@ Localization::Localization(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node
 
 bool Localization::stop_external_tracking() 
 {
-    if (is_beeing_tracked) remove_from_tracker();
-    if (is_beeing_broadcasted) remove_from_broadcaster();
+    bool ret = true; 
+    if (is_beeing_tracked) {
+        if (!remove_from_tracker()) ret = false; 
+    }
+    if (is_beeing_broadcasted)
+    {
+        if (!remove_from_broadcaster()) ret = false;
+    } 
     return true;
 }
 
@@ -70,53 +76,30 @@ bool Localization::add_to_tracker(
     request->initial_pose.position.z = initial_position[2];
     auto result = client->async_send_request(request);
 
-    RCLCPP_WARN(node->get_logger(), "wait for service success");
-
-
     auto status = result.wait_for(3s); // not spinning here!
     if (status == std::future_status::ready)
     {
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Service call success!");
+        RCLCPP_DEBUG(node->get_logger(), "Service call success!");
         auto res = result.get();
         if (res->success)
         {
-            RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Add to tracker success!");
+            RCLCPP_DEBUG(node->get_logger(), "Add to tracker success!");
             return true;
         }
         else
         {
-            RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Add to tracker failed!");
+            RCLCPP_INFO(node->get_logger(), "Add to tracker failed!");
         }
     }
     else
     {
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Service call timed out!");
+        RCLCPP_DEBUG(node->get_logger(), "Service call timed out!");
     }
 
     return false;
 }
 
-bool Localization::remove_from_tracker() 
-{
-    rclcpp::Client<object_tracker_interfaces::srv::RemoveTrackerObject>::SharedPtr client =
-        node->create_client<object_tracker_interfaces::srv::RemoveTrackerObject>(
-            "/tracker/remove_object",
-            rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
-            callback_group);
-    
-    if (!client->wait_for_service(50ms))
-    {
-        RCLCPP_WARN(node->get_logger(), "Tracking Service not available!");
-        return false;
-    }
-    
-    auto request = std::make_shared<object_tracker_interfaces::srv::RemoveTrackerObject::Request>();
-    request->tf_name.data = tf_name;
-    
-    auto result = client->async_send_request(request);
-    auto status = result.wait_for(50ms);
-    return status == std::future_status::ready;
-}
+
 
 bool Localization::add_to_broadcaster(int channel, int datarate)
 {
@@ -141,31 +124,53 @@ bool Localization::add_to_broadcaster(int channel, int datarate)
 
     auto result = client->async_send_request(request);
 
-    RCLCPP_WARN(node->get_logger(), "wait for service success");
-
-    using namespace std::chrono_literals;
-
     auto status = result.wait_for(3s); // not spinning here!
     if (status == std::future_status::ready)
     {
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Service call success!");
         auto res = result.get();
         if (res->success)
         {
-            RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Broadcast success!");
+            RCLCPP_DEBUG(node->get_logger(), "Broadcast success!");
             return true;
         }
         else
         {
-            RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Add to Broadcast failed!");
+            RCLCPP_INFO(node->get_logger(), "Add to Broadcast failed!");
         }
     }
     else
     {
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Service call timed out!");
+        RCLCPP_DEBUG(node->get_logger(), "Service call timed out!");
     }
 
     return false;
+}
+
+bool Localization::remove_from_tracker() 
+{
+    rclcpp::Client<object_tracker_interfaces::srv::RemoveTrackerObject>::SharedPtr client =
+        node->create_client<object_tracker_interfaces::srv::RemoveTrackerObject>(
+            "/tracker/remove_object",
+            rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
+            callback_group);
+    
+    if (!client->wait_for_service(100ms))
+    {
+        RCLCPP_WARN(node->get_logger(), "Tracking Service not available!");
+        return false;
+    }
+    
+    auto request = std::make_shared<object_tracker_interfaces::srv::RemoveTrackerObject::Request>();
+    request->tf_name.data = tf_name;
+    
+    auto result = client->async_send_request(request);
+    auto status = result.wait_for(100ms);
+
+    bool ret = status == std::future_status::ready;
+    if (!ret) {
+        RCLCPP_WARN(node->get_logger(), "Tracker didnt respond in time!");
+    }
+    return ret;
 }
 
 bool Localization::remove_from_broadcaster()
@@ -176,9 +181,9 @@ bool Localization::remove_from_broadcaster()
             rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
             callback_group);
 
-    if (!client->wait_for_service(50ms))
+    if (!client->wait_for_service(100ms))
     {
-        RCLCPP_WARN(node->get_logger(), "Tracking Service not available!");
+        RCLCPP_WARN(node->get_logger(), "Broadcast Service not available!");
         return false;
     }
     
@@ -188,6 +193,10 @@ bool Localization::remove_from_broadcaster()
     request->tf_frame_id = tf_name;
     
     auto result = client->async_send_request(request);
-    auto status = result.wait_for(50ms);
-    return status == std::future_status::ready;
+    auto status = result.wait_for(100ms);
+    bool ret = status == std::future_status::ready;
+    if (!ret) {
+        RCLCPP_WARN(node->get_logger(), "Broadcaster didnt respond in time!");
+    }
+    return ret;
 }
