@@ -17,8 +17,7 @@ public:
     Localization(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link, std::string tf_name);
 public: 
 
-    void console_message(const std::string);
-
+    bool stop_external_tracking();
     bool start_external_tracking(   int marker_configuration_index,
                                     int dynamics_configuration_index, 
                                     double max_initial_deviation, 
@@ -34,6 +33,15 @@ private:
         std::vector<double> initial_position);
     bool add_to_broadcaster(int channel, int datarate);
 
+    bool remove_from_tracker();
+    bool remove_from_broadcaster();
+
+private: 
+    bool is_beeing_tracked; 
+    bool is_beeing_broadcasted;
+
+    int channel_;
+    int data_rate_;
     
     std::string tf_name;
 

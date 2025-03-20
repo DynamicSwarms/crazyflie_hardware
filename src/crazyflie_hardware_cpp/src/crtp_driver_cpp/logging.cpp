@@ -3,11 +3,11 @@
 
 using std::placeholders::_1;
 
-#define PM_BLOCK_ID 0
+#define STATE_BLOCK_ID 0
 #define POSE_BLOCK_ID 1
 
 Logging::Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)
-    : LoggingLogic(link, std::string("mein_pfad")), node(node), log_pm(false), log_pose(false)
+    : LoggingLogic(link, std::string("mein_pfad")), node(node), log_state(false), log_pose(false)
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_opt = rclcpp::SubscriptionOptions();
@@ -42,14 +42,14 @@ void Logging::start_logging_pose()
 
 void Logging::start_logging_pm()
 {
-    RCLCPP_WARN(node->get_logger(), "Starting PM logging.");
-    std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state"};
-    LoggingLogic::add_block(PM_BLOCK_ID, variables);
+    RCLCPP_WARN(node->get_logger(), "Starting State logging.");
+    std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled", "sys.armed"};
+    LoggingLogic::add_block(STATE_BLOCK_ID, variables);
 
-    LoggingLogic::start_block(PM_BLOCK_ID, 100); // 1 Hz
+    LoggingLogic::start_block(STATE_BLOCK_ID, 100); // 1 Hz
 
-    log_pm_pub = node->create_publisher<crazyflie_interfaces::msg::GenericLogData>("~/pm", 10);
-    log_pm = true;
+    log_state_pub = node->create_publisher<crazyflie_interfaces::msg::GenericLogData>("~/state", 10);
+    log_state = true;
 }
 
 void Logging::crtp_response_callback(const CrtpPacket &packet)
@@ -73,11 +73,19 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
         std::vector<float> values = LoggingLogic::unpack_block(block_id, data_payload);
         std::vector<double> double_values(values.begin(), values.end());
 
-        if (block_id == PM_BLOCK_ID && log_pm && values.size() == 3)
+        if (block_id == STATE_BLOCK_ID && log_state && values.size() == 7)
         {
+            //RCLCPP_WARN(node->get_logger(), "%f, %f, %f, %f", values[3], values[4], values[5], values[6]);
+            // Values 5 is tumbled
+            if ((int)values[5]) 
+            {
+                RCLCPP_WARN(node->get_logger(), "System tumbled. Shutting Down");
+                node->shutdown();
+            }
+
             auto msg = crazyflie_interfaces::msg::GenericLogData();
             msg.values = double_values;
-            log_pm_pub->publish(msg);
+            log_state_pub->publish(msg);
         }
         if (block_id == POSE_BLOCK_ID && log_pose && values.size() == 4)
         {

@@ -34,9 +34,9 @@ private:
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr downdload_toc_sub;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr get_toc_info_sub;
 
-    bool log_pm;
+    bool log_state;
     bool log_pose;
-    rclcpp::Publisher<crazyflie_interfaces::msg::GenericLogData>::SharedPtr log_pm_pub;
+    rclcpp::Publisher<crazyflie_interfaces::msg::GenericLogData>::SharedPtr log_state_pub;
     rclcpp::Publisher<crazyflie_interfaces::msg::PoseStampedArray>::SharedPtr log_pose_pub;
 
 };  

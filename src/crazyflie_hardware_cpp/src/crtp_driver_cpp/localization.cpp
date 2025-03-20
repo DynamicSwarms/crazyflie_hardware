@@ -3,16 +3,24 @@ using std::placeholders::_1;
 using namespace std::chrono_literals;
 
 Localization::Localization(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link, std::string tf_name)
-    : LocalizationLogic(link), node(node), tf_name(tf_name)
+    : LocalizationLogic(link)
+    , node(node)
+    , tf_name(tf_name)
+    , is_beeing_tracked(false)
+    , is_beeing_broadcasted(false)
+    , channel_(80)
+    , data_rate_(2)
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
     RCLCPP_DEBUG(node->get_logger(), "Localization initialized");
 }
 
-void Localization::console_message(const std::string)
+bool Localization::stop_external_tracking() 
 {
-    return;
+    if (is_beeing_tracked) remove_from_tracker();
+    if (is_beeing_broadcasted) remove_from_broadcaster();
+    return true;
 }
 
 bool Localization::start_external_tracking(int marker_configuration_index,
@@ -22,10 +30,16 @@ bool Localization::start_external_tracking(int marker_configuration_index,
                                            int channel,
                                            int datarate)
 {
-    bool tracker_success = add_to_tracker(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position);
-
-    bool broadcast_success = add_to_broadcaster(channel, datarate);
-    return true;
+    is_beeing_tracked = add_to_tracker(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position);
+    if (is_beeing_tracked)
+    {
+        is_beeing_broadcasted = add_to_broadcaster(channel, datarate);
+        if (is_beeing_broadcasted) 
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Localization::add_to_tracker(
@@ -58,7 +72,6 @@ bool Localization::add_to_tracker(
 
     RCLCPP_WARN(node->get_logger(), "wait for service success");
 
-    using namespace std::chrono_literals;
 
     auto status = result.wait_for(3s); // not spinning here!
     if (status == std::future_status::ready)
@@ -83,8 +96,32 @@ bool Localization::add_to_tracker(
     return false;
 }
 
+bool Localization::remove_from_tracker() 
+{
+    rclcpp::Client<object_tracker_interfaces::srv::RemoveTrackerObject>::SharedPtr client =
+        node->create_client<object_tracker_interfaces::srv::RemoveTrackerObject>(
+            "/tracker/remove_object",
+            rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
+            callback_group);
+    
+    if (!client->wait_for_service(50ms))
+    {
+        RCLCPP_WARN(node->get_logger(), "Tracking Service not available!");
+        return false;
+    }
+    
+    auto request = std::make_shared<object_tracker_interfaces::srv::RemoveTrackerObject::Request>();
+    request->tf_name.data = tf_name;
+    
+    auto result = client->async_send_request(request);
+    auto status = result.wait_for(50ms);
+    return status == std::future_status::ready;
+}
+
 bool Localization::add_to_broadcaster(int channel, int datarate)
 {
+    channel_ = channel;
+    data_rate_ = datarate;
     rclcpp::Client<broadcaster_interfaces::srv::PosiPoseBroadcastObject>::SharedPtr client =
         node->create_client<broadcaster_interfaces::srv::PosiPoseBroadcastObject>(
             "/add_posi_pose_object",
@@ -129,4 +166,28 @@ bool Localization::add_to_broadcaster(int channel, int datarate)
     }
 
     return false;
+}
+
+bool Localization::remove_from_broadcaster()
+{
+    rclcpp::Client<broadcaster_interfaces::srv::PosiPoseBroadcastObject>::SharedPtr client =
+        node->create_client<broadcaster_interfaces::srv::PosiPoseBroadcastObject>(
+            "/remove_posi_pose_object",
+            rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
+            callback_group);
+
+    if (!client->wait_for_service(50ms))
+    {
+        RCLCPP_WARN(node->get_logger(), "Tracking Service not available!");
+        return false;
+    }
+    
+    auto request = std::make_shared<broadcaster_interfaces::srv::PosiPoseBroadcastObject::Request>();
+    request->channel = channel_;
+    request->data_rate = data_rate_;
+    request->tf_frame_id = tf_name;
+    
+    auto result = client->async_send_request(request);
+    auto status = result.wait_for(50ms);
+    return status == std::future_status::ready;
 }

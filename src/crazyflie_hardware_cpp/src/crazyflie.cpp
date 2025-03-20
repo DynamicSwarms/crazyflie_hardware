@@ -56,7 +56,8 @@ public:
 
       if (send_external_position)
       {
-        localization.start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
+        bool external_tracking_success = localization.start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
+        if (!external_tracking_success) throw std::runtime_error("Adding to tracking failed!");
       }
       else
       {
@@ -70,6 +71,10 @@ public:
       RCLCPP_INFO(node->get_logger(), "Caught exception during commander setup: %s", exc.what());
       configured = false;
     }
+  }
+
+  bool stop_external_tracking() {
+    return localization.stop_external_tracking();
   }
 
 private:
@@ -157,6 +162,7 @@ public:
     //!!! Makeshared not in constructor
     auto node_ptr = this->shared_from_this();
     commander = std::make_unique<Commander>(node_ptr, channel, address, datarate);
+    commander_initialized = true;
     return commander->configured;
   }
 
@@ -210,11 +216,15 @@ public:
   void shutdown_cleanly()
   {
     RCLCPP_DEBUG(get_logger(), "Shutting down cleanly.");
+    if (commander_initialized) {
+      commander->stop_external_tracking();
+    }
     rclcpp::shutdown();
   }
 
 private:
   std::unique_ptr<Commander> commander;
+  bool commander_initialized; // True if the commander ptr is valid
 
   std::array<uint8_t, 5> address;
   uint8_t id;
@@ -226,6 +236,7 @@ private:
   double max_initial_deviation;
   int marker_configuration_index;
   int dynamics_configuration_index;
+
 };
 
 int main(int argc, char **argv)
