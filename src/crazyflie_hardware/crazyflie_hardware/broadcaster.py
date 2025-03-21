@@ -6,11 +6,13 @@ from typing import List
 
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.duration import Duration
 
 from broadcaster_interfaces.srv import PosiPoseBroadcastObject
 from tf2_ros import TransformException
-from crazyflie_interfaces_python.positions import CfPositionBuffer, CfPositionListener
+from crazyflie_interfaces_python.positions import CfPositionBuffer
 
 from crtp_driver.crtp_packer_ros import CrtpPackerRos
 from crtp_driver.crtp_link_ros import CrtpLinkRos
@@ -22,6 +24,42 @@ from crtp.packers.crtp_packer import CrtpPacker
 from crtp.logic.logic import Logic
 
 from typing import Callable
+
+### This needs to be ported to crazyflie_interfaces_python
+from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
+from crazyflie_interfaces.msg import PoseStampedArray
+from geometry_msgs.msg import PoseStamped
+
+
+class CfPositionListener:
+    def __init__(self, buffer: CfPositionBuffer, node: Node):
+        self._buffer = buffer
+        self._node = node
+
+        qos = QoSProfile(
+            depth=100,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+        )
+
+        self._cf_position_sub = node.create_subscription(
+            msg_type=PoseStampedArray,
+            topic="/cf_positions",
+            callback=self.callback,
+            qos_profile=qos,
+        )
+
+    def __del__(self) -> None:
+        self.unregister()
+
+    def unregister(self): 
+        self._node.destroy_subscription(self._cf_position_sub)
+
+    def callback(self, msg: PoseStampedArray):
+        pose_stamped: PoseStamped
+        for pose_stamped in msg.poses:
+            self._buffer.set_position(pose_stamped, msg.header.frame_id)
 
 
 class Broadcaster(Node):
@@ -36,7 +74,7 @@ class Broadcaster(Node):
         self.cf_buffer = CfPositionBuffer(self)
         self.cf_listener = CfPositionListener(self.cf_buffer, self)
 
-        self.timer = self.create_timer(1.0 / self.hz, self.run)
+        self.timer = self.create_timer(1.0 / self.hz, self.run, callback_group=MutuallyExclusiveCallbackGroup())
         # https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/src/crazyswarm_server.cpp 810 Paar infos über broadcasting Adresse
         # https://github.com/whoenig/crazyflie_cpp/blob/25bc72c120f8cea6664dd24e334eefeb7c9606ca/src/Crazyflie.cpp alter code von broadcaster
 
@@ -127,11 +165,12 @@ class PositionBroadcasterCommander(BroadcasterLogic):
     def __init__(self, node: Node):
         super().__init__(CrtpPackerRos, node)
         self.node = node
+        self.callback_group = MutuallyExclusiveCallbackGroup()
         self.add_service = node.create_service(
-            PosiPoseBroadcastObject, "add_posi_pose_object", self._add_object
+            PosiPoseBroadcastObject, "add_posi_pose_object", self._add_object, callback_group=self.callback_group
         )
         self.remove_service = node.create_service(
-            PosiPoseBroadcastObject, "remove_posi_pose_object", self._remove_object
+            PosiPoseBroadcastObject, "remove_posi_pose_object", self._remove_object, callback_group=self.callback_group
         )
 
     def _add_object(self, request, response):
@@ -168,10 +207,10 @@ class BroadcasterPacker(Packer):
 def main(args=None):
     rclpy.init(args=args)
     bc = Broadcaster()
-
+    executor = MultiThreadedExecutor()
+    executor.add_node(bc)
     try:
-        while rclpy.ok():
-            rclpy.spin_once(bc, timeout_sec=1.0)
+        executor.spin()
         rclpy.try_shutdown()
     except KeyboardInterrupt:
         exit()

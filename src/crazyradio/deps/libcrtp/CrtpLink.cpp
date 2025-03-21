@@ -211,6 +211,12 @@ bool CrtpLinkContainer::getHighestPriorityLink(CrtpLinkIdentifier * link, CrtpPo
     for (const auto& [key, link_] : m_links) 
     {       
         libcrtp::CrtpPort port = link_.getPriorityPort();
+        if (link_.isBroadcast() && port != libcrtp::CrtpPort::NO_PORT) {
+            // If there is a broadcast Packet. Send immediately.
+            highestPriorityPort = port;
+            bestKey = key;
+            break;
+        }
         if (port < highestPriorityPort) {
             highestPriorityPort = port;
             bestKey = key;
