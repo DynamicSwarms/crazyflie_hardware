@@ -26,6 +26,8 @@ CrtpLink::CrtpLink(
     , m_failedMessagesCount(0)
     , m_relaxationCountMs(0)
     , m_relaxationPeriodMs(10) // At most 100 Hz
+    , m_lastSuccessfullMessageTime(0)
+    , m_lastSuccessfullMessageTimeout(2000) // If 2 seconds no Communication -> Fail refardless of how many messages failed before.
 {
 }
 
@@ -71,16 +73,25 @@ CrtpPort CrtpLink::getPriorityPort() const
     return CrtpPort::NO_PORT;
 }
 
+void CrtpLink::notifySuccessfullNullpacket()
+{
+    resetConnectionStats();
+}
+
 void CrtpLink::notifySuccessfullMessage(CrtpPort port)
 {
     m_crtpPortQueues[port].sendPacketSuccess();
-    m_failedMessagesCount = 0;
+    resetConnectionStats();
 }
 
 bool CrtpLink::notifyFailedMessage()
 {
     m_failedMessagesCount++;
-    if (m_failedMessagesCount > m_failedMessagesMaximum) 
+
+    /**
+     * Fail after m_failedMessagesMaximum or if lastSuccessfullMessage > m_lastSuccessfullMessageTimeout
+    */
+    if (m_failedMessagesCount > m_failedMessagesMaximum || m_lastSuccessfullMessageTime > m_lastSuccessfullMessageTimeout) 
     {
         return true;
     }
@@ -95,6 +106,7 @@ void CrtpLink::tense()
 void CrtpLink::relaxMs(uint8_t ms)
 {
     m_relaxationCountMs += ms;
+    m_lastSuccessfullMessageTime += ms;
 }
 
 bool CrtpLink::isRelaxed() const
@@ -128,6 +140,14 @@ bool CrtpLink::isBroadcast() const
 {
     return m_isBroadcast;
 }
+
+void CrtpLink::resetConnectionStats()
+{
+    m_failedMessagesCount = 0;
+    m_lastSuccessfullMessageTime = 0;
+}
+
+
 
 
 
@@ -302,6 +322,16 @@ bool CrtpLinkContainer::linkGetPacket(CrtpLinkIdentifier * link_id, CrtpPort por
     return false;
 }
 
+void CrtpLinkContainer::linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    CrtpLink * link;
+    if (linkFromIdentifier(&link, link_id)) {
+        link->notifySuccessfullNullpacket();
+    }
+}
+
+
 void CrtpLinkContainer::linkNotifySuccessfullMessage(CrtpLinkIdentifier * link_id, CrtpPort port)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
@@ -310,6 +340,8 @@ void CrtpLinkContainer::linkNotifySuccessfullMessage(CrtpLinkIdentifier * link_i
         link->notifySuccessfullMessage(port);
     }
 }
+
+
 
 bool CrtpLinkContainer::linkNotifyFailedMessage(CrtpLinkIdentifier * link_id)
 {

@@ -46,7 +46,16 @@ class CrtpLink
          * Returns CrtpPort::NO_PORT if completely empty
          */
         CrtpPort getPriorityPort() const;
+        
+        /**
+         * A nullpacket from polling was successfully sent. 
+         * Reset connection stats.
+        */
+        void notifySuccessfullNullpacket();
 
+        /**
+         * Will remove the message from the Port because it was successfully sent out. 
+        */
         void notifySuccessfullMessage(CrtpPort port);
         /*Notifies about a failed send attempt, returns true if link shall die*/
         bool notifyFailedMessage();
@@ -72,6 +81,8 @@ class CrtpLink
         bool isBroadcast() const;
 
     private: 
+        void resetConnectionStats();
+    private: 
         uint8_t m_channel;
         uint64_t m_address;
         uint8_t m_datarate; 
@@ -82,6 +93,9 @@ class CrtpLink
 
         uint32_t m_relaxationCountMs;
         uint32_t m_relaxationPeriodMs;
+
+        uint32_t m_lastSuccessfullMessageTime;
+        uint32_t m_lastSuccessfullMessageTimeout;
 
         std::map<CrtpPort, CrtpPacketQueue> m_crtpPortQueues;
 };
@@ -114,6 +128,7 @@ class CrtpLinkContainer
         */
         void linkAddPacket(CrtpLinkIdentifier * link, CrtpPacket * packet, CrtpResponseCallback callback);
         bool linkGetPacket(CrtpLinkIdentifier * link, CrtpPort port,  CrtpPacket * packet);
+        void linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id);
         void linkNotifySuccessfullMessage(CrtpLinkIdentifier * link_id, CrtpPort port);
         bool linkNotifyFailedMessage(CrtpLinkIdentifier * link_id);
         bool linkReleasePacket(CrtpLinkIdentifier  * link_id, CrtpPacket * responsePacket, CrtpResponseCallback & callback);

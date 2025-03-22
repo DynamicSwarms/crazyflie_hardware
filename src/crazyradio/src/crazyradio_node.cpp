@@ -76,15 +76,38 @@ private:
         }
         else if (m_links.getRandomRelaxedNonBroadcastLink(&link))
         {
-            libcrtp::CrtpPacket packet = libcrtp::nullPacket;
-            m_links.linkAddPacket(&link, &packet, NULL);
-            if (sendPacketFromPort(&link, packet.port))
+            if (sendNullpacket(&link))
             {
                 m_links.linkTense(&link);
             }
         }
     }
 
+
+    /**
+     * Send out a Nullpacket.
+     * We cannot add the nullpacket into the message queue because this would prioritize 
+     * the link until the nullpacket is succesfully received. 
+    */
+    bool sendNullpacket(libcrtp::CrtpLinkIdentifier * link)
+    {
+        libcrtp::CrtpPacket packet = libcrtp::nullPacket;
+        libcrtp::CrtpPacket responsePacket;
+        if (this->sendCrtpPacket(link, &packet, &responsePacket))
+        {
+            m_links.linkNotifySuccessfullNullpacket(link);
+            handleReponsePacket(link, &responsePacket);
+            return true;
+        }
+        this->onFailedMessage(link);
+        return false;
+    }
+
+    /**
+     * Try to send a packet from a given port of the link. 
+     * Getting the packet doesnot remeove it from queues yet. 
+     * Only if received it will get removed from queue.
+    */
     bool sendPacketFromPort(libcrtp::CrtpLinkIdentifier *link, libcrtp::CrtpPort port)
     {
         libcrtp::CrtpPacket outPacket;
@@ -98,7 +121,12 @@ private:
             handleReponsePacket(link, &responsePacket);
             return true;
         }
+        this->onFailedMessage(link);        
+        return false;
+    }
 
+    void onFailedMessage(libcrtp::CrtpLinkIdentifier *link)
+    {
         if (m_links.linkNotifyFailedMessage(link))
         {
             crtpLinkEndCallback(link);
@@ -112,7 +140,6 @@ private:
                 RCLCPP_DEBUG(this->get_logger(), "Link Quality for CF 0x%X low! (%d %%)", (uint8_t)(link->address & 0xFF), (uint8_t)(linkQuality * 100));
             }
         }
-        return false;
     }
 
     void handleReponsePacket(libcrtp::CrtpLinkIdentifier *link, libcrtp::CrtpPacket *responsePacket)
