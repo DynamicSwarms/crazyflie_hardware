@@ -300,7 +300,7 @@ private:
                             try {
                                 service_handle->send_response(*header, response);
                             } catch (const std::exception& e) {
-                                // Link might have died??
+                                // https://github.com/ros2/ros2/issues/1253#issuecomment-1702937597
                                 RCLCPP_WARN(this->get_logger(),"Caught exception:  %s; Port: %d, Ch: %d, Success: %d", e.what(), response.packet.port, response.packet.channel, success);
                             }  
                             callback_called = true;
@@ -320,7 +320,7 @@ private:
                 try {
                     service_handle->send_response(*header, response);
                 } catch (const std::exception& e) {
-                                // Link might have died??
+                    // https://github.com/ros2/ros2/issues/1253#issuecomment-1702937597
                     RCLCPP_WARN(this->get_logger(),"Caught exception:  %s; Port: %d, Ch: %d, unresp", e.what(), response.packet.port, response.packet.channel);
                 }  
             }
