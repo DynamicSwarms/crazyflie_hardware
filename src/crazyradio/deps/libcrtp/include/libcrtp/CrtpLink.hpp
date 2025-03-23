@@ -60,6 +60,11 @@ class CrtpLink
         /*Notifies about a failed send attempt, returns true if link shall die*/
         bool notifyFailedMessage();
 
+        /**
+         * This is called before decontrstuction.
+         * This way the callbacks can be returned with false
+        */
+        void retrieveAllCallbacks(std::vector<CrtpResponseCallback>& callbacks);
 
 
 
@@ -112,7 +117,7 @@ class CrtpLinkContainer
          */
         void addLink(uint8_t channel, uint64_t address, uint8_t datarate);
 
-        bool removeLink(CrtpLinkIdentifier * link);
+        bool removeLink(CrtpLinkIdentifier * link, std::vector<CrtpResponseCallback>& callbacks);
 
         bool getLinkIdentifier(CrtpLinkIdentifier * link, uint8_t channel, uint64_t address) const;
 

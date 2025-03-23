@@ -98,6 +98,14 @@ bool CrtpLink::notifyFailedMessage()
     return false;
 }
 
+void CrtpLink::retrieveAllCallbacks(std::vector<CrtpResponseCallback>& callbacks)
+{
+    for (auto& [port, queue] : m_crtpPortQueues) 
+    {
+        queue.retrieveAllCallbacks(callbacks); 
+    }
+}
+
 void CrtpLink::tense()
 {
     m_relaxationCountMs = 0;
@@ -198,13 +206,14 @@ void CrtpLinkContainer::addLink(uint8_t channel, uint64_t address, uint8_t datar
     m_links.insert({linkKey, link}); // If already in m_links this wont duplicate
 }
 
-bool CrtpLinkContainer::removeLink(CrtpLinkIdentifier * link_id)
+bool CrtpLinkContainer::removeLink(CrtpLinkIdentifier * link_id, std::vector<CrtpResponseCallback>& callbacks)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
     std::pair<uint8_t, uint64_t> linkKey = {link_id->channel,link_id->address};
     auto link = m_links.find(linkKey);
     if (link != m_links.end()) 
     {
+        link->second.retrieveAllCallbacks(callbacks);
         m_links.erase(link);
         return true;
     }

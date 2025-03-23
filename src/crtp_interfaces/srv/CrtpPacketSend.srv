@@ -5,3 +5,4 @@ uint8 matching_bytes
 bool obeys_ordering
 ---
 crtp_interfaces/CrtpPacket packet
+bool success

@@ -43,7 +43,7 @@ public:
 
 public:
     Crazyradio();
-
+    
     virtual ~Crazyradio();
 
     void sendCrtpPacket(

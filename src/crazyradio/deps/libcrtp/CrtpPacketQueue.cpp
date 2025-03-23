@@ -67,6 +67,19 @@ bool CrtpPacketQueue::releasePacket(
     return false;
 }
 
+void CrtpPacketQueue::retrieveAllCallbacks(std::vector<CrtpResponseCallback>& callbacks)
+{
+     while (!m_release_queue.empty()) {
+        auto pair = m_release_queue.front();
+        callbacks.push_back(pair.second);
+        m_release_queue.pop();
+    }
+
+    while (!m_out_queue.empty()) {
+        m_out_queue.pop();
+    }
+}
+
 bool CrtpPacketQueue::isEmtpy() const
 {
     return m_out_queue.empty();

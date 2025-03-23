@@ -41,7 +41,7 @@ class CrtpLinkRos(CrtpLink):
 
         self.send_packet_service = node.create_client(
             CrtpPacketSend,
-            "/crazyradio/send_crtp_packet",
+            f"/crazyradio/send_crtp_packet{channel}",
             qos_profile=qos_profile,
             callback_group=callback_group,
         )

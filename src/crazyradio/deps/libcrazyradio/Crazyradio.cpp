@@ -41,7 +41,6 @@ Crazyradio::Crazyradio()
             errors.push_back(e.what()); // Store the error message
         }
     }
-
     if (!success) {
         //If open did not succeed, throw an error.
         std::string combinedError = "Failed to open any device: ";
@@ -50,7 +49,6 @@ Crazyradio::Crazyradio()
         }
         throw std::runtime_error(combinedError);
     }
-
     setDatarate(Datarate_2MPS);
     setChannel(2);
     setContCarrier(false);

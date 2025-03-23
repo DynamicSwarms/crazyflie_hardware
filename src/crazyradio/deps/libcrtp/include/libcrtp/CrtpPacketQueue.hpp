@@ -24,6 +24,8 @@ class CrtpPacketQueue
         bool getPacket(CrtpPacket * packet);
 
         bool releasePacket(CrtpPacket * packet, CrtpResponseCallback &  callback);
+        
+        void retrieveAllCallbacks(std::vector<CrtpResponseCallback>& callbacks);
 
         bool isEmtpy() const;
 

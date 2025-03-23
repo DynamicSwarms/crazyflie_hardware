@@ -145,6 +145,12 @@ void RosLink::send_packet_no_response(CrtpRequest request)
 
 std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
 {
+    static bool first_call = true; // The first call might take more time because buffer needs to be cleared
+ 
+    using namespace std::chrono_literals;
+    std::chrono::seconds timeout = (first_call) ? 5s : 1s; // More time to clear buffer
+    first_call = false;
+
     // RCLCPP_WARN(node->get_logger(), "Sending with response! p: %d, ch: %d, dl: %d, d1: %d er;%d, mb:%d", request.packet.port, request.packet.channel, request.packet.data_length, request.packet.data[0], request.expects_response, request.matching_bytes);
 
     auto req = std::make_shared<crtp_interfaces::srv::CrtpPacketSend::Request>();
@@ -152,21 +158,19 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
 
     auto result = send_crtp_packet_client->async_send_request(req);
 
-    using namespace std::chrono_literals;
 
-    auto status = result.wait_for(1s);
+    auto status = result.wait_for(timeout);
     if (status == std::future_status::ready)
-    {
-        return response_to_packet(result.get());
+    {   
+        auto response = result.get();
+        if (response->success) {
+            return response_to_packet(response);
+        }
     }
-    else
-    {
-        RCLCPP_DEBUG(node->get_logger(), "Failed single request responded");
-        throw std::runtime_error("Communication failed!");
-    }
-
-    return CrtpPacket();
+    RCLCPP_DEBUG(node->get_logger(), "Failed single request responded");
+    throw std::runtime_error("Communication failed!");
 }
+
 std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpRequest> requests)
 {
     RCLCPP_WARN(node->get_logger(), "Sending batch! %d", requests.size());
@@ -187,13 +191,20 @@ std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpReques
 
         auto status = result.wait_for(1s);
         if (status == std::future_status::ready)
-        {
-            auto pkt = response_to_packet(result.get());
-            response_packets.push_back(pkt);
+        {   
+            auto response = result.get();
+            if (response->success) {
+                auto pkt = response_to_packet(result.get());
+                response_packets.push_back(pkt);
+            } else {
+                RCLCPP_WARN(node->get_logger(), "Failed batch request. Single Message failed.");
+                break;
+            }            
         }
         else
         {
-            RCLCPP_WARN(node->get_logger(), "Failed batch request");
+            RCLCPP_WARN(node->get_logger(), "Failed batch request. TimedOut.");
+            break;
         }
     }
     RCLCPP_WARN(node->get_logger(), "Batch finished with! %d", response_packets.size());

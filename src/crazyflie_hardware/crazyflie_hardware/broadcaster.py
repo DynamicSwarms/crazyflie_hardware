@@ -30,6 +30,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 from crazyflie_interfaces.msg import PoseStampedArray
 from geometry_msgs.msg import PoseStamped
 
+from typing import Dict
 
 class CfPositionListener:
     def __init__(self, buffer: CfPositionBuffer, node: Node):
@@ -81,11 +82,18 @@ class Broadcaster(Node):
         self.broadcaster_commander = PositionBroadcasterCommander(self)
 
     def run(self):
-        self.broadcaster_commander.send_external_positions(
-            list(self._get_external_positions())
-        )
+        id_positions_by_channel: Dict[int, "list[int, list[float]]"] = {} # for each channel list of ids and positions
+        for position_ in list(self._get_external_positions()):
+            id, position, channel = position_
+            if channel not in id_positions_by_channel.keys():
+                id_positions_by_channel[channel] = []
+            id_positions_by_channel[channel].append((id, position)) 
+        
 
-    def _get_external_positions(self):
+        for channel in id_positions_by_channel.keys():
+            self.broadcaster_commander.send_external_positions(id_positions_by_channel[channel], channel)
+
+    def _get_external_positions(self) -> "tuple[int, list[float], int]": # representing id, pos, channel
         for frame in self.broadcaster_commander.frame_channels.keys():
             pose_stamped = self.cf_buffer.get_position(frame)
             if pose_stamped is None:
@@ -96,7 +104,8 @@ class Broadcaster(Node):
                 pose_stamped.pose.position.y * 1000,
                 pose_stamped.pose.position.z * 1000,
             ]
-            yield id_, pos
+            yield id_, pos, self.broadcaster_commander.frame_channels[frame][0]
+            # somehow frame_channel is a list of channels. 
 
     def _get_id_of_frame(self, frame) -> int:
         id_ = frame.replace("cf", "")
@@ -143,7 +152,7 @@ class BroadcasterLogic:
             return True
         return False
 
-    def send_external_positions(self, id_positions):
+    def send_external_positions(self, id_positions, channel):
         for i in range(math.ceil(len(id_positions) / 4)):
             packets = []
             for id_, pos in id_positions[i * 4 : i * 4 + 4]:
@@ -157,7 +166,8 @@ class BroadcasterLogic:
 
             # send packet to all channels
             for link in self.crtp_links:
-                link.send_packet_no_response(packet)
+                if link.channel == channel:
+                    link.send_packet_no_response(packet)
             # TODO send2packets in https://github.com/whoenig/crazyflie_cpp/blob/25bc72c120f8cea6664dd24e334eefeb7c9606ca/src/Crazyflie.cpp
 
 
