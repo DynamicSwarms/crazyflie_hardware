@@ -24,8 +24,11 @@ class CrazyradioNode : public rclcpp::Node
 {
 public:
     CrazyradioNode(const rclcpp::NodeOptions &options)
-        : Node("crazyradio_cpp", options), m_radio(libcrazyradio::Crazyradio(0)), m_links(), m_radioPeriodMs(2) // 500 Hz
+        : Node("crazyradio_cpp", options), m_radio(libcrazyradio::Crazyradio()), m_links(), m_radioPeriodMs(2) // 500 Hz
     {
+        this->declare_parameter("channel", 80);
+        uint8_t channel = this->get_parameter("channel").as_int();
+
         auto qos = rclcpp::QoS(500);
         qos.reliable();
         qos.keep_all();
@@ -33,7 +36,7 @@ public:
 
         crtp_send_callback_group = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
         send_crtp_packet_service = this->create_service<crtp_interfaces::srv::CrtpPacketSend>(
-            "crazyradio/send_crtp_packet",
+            "crazyradio/send_crtp_packet" + std::to_string(channel),
             std::bind(&CrazyradioNode::sendCrtpPacketCallback, this, _1, _2, _3),
             qos.get_rmw_qos_profile(),
             crtp_send_callback_group);

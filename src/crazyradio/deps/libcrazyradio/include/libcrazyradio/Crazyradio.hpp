@@ -42,7 +42,7 @@ public:
     };
 
 public:
-    Crazyradio(uint32_t device_id);
+    Crazyradio();
 
     virtual ~Crazyradio();
 

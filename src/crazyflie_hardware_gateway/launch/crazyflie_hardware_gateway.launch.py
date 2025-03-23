@@ -1,9 +1,18 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
+
+def generate_radios(context):
+    channels: str = LaunchConfiguration("radio_channels").perform(context)
+    for channel in [int(channel_str) for channel_str in channels.strip("[]").split(",")]:
+        yield Node(
+            package="crazyradio",
+            executable="crazyradio_node",
+            name=f"crazyradio{channel}",
+            parameters=[{"channel": channel}])
 
 
 def generate_launch_description():
@@ -41,8 +50,8 @@ def generate_launch_description():
         parameters=[types_yaml, {"crazyflie_configuration_yaml": configuration_yaml}],
     )
 
-    crazyradio = Node(package="crazyradio", executable="crazyradio_node")
-
+    radios_arg = DeclareLaunchArgument('radio_channels', default_value='[80]', description="List of crazyradios to spawn. With a different channel for each")
+    
     broadcaster = Node(package="crazyflie_hardware", executable="broadcaster")
 
     radiolistener = Node(
@@ -54,8 +63,9 @@ def generate_launch_description():
             types_yaml_launch_argument,
             crazyflie_configuration_yaml_launch_argument,
             crazyflie_gateway,
-            crazyradio,
             broadcaster,
             radiolistener,
+            radios_arg,
+            OpaqueFunction(function=generate_radios)
         ]
     )

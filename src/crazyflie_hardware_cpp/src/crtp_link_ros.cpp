@@ -14,7 +14,7 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
     qos.durability_volatile();
 
     send_crtp_packet_client = node->create_client<crtp_interfaces::srv::CrtpPacketSend>(
-        "crazyradio/send_crtp_packet",
+        "crazyradio/send_crtp_packet" + std::to_string(channel),
         qos.get_rmw_qos_profile(),
         callback_group);
 

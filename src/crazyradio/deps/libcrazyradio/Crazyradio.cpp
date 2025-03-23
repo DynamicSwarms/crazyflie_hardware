@@ -22,14 +22,35 @@ enum
     LAUNCH_BOOTLOADER   = 0xFF,
 };
 
-Crazyradio::Crazyradio(uint32_t device_id) 
+Crazyradio::Crazyradio() 
     : USBDevice(0x1915, 0x7777),
     m_datarate(Datarate_250KPS),
     m_address(0xDEADBEEF),
     m_channel(0),
     m_ackEnable(false) // need to be differnt in order to initially set
 {
-    open(device_id);
+    bool success = false;
+    std::vector<std::string> errors; // Store errors for potential later use.
+
+    for (int deviceId = 0; deviceId < 5; deviceId++) {
+        try {
+            open(deviceId);
+            success = true; // Open succeeded, so break the loop
+            break;
+        } catch (const std::runtime_error& e) {
+            errors.push_back(e.what()); // Store the error message
+        }
+    }
+
+    if (!success) {
+        //If open did not succeed, throw an error.
+        std::string combinedError = "Failed to open any device: ";
+        for(const auto& error : errors) {
+            combinedError += error + "; ";
+        }
+        throw std::runtime_error(combinedError);
+    }
+
     setDatarate(Datarate_2MPS);
     setChannel(2);
     setContCarrier(false);
