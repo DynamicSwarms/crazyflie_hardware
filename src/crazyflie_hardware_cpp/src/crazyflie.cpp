@@ -45,7 +45,6 @@ public:
       rclcpp::Parameter set_param("kalman.resetEstimation", 1);
       node->set_parameter(set_param);
 
-      RCLCPP_WARN(node->get_logger(), "Setting up tracking services.");
       int id = node->get_parameter("id").as_int();
       std::vector<double> initial_position = node->get_parameter("initial_position").as_double_array();
       bool send_external_position = node->get_parameter("send_external_position").as_bool();
@@ -56,8 +55,10 @@ public:
 
       if (send_external_position)
       {
+        RCLCPP_WARN(node->get_logger(), "Setting up tracking services.");
         bool external_tracking_success = localization.start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
-        if (!external_tracking_success) throw std::runtime_error("Adding to tracking failed!");
+        if (!external_tracking_success)
+          throw std::runtime_error("Adding to tracking failed!");
       }
       else
       {
@@ -73,7 +74,8 @@ public:
     }
   }
 
-  bool stop_external_tracking() {
+  bool stop_external_tracking()
+  {
     return localization.stop_external_tracking();
   }
 
@@ -216,8 +218,10 @@ public:
   void shutdown_cleanly()
   {
     RCLCPP_DEBUG(get_logger(), "Shutting down cleanly.");
-    if (commander_initialized) {
-      if (!commander->stop_external_tracking()) {
+    if (commander_initialized)
+    {
+      if (!commander->stop_external_tracking())
+      {
         RCLCPP_INFO(get_logger(), "Failed stopping external positioning.");
       }
     }
@@ -238,7 +242,6 @@ private:
   double max_initial_deviation;
   int marker_configuration_index;
   int dynamics_configuration_index;
-
 };
 
 int main(int argc, char **argv)

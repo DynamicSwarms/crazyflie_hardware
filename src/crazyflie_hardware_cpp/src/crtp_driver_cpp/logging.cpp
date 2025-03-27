@@ -43,7 +43,7 @@ void Logging::start_logging_pose()
 void Logging::start_logging_pm()
 {
     RCLCPP_WARN(node->get_logger(), "Starting State logging.");
-    std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled", "sys.armed"};
+    std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled"};
     LoggingLogic::add_block(STATE_BLOCK_ID, variables);
 
     LoggingLogic::start_block(STATE_BLOCK_ID, 100); // 1 Hz
@@ -73,11 +73,11 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
         std::vector<float> values = LoggingLogic::unpack_block(block_id, data_payload);
         std::vector<double> double_values(values.begin(), values.end());
 
-        if (block_id == STATE_BLOCK_ID && log_state && values.size() == 7)
+        if (block_id == STATE_BLOCK_ID && log_state && values.size() == 6)
         {
-            //RCLCPP_WARN(node->get_logger(), "%f, %f, %f, %f", values[3], values[4], values[5], values[6]);
-            // Values 5 is tumbled
-            if ((int)values[5]) 
+            // RCLCPP_WARN(node->get_logger(), "%f, %f, %f, %f", values[3], values[4], values[5], values[6]);
+            //  Values 5 is tumbled
+            if ((int)values[5])
             {
                 RCLCPP_WARN(node->get_logger(), "System tumbled. Shutting Down");
                 node->shutdown();
