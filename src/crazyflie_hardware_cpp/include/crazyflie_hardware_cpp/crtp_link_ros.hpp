@@ -13,6 +13,8 @@ public:
 
     RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate);
 
+    bool try_initialize();
+
     void close_link() override;
 
     void add_callback(uint8_t port, const CrtpCallbackType& callback) override;
@@ -22,6 +24,8 @@ public:
     std::optional<CrtpPacket> send_packet(CrtpRequest request) override;
     
     std::vector<CrtpPacket> send_batch_request(const std::vector<CrtpRequest> requests) override;
+
+    bool initialized;
 private: 
     void fill_crtp_request(std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Request> req, const CrtpRequest& request);
     CrtpPacket response_to_packet(std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Response> response);

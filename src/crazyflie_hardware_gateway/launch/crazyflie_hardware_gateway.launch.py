@@ -52,7 +52,7 @@ def generate_launch_description():
 
     radios_arg = DeclareLaunchArgument('radio_channels', default_value='[80]', description="List of crazyradios to spawn. With a different channel for each")
     
-    broadcaster = Node(package="crazyflie_hardware", executable="broadcaster")
+    broadcaster = Node(package="crazyflie_hardware_cpp", executable="broadcaster")
 
     radiolistener = Node(
         package="crazyflie_hardware_examples", executable="radiolistener"

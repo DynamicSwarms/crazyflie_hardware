@@ -7,7 +7,6 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
     : CrtpLink(channel, address, datarate), node(node)
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-
     auto qos = rclcpp::QoS(500);
     qos.reliable();
     qos.keep_all();
@@ -18,17 +17,8 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
         qos.get_rmw_qos_profile(),
         callback_group);
 
-    send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500));
-    while (!send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500)))
-    {
-        if (!rclcpp::ok())
-        {
-            RCLCPP_ERROR(node->get_logger(), "Interrupted while waiting for the service. Exiting.");
-            return;
-        }
-        RCLCPP_DEBUG(node->get_logger(), "Crazyradio not available, waiting again...");
-    }
-
+    initialized = try_initialize();
+ 
     auto sub_opt = rclcpp::SubscriptionOptions();
     sub_opt.callback_group = callback_group;
     link_end_sub = node->create_subscription<crtp_interfaces::msg::CrtpLink>(
@@ -49,6 +39,22 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
         "/crazyradio/close_crtp_link",
         10,
         pub_opt);
+}
+
+bool RosLink::try_initialize()
+{
+    send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500));
+    int timeout = 0;
+    while (!send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500)))
+    {
+        if (timeout++ > 4 || !rclcpp::ok())
+        {
+            RCLCPP_ERROR(node->get_logger(), "Interrupted while waiting for the service. Exiting.");
+            return false;
+        }
+        RCLCPP_DEBUG(node->get_logger(), "Crazyradio not available, waiting again...");
+    }
+    return true;    
 }
 
 void RosLink::fill_crtp_request(std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Request> req, const CrtpRequest &request)

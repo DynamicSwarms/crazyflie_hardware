@@ -4,6 +4,8 @@ using std::placeholders::_1;
 Console::Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)
     : ConsoleLogic(link), node(node)
 {
+    RCLCPP_INFO(node->get_logger(), "Console");
+
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
     console_publisher = node->create_publisher<std_msgs::msg::String>(
@@ -15,7 +17,7 @@ Console::Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
         ConsoleLogic::send_consolepacket();
     }
 
-    RCLCPP_DEBUG(node->get_logger(), "Console initialized");
+    RCLCPP_INFO(node->get_logger(), "Console initialized");
 }
 
 void Console::crtp_response_callback(const CrtpPacket &packet)

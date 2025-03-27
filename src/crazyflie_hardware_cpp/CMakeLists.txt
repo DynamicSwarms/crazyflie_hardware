@@ -22,10 +22,12 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 
 add_executable(crazyflie src/crazyflie.cpp)
+add_executable(broadcaster src/broadcaster.cpp)
 target_include_directories(crazyflie PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(crazyflie PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_features(broadcaster PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
 
 
@@ -56,6 +58,8 @@ ament_target_dependencies(crtp_driver_cpp
 
 target_link_libraries(crazyflie
                     crtp_driver_cpp)
+target_link_libraries(broadcaster
+                    crtp_driver_cpp)
 
 ament_target_dependencies(crazyflie
   crtp_cpp
@@ -64,8 +68,16 @@ ament_target_dependencies(crazyflie
   rclcpp_lifecycle
   lifecycle_msgs)
 
+ament_target_dependencies(broadcaster
+  crtp_cpp
+  rclcpp
+  crtp_interfaces
+  broadcaster_interfaces)
 
 install(TARGETS crazyflie
+  DESTINATION lib/${PROJECT_NAME})
+
+install(TARGETS broadcaster
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

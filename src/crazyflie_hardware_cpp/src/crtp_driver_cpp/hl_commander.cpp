@@ -26,7 +26,7 @@ HighLevelCommander::HighLevelCommander(std::shared_ptr<rclcpp_lifecycle::Lifecyc
         std::bind(&HighLevelCommander::goto_callback, this, _1),
         sub_opt);
 
-    RCLCPP_DEBUG(node->get_logger(), "High Level Commander initialized");
+    RCLCPP_INFO(node->get_logger(), "High Level Commander initialized");
 };
 
 void HighLevelCommander::land_callback(const crazyflie_interfaces::msg::Land::SharedPtr msg)

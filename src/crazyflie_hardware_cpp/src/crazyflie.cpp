@@ -29,8 +29,13 @@ public:
   {
     try
     {
+      if (!link.initialized) {
+        throw std::runtime_error("Link initialization failed!");
+      }
       // The initalization might fail because of the connection.
+      RCLCPP_ERROR(node->get_logger(), "A");
       parameters.initialize_parameters();
+      RCLCPP_ERROR(node->get_logger(), "B");
       logging.initialize_logging();
 
       RCLCPP_WARN(node->get_logger(), "Setting default Parameters");
