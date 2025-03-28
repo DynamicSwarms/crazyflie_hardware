@@ -25,7 +25,15 @@ class Commander
 {
 public:
   Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate)
-      : node(node), link(node, channel, address, datarate), console(node, &link), hl_commander(node, &link), generic_commander(node, &link), parameters(node, &link), logging(node, &link), localization(node, &link, get_tf_name(address))
+      : node(node)
+      , link(node, channel, address, datarate)
+      , console(node, &link)
+      , hl_commander(node, &link)
+      , generic_commander(node, &link)
+      , parameters(node, &link)
+      , logging(node, &link)
+      , localization(node, &link, get_tf_name(address))
+      , tf_name(get_tf_name(address))
   {
     try
     {
@@ -33,9 +41,7 @@ public:
         throw std::runtime_error("Link initialization failed!");
       }
       // The initalization might fail because of the connection.
-      RCLCPP_ERROR(node->get_logger(), "A");
       parameters.initialize_parameters();
-      RCLCPP_ERROR(node->get_logger(), "B");
       logging.initialize_logging();
 
       RCLCPP_WARN(node->get_logger(), "Setting default Parameters");
@@ -64,6 +70,8 @@ public:
         bool external_tracking_success = localization.start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
         if (!external_tracking_success)
           throw std::runtime_error("Adding to tracking failed!");
+
+          localization_lost_sub = node->create_subscription<std_msgs::msg::String>("/tracker/object_tracking_lost", 10, std::bind(&Commander::tracking_lost_callback, this, std::placeholders::_1));
       }
       else
       {
@@ -92,7 +100,20 @@ private:
     return ss.str();
   }
 
+  void tracking_lost_callback(const std_msgs::msg::String::SharedPtr msg)
+  {
+    if (msg->data == this->tf_name) {
+      RCLCPP_INFO(node->get_logger(), "Tracking lost. Shutting down.");
+      hl_commander.send_stop(0);
+      node->shutdown();
+    }
+  }
+
   std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
+
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr localization_lost_sub;
+  std::string tf_name;
+
   RosLink link;
   Console console;
   HighLevelCommander hl_commander;

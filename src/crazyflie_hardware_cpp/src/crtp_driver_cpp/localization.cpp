@@ -13,7 +13,7 @@ Localization::Localization(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
-    RCLCPP_INFO(node->get_logger(), "Localization initialized");
+    RCLCPP_DEBUG(node->get_logger(), "Localization initialized");
 }
 
 bool Localization::stop_external_tracking() 

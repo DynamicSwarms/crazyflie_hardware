@@ -111,7 +111,6 @@ private:
             if (count == 4) {
                 CrtpRequest request;
                 request.packet = m_packer.prepare_packet(POSITION_CHANNEL, data);
-                RCLCPP_WARN(this->get_logger(), "Broadcaster sending.");
                 link->send_packet_no_response(request);
                 data.clear();
                 count = 0;
@@ -123,7 +122,6 @@ private:
         {
             CrtpRequest request;
             request.packet = m_packer.prepare_packet(POSITION_CHANNEL, data); 
-            RCLCPP_WARN(this->get_logger(), "Broadcaster sending.");
 
             link->send_packet_no_response(request);
         } 
