@@ -214,7 +214,8 @@ class Gateway(Node):
         type: str,
     ) -> List[str]:
         crazyflie_path = get_executable_path(
-            package_name="crazyflie_hardware_cpp", executable_name="crazyflie"
+            package_name=self.crazyflie_implementation_package,
+            executable_name="crazyflie",
         )
 
         send_external_position = self.__get_send_external_position(type)
@@ -307,6 +308,14 @@ class Gateway(Node):
             .get_parameter_value()
             .string_value
         )
+
+    @property
+    def crazyflie_implementation_package(self) -> str:
+        impl = self.get_parameter("implementation").get_parameter_value().string_value
+        if impl == "cpp":
+            return "crazyflie_hardware_cpp"
+        else:
+            return "crazyflie_hardware"
 
     def _wait_for_change_state_service(
         self, key: Tuple[int, int], timeout: float
