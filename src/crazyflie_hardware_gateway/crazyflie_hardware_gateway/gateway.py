@@ -14,6 +14,7 @@ from rclpy.node import Node
 from rclpy.client import Client
 from rclpy import Future
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.executors import ExternalShutdownException
 
 from crazyflie_hardware_gateway_interfaces.srv import AddCrazyflie, RemoveCrazyflie
 from geometry_msgs.msg import Point
@@ -84,6 +85,8 @@ class Gateway(Node):
 
             process = self.crazyflies[(channel, id)].process
             os.killpg(os.getpgid(process.pid), SIGINT)
+
+            del self.crazyflies[(channel, id)]
             return (True, "Success")
         msg = (
             "Couldn't remove crazyflie with Channel: {}, ID: {}; was not active".format(
@@ -97,7 +100,6 @@ class Gateway(Node):
         """Removes all crazyflies which were started with the gateway."""
         for cf_key in list(self.crazyflies.keys()):
             _ = self.remove_crazyflie(*cf_key)
-            del self.crazyflies[cf_key]
 
     def add_crazyflie(
         self,
@@ -267,6 +269,7 @@ class Gateway(Node):
                 resp.msg = "See Crazyflie log for more detail!"
                 self.remove_crazyflie(req.channel, req.id)
         except (TimeoutError, GatewayError) as ex:
+            self.remove_crazyflie(req.channel, req.id)
             resp.success = False
             resp.msg = str(ex)
 
@@ -327,8 +330,20 @@ class Gateway(Node):
             ):
                 return True
 
-            time.sleep(0.1)
-            timeout -= 0.1
+            time.sleep(0.02)
+            timeout -= 0.02
+        return False
+
+    def _wait_for_get_state_service(self, key: Tuple[int, int], timeout: float) -> bool:
+        while timeout > 0.0:
+            if (
+                key in self.crazyflies.keys()
+                and self.crazyflies[key].get_state.service_is_ready()
+            ):
+                return True
+
+            time.sleep(0.02)
+            timeout -= 0.02
         return False
 
     def _transition_crazyflie(
@@ -338,6 +353,7 @@ class Gateway(Node):
         request.transition.id = state
         request.transition.label = label
         if (channel, cf_id) in self.crazyflies.keys():
+            self._wait_for_change_state_service((channel, cf_id), 0.2)
             fut = self.crazyflies[(channel, cf_id)].change_state.call_async(request)
             timeout = 0.0
             while not fut.done() and timeout < 10.0:
@@ -360,6 +376,7 @@ class Gateway(Node):
     def _get_state(self, channel: int, cf_id: int) -> Optional[LifecycleState]:
         request = GetState.Request()
         if (channel, cf_id) in self.crazyflies.keys():
+            self._wait_for_get_state_service((channel, cf_id), 0.2)
             fut: Future = self.crazyflies[(channel, cf_id)].get_state.call_async(
                 request
             )
@@ -380,7 +397,7 @@ async def run_node(cf_eventloop):
             await asyncio.sleep(0.01)
             rclpy.spin_once(gateway, timeout_sec=0)
         rclpy.shutdown()
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, ExternalShutdownException):
         gateway.remove_all_crazyflies()
 
 

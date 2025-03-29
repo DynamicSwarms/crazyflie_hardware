@@ -18,7 +18,6 @@
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/console.hpp"
 #include "crazyflie_hardware_cpp/crtp_driver_cpp/localization.hpp"
 #include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
-
 // #include "crtp_cpp/logic/link_layer_logic.hpp"
 
 class Commander
@@ -252,6 +251,7 @@ public:
       }
     }
     rclcpp::shutdown();
+    exit(0);
   }
 
 private:
@@ -274,7 +274,6 @@ int main(int argc, char **argv)
 {
   (void)argc;
   (void)argv;
-  printf("hello world crazyflie_hardware_cpp package\n");
 
   rclcpp::init(argc, argv);
   rclcpp::NodeOptions options;
@@ -282,6 +281,7 @@ int main(int argc, char **argv)
   rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(node->get_node_base_interface());
   executor.spin();
+  executor.remove_node(node->get_node_base_interface());
   // rclcpp::spin(node->get_node_base_interface());
   rclcpp::shutdown();
   return 0;
