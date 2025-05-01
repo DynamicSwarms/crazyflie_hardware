@@ -37,6 +37,9 @@ private:
     bool remove_from_broadcaster();
 
 private: 
+    std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
+    std::string logger_name;
+
     bool is_beeing_tracked; 
     bool is_beeing_broadcasted;
 
@@ -47,6 +50,5 @@ private:
 
     rclcpp::CallbackGroup::SharedPtr callback_group; 
 
-    std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr console_publisher;
 };

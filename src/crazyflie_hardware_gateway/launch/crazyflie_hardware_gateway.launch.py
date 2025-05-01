@@ -56,7 +56,7 @@ def generate_launch_description():
     )
 
     crazyflie_gateway = Node(
-        package="crazyflie_hardware_gateway",
+        package="crazyflie_hardware_gateway_components",
         executable="gateway",
         parameters=[
             types_yaml,

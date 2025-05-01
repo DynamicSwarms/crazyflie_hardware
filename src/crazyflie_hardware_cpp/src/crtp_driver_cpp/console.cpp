@@ -2,7 +2,9 @@
 using std::placeholders::_1;
 
 Console::Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)
-    : ConsoleLogic(link), node(node)
+    : ConsoleLogic(link)
+    , logger_name(node->get_name())
+
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
@@ -15,7 +17,7 @@ Console::Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
         ConsoleLogic::send_consolepacket();
     }
 
-    RCLCPP_DEBUG(node->get_logger(), "Console initialized");
+    RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Console initialized");
 }
 
 void Console::crtp_response_callback(const CrtpPacket &packet)
@@ -32,7 +34,7 @@ void Console::crtp_response_callback(const CrtpPacket &packet)
         if (message.back() == '\n' || message.back() == '\r')
         {
             message.pop_back(); // Do not print newline twice.
-            RCLCPP_WARN(node->get_logger(), "%s", message.c_str());
+            RCLCPP_WARN(rclcpp::get_logger(logger_name), "%s", message.c_str());
             this->console_message(message);
             message.clear();
         }

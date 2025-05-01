@@ -7,7 +7,11 @@ using std::placeholders::_1;
 #define POSE_BLOCK_ID 1
 
 Logging::Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)
-    : LoggingLogic(link, std::string("mein_pfad")), node(node), log_state(false), log_pose(false)
+    : LoggingLogic(link, std::string("mein_pfad"))
+    , logger_name(node->get_name())
+    , node(node)
+    , log_state(false)
+    , log_pose(false)
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_opt = rclcpp::SubscriptionOptions();
@@ -25,38 +29,44 @@ Logging::Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
         std::bind(&Logging::get_toc_info_callback, this, _1),
         sub_opt);
 
-    RCLCPP_DEBUG(node->get_logger(), "Logging  initialized");
+    RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Logging  initialized");
 }
 
 void Logging::start_logging_pose()
 {
-    RCLCPP_WARN(node->get_logger(), "Starting Pose logging.");
+    RCLCPP_WARN(rclcpp::get_logger(logger_name), "Starting Pose logging.");
     std::vector<std::string> variables = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimateZ.quat"};
     LoggingLogic::add_block(POSE_BLOCK_ID, variables);
 
     LoggingLogic::start_block(POSE_BLOCK_ID, 10); // 10 Hz
 
-    log_pose_pub = node->create_publisher<crazyflie_interfaces::msg::PoseStampedArray>("/cf_positions", 10);
-    log_pose = true;
+    if (auto node_shared = node.lock())
+    {
+        log_pose_pub = node_shared->create_publisher<crazyflie_interfaces::msg::PoseStampedArray>("/cf_positions", 10);
+        log_pose = true;
+    }
 }
 
 void Logging::start_logging_pm()
 {
-    RCLCPP_WARN(node->get_logger(), "Starting State logging.");
+    RCLCPP_WARN(rclcpp::get_logger(logger_name), "Starting State logging.");
     std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled"};
     LoggingLogic::add_block(STATE_BLOCK_ID, variables);
 
     LoggingLogic::start_block(STATE_BLOCK_ID, 100); // 1 Hz
 
-    log_state_pub = node->create_publisher<crazyflie_interfaces::msg::GenericLogData>("~/state", 10);
-    log_state = true;
+    if (auto node_shared = node.lock())
+    {
+        log_state_pub = node_shared->create_publisher<crazyflie_interfaces::msg::GenericLogData>("~/state", 10);
+        log_state = true;
+    }
 }
 
 void Logging::crtp_response_callback(const CrtpPacket &packet)
 {
     if (packet.channel == CONTROL_CHANNEL)
     {
-        RCLCPP_WARN(node->get_logger(), "Received Control Packet: %d", packet.data[0]);
+        RCLCPP_WARN(rclcpp::get_logger(logger_name), "Received Control Packet: %d", packet.data[0]);
         // Should never receive because it is a responed packet.
     }
     if (packet.channel == LOGDATA_CHANNEL && packet.data_length >= 4)
@@ -66,7 +76,7 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
         uint8_t ts2 = packet.data[2];
         uint8_t ts3 = packet.data[3];
 
-        // RCLCPP_WARN(node->get_logger(), "Received Block with id %d", block_id);
+        // RCLCPP_WARN(rclcpp::get_logger(logger_name), "Received Block with id %d", block_id);
 
         std::vector<uint8_t> data_payload(packet.data + 4, packet.data + packet.data_length); // Copy data after the first 4 bytes.
 
@@ -75,12 +85,12 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
 
         if (block_id == STATE_BLOCK_ID && log_state && values.size() == 6)
         {
-            // RCLCPP_WARN(node->get_logger(), "%f, %f, %f, %f", values[3], values[4], values[5], values[6]);
+            // RCLCPP_WARN(rclcpp::get_logger(logger_name), "%f, %f, %f, %f", values[3], values[4], values[5], values[6]);
             //  Values 5 is tumbled
             if ((int)values[5])
             {
-                RCLCPP_WARN(node->get_logger(), "System tumbled. Shutting Down");
-                node->shutdown();
+                RCLCPP_WARN(rclcpp::get_logger(logger_name), "System tumbled. Shutting Down");
+                if (auto node_shared = node.lock()) node_shared->shutdown();
             }
 
             auto msg = crazyflie_interfaces::msg::GenericLogData();
@@ -93,8 +103,8 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
             float q[4];
             quatdecompress(values[3], q);
             geometry_msgs::msg::PoseStamped pose;
-            pose.header.stamp = node->get_clock()->now();
-            pose.header.frame_id = node->get_name();
+            if (auto node_shared = node.lock()) pose.header.stamp = node_shared->get_clock()->now();
+            pose.header.frame_id = logger_name;
 
             pose.pose.position.x = values[0];
             pose.pose.position.y = values[1];
@@ -108,9 +118,9 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
 
             log_pose_pub->publish(posearray);
         }
-        // if (values.size()) RCLCPP_WARN(node->get_logger(), "LogBlock ID:%d , %f", block_id, values[0]);
+        // if (values.size()) RCLCPP_WARN(rclcpp::get_logger(logger_name), "LogBlock ID:%d , %f", block_id, values[0]);
     }
-    // RCLCPP_WARN(node->get_logger(), "Logging received a packet with channel %X", packet.channel);
+    // RCLCPP_WARN(rclcpp::get_logger(logger_name), "Logging received a packet with channel %X", packet.channel);
 }
 
 void Logging::initialize_logging()
@@ -126,11 +136,11 @@ void Logging::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg)
 
     // auto [nbr_of_items, crc] = ParametersLogic::send_get_toc_info();
     // bool success = ParametersLogic::load_from_file(crc);
-    // RCLCPP_WARN(node->get_logger(), "%d", success);
+    // RCLCPP_WARN(rclcpp::get_logger(logger_name), "%d", success);
 }
 
 void Logging::get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {
     auto [nbr_of_items, crc] = LoggingLogic::send_get_toc_info();
-    RCLCPP_WARN(node->get_logger(), "%d, %X", nbr_of_items, crc);
+    RCLCPP_WARN(rclcpp::get_logger(logger_name), "%d, %X", nbr_of_items, crc);
 }

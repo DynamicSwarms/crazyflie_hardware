@@ -2,7 +2,9 @@
 using std::placeholders::_1;
 
 Parameters::Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)
-    : ParametersLogic(link, std::string("mein_pfad")), node(node)
+    : ParametersLogic(link, std::string("mein_pfad"))
+    , node(node)
+    , logger_name(node->get_name())
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_opt = rclcpp::SubscriptionOptions();
@@ -20,7 +22,7 @@ Parameters::Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, Cr
         std::bind(&Parameters::get_toc_info_callback, this, _1),
         sub_opt);
 
-    RCLCPP_DEBUG(node->get_logger(), "Parameters  initialized");
+    RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Parameters  initialized");
 }
 
 void Parameters::initialize_parameters()
@@ -35,14 +37,16 @@ void Parameters::initialize_parameters()
         ss << group << "." << name;
         if (entry.isInteger())
         {
-            node->declare_parameter(ss.str(), rclcpp::PARAMETER_INTEGER);
+            if (auto node_shared = node.lock()) node_shared->declare_parameter(ss.str(), rclcpp::PARAMETER_INTEGER);
         }
         else if (entry.isDouble())
         {
-            node->declare_parameter(ss.str(), rclcpp::PARAMETER_DOUBLE);
+            if (auto node_shared = node.lock()) node_shared->declare_parameter(ss.str(), rclcpp::PARAMETER_DOUBLE);
         }
     }
-    param_callback_handle = node->add_on_set_parameters_callback(std::bind(&Parameters::set_parameter_callback, this, std::placeholders::_1));
+    if (auto node_shared = node.lock()) {
+        param_callback_handle = node_shared->add_on_set_parameters_callback(std::bind(&Parameters::set_parameter_callback, this, std::placeholders::_1));    
+    }
 }
 
 rcl_interfaces::msg::SetParametersResult Parameters::set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters)
@@ -91,5 +95,5 @@ void Parameters::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg
 void Parameters::get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {
     auto [nbr_of_items, crc] = ParametersLogic::send_get_toc_info();
-    RCLCPP_WARN(node->get_logger(), "%d, %X", nbr_of_items, crc);
+    RCLCPP_WARN(rclcpp::get_logger(logger_name), "%d, %X", nbr_of_items, crc);
 }

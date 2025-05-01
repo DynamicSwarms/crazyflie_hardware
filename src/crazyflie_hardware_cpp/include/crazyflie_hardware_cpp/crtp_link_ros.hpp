@@ -13,7 +13,7 @@ public:
 
     RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate);
 
-    bool try_initialize();
+    bool try_initialize(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node);
 
     void close_link() override;
 
@@ -37,15 +37,16 @@ private:
 
 
 private:
-    std::map<uint8_t, std::vector<CrtpCallbackType>> callbacks;
-
+    //std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
+    std::string logger_name;
+    
     rclcpp::CallbackGroup::SharedPtr callback_group; 
-
-    std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
     rclcpp::Client<crtp_interfaces::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_client;
 
     rclcpp::Subscription<crtp_interfaces::msg::CrtpLink>::SharedPtr link_end_sub;
     rclcpp::Subscription<crtp_interfaces::msg::CrtpResponse>::SharedPtr crtp_response_sub;
 
     rclcpp::Publisher<crtp_interfaces::msg::CrtpLink>::SharedPtr link_close_pub;
+
+    std::map<uint8_t, std::vector<CrtpCallbackType>> callbacks;
 };

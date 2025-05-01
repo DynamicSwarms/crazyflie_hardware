@@ -2,7 +2,8 @@
 using std::placeholders::_1;
 
 GenericCommander::GenericCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)
-    : GenericCommanderLogic(link), node(node)
+    : GenericCommanderLogic(link)
+    , logger_name(node->get_name())
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_opt = rclcpp::SubscriptionOptions();
@@ -20,7 +21,7 @@ GenericCommander::GenericCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNo
         std::bind(&GenericCommander::cmd_position_callback, this, _1),
         sub_opt);
         
-    RCLCPP_DEBUG(node->get_logger(), "Generic Commander initialized");
+    RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Generic Commander initialized");
 };
 
 void GenericCommander::notify_setpoints_stop_callback(const crazyflie_interfaces::msg::NotifySetpointsStop::SharedPtr msg)

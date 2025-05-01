@@ -174,7 +174,7 @@ private:
             auto it = m_links.find(channel_datarate);
             if (it != m_links.end()) 
             { // Already in list.  
-                if (!it->second->initialized) it->second->try_initialize();
+                if (!it->second->initialized) it->second->try_initialize(this->shared_from_this());
             } else {
                 lock.unlock();
                 std::array<uint8_t, 5> address = {0xFF, 0xE7, 0xE7, 0xE7, 0xE7}; // Fixed for Broadcasts
