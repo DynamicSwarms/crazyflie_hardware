@@ -5,7 +5,7 @@ using std::placeholders::_1;
 
 RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate)
     : CrtpLink(channel, address, datarate)
-    //, node(node)
+    , node(node)
     , logger_name(node->get_name())
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -123,10 +123,10 @@ void RosLink::crtp_link_end_callback(const crtp_interfaces::msg::CrtpLink::Share
     if (msg->address == address)
     {
         RCLCPP_WARN(rclcpp::get_logger(logger_name), "Connection lost, trying to shut down!");
-
-        //if (auto node_shared = node.lock()) {
-        //    node_shared->shutdown(); // This works only if we are configured.
-        //}
+        if (auto node_shared = node.lock()) {
+            node_shared->shutdown(); // This works only if we are configured.
+        }
+        RCLCPP_WARN(rclcpp::get_logger(logger_name), "Made it to here!");
     }
 }
 

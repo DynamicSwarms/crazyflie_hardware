@@ -46,7 +46,7 @@ public:
   CrazyflieGateway(
     std::weak_ptr<rclcpp::Executor> executor,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
-  : Node("crazyflie_gateway", options)
+  : Node("crazyflie_hardware_gateway", options)
   , executor_(executor)
   , crazyflies_()
   {
@@ -56,13 +56,132 @@ public:
     remove_service_ = this->create_service<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie>(
       "~/remove_crazyflie", std::bind(&CrazyflieGateway::handle_remove_crazyflie, this, std::placeholders::_1, std::placeholders::_2));
     
+    cleanup_timer_ = this->create_wall_timer(
+      std::chrono::milliseconds(100),
+      std::bind(&CrazyflieGateway::cleanup_callback, this));
   
     factory_ = create_component_factory("crazyflie_hardware_cpp", "CrazyflieNode");
 
     RCLCPP_INFO(get_logger(), "Crazyflie Gateway ready.");
   }
-private: 
 
+private: 
+  std::pair<bool, std::string> add_crazyflie(int id, 
+    int channel, 
+    const geometry_msgs::msg::Point & initial_position,
+    const std::string & type)
+  {
+    RCLCPP_INFO(get_logger(), "Adding Crazyflie with Channel: %d, Id: %d", channel, id);
+    std::pair<uint8_t, uint8_t> crazyflie_key = {id, channel};
+
+    if (crazyflies_.count(crazyflie_key))
+    {
+      return std::make_pair(false, "Crazyflie with id '" + std::to_string(id) + "' already exists.");
+    }
+
+    auto options = create_node_options(id, channel, initial_position, type);
+    try {
+      auto node = factory_->create_node_instance(options);
+      auto exec = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+      exec->add_node(node.get_node_base_interface());
+
+      auto entry = crazyflies_.emplace(std::make_pair(crazyflie_key, std::make_pair(node, exec)));
+
+      DedicatedExecutorWrapper & wrapper = entry.first->second.second;
+      wrapper.executor = exec;
+
+      auto & thread_initialized = wrapper.thread_initialized;
+      wrapper.thread = std::thread(
+        [exec, &thread_initialized ]() {
+          thread_initialized = true;
+          try {
+            exec->spin();
+          } catch (...) {}
+        }
+      );
+      // // Downcast to lifecycle node interface
+      auto lifecycle_node = std::static_pointer_cast<rclcpp_lifecycle::LifecycleNode>(node.get_node_instance());
+      if (!lifecycle_node) {
+         throw std::runtime_error("Failed to cast to LifecycleNodeInterface");
+       }
+      // // Transition to configure
+       auto ret = lifecycle_node.get()->configure();    
+       if (ret.id() != lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) 
+       {
+          remove_crazyflie(id, channel);
+          return std::make_pair(false, "Configuration failed.");
+       }
+
+    } catch (const std::exception & ex) {
+      // In the case that the component constructor throws an exception,
+      // rethrow into the following catch block.
+      throw GatewayException(
+              "Component constructor threw an exception: " + std::string(ex.what()));
+    } catch (...) {
+      // In the case that the component constructor throws an exception,
+      // rethrow into the following catch block.
+      throw GatewayException("Component constructor threw an exception");
+    }
+    
+    return std::make_pair(true, "Success!");
+  }
+
+  std::pair<bool, std::string> remove_crazyflie(int id, int channel)
+  {
+    RCLCPP_INFO(get_logger(), "Removing Crazyflie with Channel: %d, Id: %d", channel, id);
+    std::pair<uint8_t, uint8_t> crazyflie_key = {id, channel};
+    auto cf = crazyflies_.find(crazyflie_key);
+    if (cf == crazyflies_.end()) {
+      return std::make_pair(false,
+        "Couldn't remove Crazyflie with Channel: " + std::to_string(channel) 
+        + ", ID: " + std::to_string(id) + "; not in list.");
+    }
+    
+    if (!cf->second.second.thread_initialized)
+    {
+      rclcpp::sleep_for(std::chrono::milliseconds(1)); // This only happens when add and removed are called near simultaniously. 
+    }
+    cf->second.second.executor->cancel();
+    cf->second.second.thread.join();
+    crazyflies_.erase(cf);
+    return std::make_pair(true, "Success!");
+  }
+
+private:
+  void cleanup_callback()
+  {
+    for (auto& [key, entry] : crazyflies_ )
+    {
+      auto lifecycle_node = std::static_pointer_cast<rclcpp_lifecycle::LifecycleNode>(entry.first.get_node_instance());
+      if (lifecycle_node) 
+      {
+        if (lifecycle_node.get()->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_FINALIZED)
+        {
+          remove_crazyflie(key.first, key.second);
+          return;
+        }
+      }
+    }
+  }
+
+  void handle_add_crazyflie(const std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie::Request> request,
+                            std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie::Response> response)
+  {
+    auto [success, msg] = add_crazyflie(request->id, request->channel, request->initial_position, request->type);
+    response->success = success;
+    response->msg = msg;
+  }
+
+  void handle_remove_crazyflie(const std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie::Request> request,
+                               std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie::Response> response)
+  {
+    auto [success, msg] = remove_crazyflie(request->id, request->channel);
+
+    response->success = success;
+    response->msg = msg;
+  }
+
+private: 
   rclcpp::NodeOptions
   create_node_options(int id, 
                       int channel, 
@@ -109,93 +228,6 @@ private:
       return options;
   }
 
-private:
-  void handle_add_crazyflie(const std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie::Request> request,
-                            std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie::Response> response)
-  {
-    RCLCPP_INFO(get_logger(), "Adding Crazyflie with Channel: %d, Id: %d", request->channel, request->id);
-
-    std::pair<uint8_t, uint8_t> crazyflie_key = {request->id, request->channel};
-    if (crazyflies_.count(crazyflie_key))
-    {
-      response->success = false;
-      response->msg = "Crazyflie with id '" + std::to_string(request->id) + "' already exists.";
-      return;
-    }
-    auto options = create_node_options(request->id, request->channel, request->initial_position, request->type);
-    try {
-      auto node = factory_->create_node_instance(options);
-      auto exec = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
-      exec->add_node(node.get_node_base_interface());
-
-      auto entry = crazyflies_.emplace(std::make_pair(crazyflie_key, std::make_pair(node, exec)));
-
-      DedicatedExecutorWrapper & wrapper = entry.first->second.second;
-      wrapper.executor = exec;
-
-      auto & thread_initialized = wrapper.thread_initialized;
-      wrapper.thread = std::thread(
-        [exec, &thread_initialized ]() {
-          thread_initialized = true;
-          try {
-            exec->spin();
-          } catch (...) {}
-        }
-      );
-      // // Downcast to lifecycle node interface
-      auto lifecycle_node = std::static_pointer_cast<rclcpp_lifecycle::LifecycleNode>(node.get_node_instance());
-      if (!lifecycle_node) {
-         throw std::runtime_error("Failed to cast to LifecycleNodeInterface");
-       }
-      // // Transition to configure
-       auto ret = lifecycle_node.get()->configure();    
-       if (ret.id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) 
-       {
-          RCLCPP_INFO(get_logger(), "Configure failed");
-       }
-
-    } catch (const std::exception & ex) {
-      // In the case that the component constructor throws an exception,
-      // rethrow into the following catch block.
-      throw GatewayException(
-              "Component constructor threw an exception: " + std::string(ex.what()));
-    } catch (...) {
-      // In the case that the component constructor throws an exception,
-      // rethrow into the following catch block.
-      throw GatewayException("Component constructor threw an exception");
-    }
-    
-    response->success = true;
-    return;  
-  }
-
-  void handle_remove_crazyflie(const std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie::Request> request,
-                               std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie::Response> response)
-  {
-    RCLCPP_INFO(get_logger(), "Removing Crazyflie with Channel: %d, Id: %d", request->channel, request->id);
-    std::pair<uint8_t, uint8_t> crazyflie_key = {request->id, request->channel};
-    auto cf = crazyflies_.find(crazyflie_key);
-    if (cf == crazyflies_.end()) {
-      response->success = false;
-      response->msg = "Couldn't remove Crazyflie with Channel: " + std::to_string(request->channel) + ", ID: " + std::to_string(request->id) + "; not in list.";
-      return;
-    }
-    
-    if (!cf->second.second.thread_initialized)
-    {
-      rclcpp::sleep_for(std::chrono::milliseconds(1)); // This only happens when add and removed are called near simultaniously. 
-    }
-    cf->second.second.executor->cancel();
-    cf->second.second.thread.join();
-    crazyflies_.erase(cf);
-    response->success = true;
-
-    // Unload the CrazyflieNode component
-    // Implement the logic to unload the component using component_manager_
-    // Set response->success accordingly
-  }
-
-private: 
   std::vector<std::pair<std::string, std::string>>
   get_component_resources(
     const std::string & package_name, const std::string & resource_index) const
@@ -259,6 +291,7 @@ private:
 
   rclcpp::Service<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie>::SharedPtr add_service_;
   rclcpp::Service<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie>::SharedPtr remove_service_;
+  rclcpp::TimerBase::SharedPtr cleanup_timer_;
 
   std::unique_ptr<class_loader::ClassLoader> loader_;
   std::shared_ptr<rclcpp_components::NodeFactory> factory_;

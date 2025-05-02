@@ -260,7 +260,7 @@ public:
 
   void shutdown_cleanly()
   {
-    RCLCPP_DEBUG(get_logger(), "Shutting down cleanly.");
+    RCLCPP_INFO(get_logger(), "Shutting down cleanly.");
     if (commander_initialized)
     {
       if (!commander->stop_external_tracking())

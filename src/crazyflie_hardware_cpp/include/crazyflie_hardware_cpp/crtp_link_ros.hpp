@@ -37,7 +37,7 @@ private:
 
 
 private:
-    //std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
+    std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
     std::string logger_name;
     
     rclcpp::CallbackGroup::SharedPtr callback_group; 
