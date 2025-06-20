@@ -15,6 +15,7 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <fstream>
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -24,10 +25,20 @@ class CrazyradioNode : public rclcpp::Node
 {
 public:
     CrazyradioNode(const rclcpp::NodeOptions &options)
-        : Node("crazyradio_cpp", options),  m_radio(), m_links(), m_radioPeriodMs(2) // 500 Hz
+        : Node("crazyradio_cpp", options)
+        , m_radio()
+        , m_links()
+        , m_radioPeriodMs(2) // 500 Hz
+        , m_logEnabled(false)
     {
         this->declare_parameter("channel", 80);
         uint8_t channel = this->get_parameter("channel").as_int();
+
+        if (m_logEnabled)
+        {
+            m_logStartTime = this->get_clock()->now();
+            m_logStream.open("crazyradio_log_" + std::to_string(channel) + ".log");
+        }
 
         auto qos = rclcpp::QoS(500);
         qos.reliable();
@@ -57,14 +68,7 @@ public:
             std::chrono::milliseconds(m_radioPeriodMs),
             std::bind(&CrazyradioNode::radioCallback, this),
             radio_callback_group);
-
-        RCLCPP_WARN(this->get_logger(), "Started Crazyradio Node on Channel %d", channel);
-    }
-
-private:
-    void radioCallback()
-    {
-        m_links.relaxLinks(m_radioPeriodMs);
+        
         /**
          * Relax all links because time has passed. The link relaxations allows
          * for periodic sending of nullpackets, with a maxmim rate for each link.
@@ -72,22 +76,85 @@ private:
          * You can achieve faster polling rate by manually sending nullpackets.
          * They will not "tense" the link.
          */
+        m_relax_timer = this->create_wall_timer(
+            std::chrono::milliseconds(m_radioPeriodMs),
+            [this] {m_links.relaxLinks(m_radioPeriodMs); });
 
+        RCLCPP_WARN(this->get_logger(), "Started Crazyradio Node on Channel %d", channel);
+    }
+
+private:
+    void multiPingLink(libcrtp::CrtpLinkIdentifier *link)
+    {
+        libcrtp::CrtpLinkIdentifier _l;
+        libcrtp::CrtpPort _p;
+        
+        int pingCount = 3;
+        while (!m_links.getHighestPriorityLink(&_l, &_p) 
+                && pingCount-- > 0)
+        {
+            bool pingSuccess = pingLink(link);
+            if (!pingSuccess) return; // If sending nullpacket failed, we stop trying
+        }
+    }
+
+    bool pingLink(libcrtp::CrtpLinkIdentifier *link)
+    {
+        if (sendNullpacket(link))
+        {
+            m_links.linkTense(link);
+            return true;
+        }   
+        return false;
+    }
+
+    void radioCallback()
+    {
         libcrtp::CrtpLinkIdentifier link;
         libcrtp::CrtpPort port;
 
-        if (m_links.getHighestPriorityLink(&link, &port))
+        bool packetsAvailable = m_links.getHighestPriorityLink(&link, &port);
+        if (!packetsAvailable && m_links.getRandomRelaxedNonBroadcastLink(&link))
         {
-            sendPacketFromPort(&link, port);
+            multiPingLink(&link);        
+            // multiPing link will stop pinging if a packet is to be sent.
         }
-        else if (m_links.getRandomRelaxedNonBroadcastLink(&link))
+
+        if (m_links.getHighestPriorityLink(&link, &port)
+            && sendPacketFromPort(&link, port)
+            && !link.isBroadcast)
         {
-            if (sendNullpacket(&link))
-            {
-                m_links.linkTense(&link);
-            }
-        }
+            // We should ping the link, this reduces switching of radio
+            multiPingLink(&link);
+        }         
     }
+
+    std::stringstream formatCrtpPacket(
+        libcrtp::CrtpPacket *packet)
+    {
+        std::stringstream ss;
+        ss << std::dec << " [" << (int)packet->port << ":" << (int)packet->channel << "] ";
+        for (int i = 0; i < packet->dataLength; i++) ss << std::hex << (int)packet->data[i] << " ";
+        return ss;
+    } 
+
+    void startLogPacket(
+        libcrtp::CrtpLinkIdentifier *link,
+        libcrtp::CrtpPacket *packet)
+    {
+        std::stringstream ss;
+        auto time = this->get_clock()->now() - m_logStartTime;
+        ss << "[" << (long int)(time.nanoseconds() / 1000 ) << "] "; //  in microseconds
+        ss << std::hex << (int)(uint8_t)(link->address & 0xFF);
+        m_logStream << ss.str() << formatCrtpPacket(packet).str() << std::endl;
+    }
+
+    void endLogPacket(libcrtp::CrtpPacket *packet, bool valid)
+    {
+        if (valid) m_logStream << '\t' << formatCrtpPacket(packet).str();
+        m_logStream << std::endl;
+    }
+
 
 
     /**
@@ -99,12 +166,16 @@ private:
     {
         libcrtp::CrtpPacket packet = libcrtp::nullPacket;
         libcrtp::CrtpPacket responsePacket;
+
+        if (m_logEnabled) startLogPacket(link, &packet);
         if (this->sendCrtpPacket(link, &packet, &responsePacket))
         {
             m_links.linkNotifySuccessfullNullpacket(link);
             handleReponsePacket(link, &responsePacket);
+            if (m_logEnabled) endLogPacket(&responsePacket, true);
             return true;
         }
+        if (m_logEnabled) endLogPacket(&packet, false);
         this->onFailedMessage(link);
         return false;
     }
@@ -121,12 +192,15 @@ private:
         if (!m_links.linkGetPacket(link, port, &outPacket))
             return false; // Something went wrong when choosing packet
 
+        if (m_logEnabled) startLogPacket(link, &outPacket);
         if (this->sendCrtpPacket(link, &outPacket, &responsePacket))
         {
             m_links.linkNotifySuccessfullMessage(link, port);
             handleReponsePacket(link, &responsePacket);
+            if (m_logEnabled) endLogPacket(&responsePacket, true);
             return true;
         }
+        if (m_logEnabled) endLogPacket(&outPacket, false);
         this->onFailedMessage(link);        
         return false;
     }
@@ -135,6 +209,7 @@ private:
     {
         if (m_links.linkNotifyFailedMessage(link))
         {
+            m_logStream << "ending" << link->address << std::endl;
             destroyLink(link);
             crtpLinkEndCallback(link);
         }
@@ -198,8 +273,9 @@ private:
         libcrazyradio::Crazyradio::Ack ack;
         //RCLCPP_WARN(this->get_logger(),"[%d; %d]! Starting send", link->channel,  (uint8_t)(link->address & 0xFF));
 
-
         m_radio.sendCrtpPacket(link, packet, ack);
+       
+
         // RCLCPP_WARN(this->get_logger(),"%X; [%d; %d]!", (uint8_t)(link->address & 0xFF), packet->port, packet->channel );
         if (link->isBroadcast)
         {
@@ -335,6 +411,7 @@ private:
     rclcpp::CallbackGroup::SharedPtr radio_callback_group;
 
     rclcpp::TimerBase::SharedPtr radio_timer;
+    rclcpp::TimerBase::SharedPtr m_relax_timer;
     uint8_t m_radioPeriodMs;
 
     rclcpp::Service<crtp_interfaces::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_service;
@@ -343,6 +420,11 @@ private:
     rclcpp::Subscription<crtp_interfaces::msg::CrtpLink>::SharedPtr link_close_sub;
 
     std::mutex m_radioMutex;
+
+    std::ofstream m_logStream;
+    rclcpp::Time m_logStartTime;
+    bool m_logEnabled = false;
+
 };
 
 int main(int argc, char **argv)

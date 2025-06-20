@@ -12,11 +12,7 @@ Console::Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
         "~/console",
         10);
 
-    for (int i = 0; i < 10; i++)
-    {
-        ConsoleLogic::send_consolepacket();
-    }
-
+    ConsoleLogic::send_consolepacket(); // This initializes communication with the Crazyflie.
     RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Console initialized");
 }
 

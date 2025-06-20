@@ -22,12 +22,13 @@ CrtpLink::CrtpLink(
     , m_address(address)
     , m_datarate(datarate)
     , m_isBroadcast(((address >> 4 * 8) & 0xFF) == 0xFF) // Broadcasting Packet if 0xFF   
-    , m_failedMessagesMaximum(100)
+    , m_failedMessagesMaximum(30) // After this many failed messages we consider the link dead, we also wait 10 ms for a retry
     , m_failedMessagesCount(0)
     , m_relaxationCountMs(0)
-    , m_relaxationPeriodMs(10) // At most 100 Hz
+    , m_relaxationPeriodMs(10) // At most 100 Hz for ping messages
     , m_lastSuccessfullMessageTime(0)
     , m_lastSuccessfullMessageTimeout(2000) // If 2 seconds no Communication -> Fail refardless of how many messages failed before.
+    , m_failedMessageRetryTimeout(30) // If a message fails, we wait 30 ms before retrying
 {
 }
 
@@ -39,13 +40,15 @@ void CrtpLink::addPacket(
     CrtpPacket * packet,
     CrtpResponseCallback  callback)
 {
+    //if (packet->expectsResponse) 
+    //    std::cerr << "Add: " << (int)packet->port << std::endl;
     m_crtpPortQueues[packet->port].addPacket(packet, callback);
 }
 
 bool CrtpLink::getPacket(
     CrtpPort port, 
     CrtpPacket * packet)
-{
+{   
     return m_crtpPortQueues[port].getPacket(packet);
 }
 
@@ -61,11 +64,17 @@ bool CrtpLink::releasePacket(
     */
     if (packet->port == CrtpPort::DATA_LOGGING && packet->channel == 2) return false;
     
-    return m_crtpPortQueues[packet->port].releasePacket(packet, callback);
+    bool released = m_crtpPortQueues[packet->port].releasePacket(packet, callback);
+    //if (released)
+    //    std::cerr << "Released?: " << (int)packet->port << (released ? "yes" : "no") << std::endl;
+    return released;
 }
 
 CrtpPort CrtpLink::getPriorityPort() const
 {
+    if (m_lastSuccessfullMessageTime < m_failedMessageRetryTimeout * m_failedMessagesCount)
+        return CrtpPort::NO_PORT; // Wait before sending a failed packet again.
+
     for (const auto& [port, queue] : m_crtpPortQueues) 
     {
         if (! queue.isEmtpy()) return port; 
@@ -119,7 +128,9 @@ void CrtpLink::relaxMs(uint8_t ms)
 
 bool CrtpLink::isRelaxed() const
 {
-    return m_relaxationCountMs >= m_relaxationPeriodMs;
+    // 3 Ping messages are sent in a row this ensures that radio settings
+    // are not changed too often.
+    return m_relaxationCountMs >= 3 * m_relaxationPeriodMs;
 }
 
 

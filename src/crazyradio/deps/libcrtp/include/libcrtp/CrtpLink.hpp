@@ -102,6 +102,8 @@ class CrtpLink
         uint32_t m_lastSuccessfullMessageTime;
         uint32_t m_lastSuccessfullMessageTimeout;
 
+        uint32_t m_failedMessageRetryTimeout;
+
         std::map<CrtpPort, CrtpPacketQueue> m_crtpPortQueues;
 };
 

@@ -180,7 +180,15 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
         }
     }
     RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Failed single request responded");
-    throw std::runtime_error("Communication failed!");
+    std::stringstream ss;
+    ss << "Communication failed! "
+    << (int)request.packet.port << ", "
+    << (int)request.packet.channel << ", "
+    << (int)request.packet.data_length << ", "
+    << (int)request.packet.data[0] << ", "
+    << request.expects_response << ", "
+    << (int)request.matching_bytes;
+    throw std::runtime_error(ss.str());
 }
 
 std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpRequest> requests)
