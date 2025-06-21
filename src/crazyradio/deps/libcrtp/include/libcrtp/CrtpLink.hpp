@@ -33,19 +33,24 @@ class CrtpLink
         */
         void addPacket(CrtpPacket * packet,  CrtpResponseCallback  callback);
 
-        bool getPacket(CrtpPort port, CrtpPacket * packet);
-
         /**
-        *  Gets a crazyflies response, which should be crossreferenced to an yet unacknowledged request which excpected a response. 
-        *  Returns False if nobody listened for a response.
-        */
-        bool releasePacket(CrtpPacket * packet, CrtpResponseCallback & callback);
+         * Gets a packet from the port, if available.
+         * Returns true if a packet was found, false otherwise.
+         * The packet is not removed from the port, call notifySuccessfullPortMessage to do so.
+         */
+        bool getPacket(CrtpPort port, CrtpPacket * packet);
 
         /**
          * Returns the port with highest priority with a packet to send inside.
          * Returns CrtpPort::NO_PORT if completely empty
          */
         CrtpPort getPriorityPort() const;
+        
+        /**
+        *  Pass a response packet, will be crossreferenced to an yet unacknowledged request which excpected a response. 
+        *  Returns False if nobody listened for a response.
+        */
+        bool releasePacket(CrtpPacket * packet, CrtpResponseCallback & callback);      
         
         /**
          * A nullpacket from polling was successfully sent. 
@@ -56,8 +61,11 @@ class CrtpLink
         /**
          * Will remove the message from the Port because it was successfully sent out. 
         */
-        void notifySuccessfullMessage(CrtpPort port);
-        /*Notifies about a failed send attempt, returns true if link shall die*/
+        void notifySuccessfullPortMessage(CrtpPort port);
+
+        /**
+         * Notifies about a failed send attempt, returns true if link shall die
+        */
         bool notifyFailedMessage();
 
         /**
@@ -66,18 +74,19 @@ class CrtpLink
         */
         void retrieveAllCallbacks(std::vector<CrtpResponseCallback>& callbacks);
 
-
-
-        /**
-         * Relax and tense the link.
-         * This ensures that the rate of nullpackets is limited. 
-        */
-        void tense();
-        void relaxMs(uint8_t ms);
-
         // Check if the link is relaxed and nullpacket can be sent
         bool isRelaxed() const;
 
+        /**
+         * Give time in ms to the link, so it can update its internal state.
+         */
+        void tickMs(uint8_t ms);
+
+        /**
+         * Returns the link quality as a double between 0 and 1.
+         * 0 means no messages were sent, 1 means all messages were sent successfully.
+         * Average over the last 64 messages.
+         */
         double getLinkQuality() const;
 
         uint8_t getChannel() const;
@@ -86,25 +95,28 @@ class CrtpLink
         bool isBroadcast() const;
 
     private: 
-        void resetConnectionStats();
+        void onSuccessfullMessage();
+        
+    // Configurable parameters
     private: 
+        uint8_t m_failedMessagesMaximum;
+        uint32_t m_relaxationPeriodMs;
+        uint32_t m_lastSuccessfullMessageTimeout;
+        uint32_t m_failedMessageRetryTimeout;
+
+    private: 
+        uint8_t m_failedMessagesCount;
+        uint32_t m_relaxationCountMs;
+        uint32_t m_lastSuccessfullMessageTime;
+        
+        std::map<CrtpPort, CrtpPacketQueue> m_crtpPortQueues;
+
+        uint64_t m_linkQuality; // 64 bits of failed and successful messages (bits)
+
         uint8_t m_channel;
         uint64_t m_address;
         uint8_t m_datarate; 
         bool m_isBroadcast;
-
-        uint8_t m_failedMessagesMaximum;
-        uint8_t m_failedMessagesCount;
-
-        uint32_t m_relaxationCountMs;
-        uint32_t m_relaxationPeriodMs;
-
-        uint32_t m_lastSuccessfullMessageTime;
-        uint32_t m_lastSuccessfullMessageTimeout;
-
-        uint32_t m_failedMessageRetryTimeout;
-
-        std::map<CrtpPort, CrtpPacketQueue> m_crtpPortQueues;
 };
 
 
@@ -119,29 +131,48 @@ class CrtpLinkContainer
          */
         void addLink(uint8_t channel, uint64_t address, uint8_t datarate);
 
+        /**
+         * Removes a link from the container.
+         * Returns true if the link was removed, false if it was not found.
+         * The callbacks are returned to the caller, they should probably be called with a nullpacket.
+         */
         bool removeLink(CrtpLinkIdentifier * link, std::vector<CrtpResponseCallback>& callbacks);
 
+        /**
+         * Returns true if the link was found and copied to the link identifier.
+         * If the link is not found, false is returned.
+         */
         bool getLinkIdentifier(CrtpLinkIdentifier * link, uint8_t channel, uint64_t address) const;
 
+        /**
+         * Returns true if a link with the highest priority port is found.
+         * The link identifier is copied to the link parameter and the port is set to the highest priority port of the link.
+         */
         bool getHighestPriorityLink(CrtpLinkIdentifier * link, CrtpPort * port) const;
 
-        bool getRandomLink(CrtpLinkIdentifier * link) const;
+        /**
+         * Returns a random relaxed link which is not a broadcast link.
+         * If no such link is found, false is returned.
+         */
         bool getRandomRelaxedNonBroadcastLink(CrtpLinkIdentifier * link) const;
 
-        void relaxLinks(uint8_t ms);
+        /**
+         * Get connection statistics for all links.
+         */
+        void getConnectionStats(std::vector<CrtpLinkIdentifier>& links, std::vector<double>& quality) const;
 
         /**
         * In order to call link functions with link identifiers we need these wrappers
         */
+        void tickLinksMs(uint8_t ms);
+        
         void linkAddPacket(CrtpLinkIdentifier * link, CrtpPacket * packet, CrtpResponseCallback callback);
-        bool linkGetPacket(CrtpLinkIdentifier * link, CrtpPort port,  CrtpPacket * packet);
-        void linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id);
-        void linkNotifySuccessfullMessage(CrtpLinkIdentifier * link_id, CrtpPort port);
-        bool linkNotifyFailedMessage(CrtpLinkIdentifier * link_id);
+        bool linkGetHighestPriorityPacket(CrtpLinkIdentifier * link, CrtpPacket * packet);
         bool linkReleasePacket(CrtpLinkIdentifier  * link_id, CrtpPacket * responsePacket, CrtpResponseCallback & callback);
-        double linkGetLinkQuality(CrtpLinkIdentifier * link_id);
-        void linkTense(CrtpLinkIdentifier * link_id);
-        void linkRelaxMs(CrtpLinkIdentifier * link_id, uint8_t ms);
+
+        void linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id);
+        void linkNotifySuccessfullPortMessage(CrtpLinkIdentifier * link_id, CrtpPort port);
+        bool linkNotifyFailedMessage(CrtpLinkIdentifier * link_id);
 
     private: 
         void copyLinkIdentifier(CrtpLinkIdentifier * from_link, CrtpLinkIdentifier * to_link) const;

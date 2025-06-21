@@ -17,6 +17,8 @@ find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CrtpLink.msg"
+  "msg/CrtpLinkQuality.msg"
+  "msg/CrtpLinkQualities.msg"
   "msg/CrtpPacket.msg"
   "msg/CrtpResponse.msg"
   "srv/CrtpPacketSend.srv"

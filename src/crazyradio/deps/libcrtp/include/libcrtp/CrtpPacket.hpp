@@ -40,6 +40,9 @@ namespace libcrtp {
         .obeysOrdering = false
     };
 
+    inline bool isNullPacket(CrtpPacket * packet) {
+        return (packet->port == CrtpPort::LINK_LAYER && packet->channel == 3);
+    }
 
     using CrtpResponseCallback = std::function<void(CrtpPacket*, bool)>;
 } // namespace libcrtp
