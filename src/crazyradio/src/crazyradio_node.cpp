@@ -8,7 +8,7 @@
 #include "rclcpp/qos.hpp"
 
 #include "libcrazyradio/Crazyradio.hpp"
-#include "libcrtp/CrtpLink.hpp"
+#include "libcrtp/CrtpLinkContainer.hpp"
 
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
 #include "crtp_interfaces/msg/crtp_response.hpp"
@@ -141,7 +141,7 @@ private:
         libcrtp::CrtpPacket responsePacket;
 
         bool isPortPacket = m_links.linkGetHighestPriorityPacket(link, &packet);
-        if (link->isBroadcast && !isPortPacket) return; // No broadcast packet available
+        if (link->isBroadcast && !isPortPacket) return; // No broadcast packet available, broadcast links do not send null packets.
                 
         bool sendSuccess = sendCrtpPacket(link, &packet, &responsePacket);
         if (sendSuccess)
@@ -150,7 +150,11 @@ private:
             else m_links.linkNotifySuccessfullNullpacket(link);
             handleReponsePacket(link, &responsePacket);
         } else {
-            if (m_links.linkNotifyFailedMessage(link)) {
+            bool shallDie;
+            if (isPortPacket) shallDie = m_links.linkNotifyFailedPortMessage(link);
+            else shallDie = m_links.linkNotifyFailedNullpacket(link);
+            
+            if (shallDie) {
                 destroyLink(link);
             }
         }
