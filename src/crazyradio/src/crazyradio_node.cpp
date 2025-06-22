@@ -31,7 +31,7 @@ public:
         : Node("crazyradio_cpp", options)
         , m_radio()
         , m_links()
-        , m_radioPeriodMs(2) // 500 Hz
+        , m_radioPeriodMs(1) // 1000 Hz
         , m_logEnabled(true)
     {
         this->declare_parameter("channel", 80);
@@ -358,8 +358,15 @@ private:
         libcrtp::CrtpPacket *packet,
         libcrtp::CrtpPacket *responsePacket)
     {
+        auto start = std::chrono::high_resolution_clock::now();
+
         libcrazyradio::Crazyradio::Ack ack;
         m_radio.sendCrtpPacket(link, packet, ack);
+
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::micro> elapsed = end - start;
+        // std::cerr << "Packet transfer took " << elapsed.count() << " us" << std::endl;
         
         if (link->isBroadcast) return true;
         
