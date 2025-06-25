@@ -23,7 +23,7 @@ CrtpLink::CrtpLink(
     , m_address(address)
     , m_datarate(datarate)
     , m_isBroadcast(((address >> 4 * 8) & 0xFF) == 0xFF) // Broadcasting Links have 0xFF as the first byte of the address (cfs have 0xE7)   
-    , m_failedMessagesMaximum(30) // After this many failed messages we consider the link dead, we also wait m_failedMessageRetryTimeout before retrying
+    , m_failedMessagesMaximum(100) // After this many failed messages we consider the link dead, we also wait m_failedMessageRetryTimeout before retrying
     , m_nullpacketPeriodMs(10) // At most 100 Hz for ping messages
     , m_lastSuccessfullMessageTimeoutMs(2000) // If 2 seconds no Communication -> Fail refardless of how many messages failed before.
     , m_failedMessageRetryTimeoutMs(30) // If a message fails, we wait 30 ms before retrying
@@ -128,8 +128,8 @@ void CrtpLink::tickMs(uint8_t ms)
 
 bool CrtpLink::isRelaxed() const
 {
-    if (m_failedMessagesCount) // If we have failed messages and need to sent packets, we should not send nullpackets
-        for (const auto& [port, queue] : m_crtpPortQueues) if (! queue.isEmtpy()) return false; 
+    // if (m_failedMessagesCount) // If we have failed messages and need to sent packets, we should not send nullpackets
+    //     for (const auto& [port, queue] : m_crtpPortQueues) if (! queue.isEmtpy()) return false; 
     
     return m_timeSinceLastNullpacketMs >= m_nullpacketPeriodMs;
 }

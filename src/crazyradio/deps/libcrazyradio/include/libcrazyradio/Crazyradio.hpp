@@ -46,19 +46,23 @@ public:
     
     virtual ~Crazyradio();
 
-    void sendCrtpPacket(
+    /**
+     * Transmits a CrtpPacket over the Crazyradio.
+     * Returns true if the packet was sent successfully.
+     * If the link is non broadcast and the packet was sent successfully, the responsePacket will contain a response from the Crazyflie.
+    */
+    bool sendCrtpPacket(
         libcrtp::CrtpLinkIdentifier * link,
         libcrtp::CrtpPacket * packet,
-        Ack & result);
+        libcrtp::CrtpPacket * responsePacket);
         
+private:
     void sendPacket(
         const uint8_t* data,
         uint32_t length, 
         Ack& result
     );
 
-    static void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
-private:
     void setToCrtpLink(libcrtp::CrtpLinkIdentifier * link);
 
     void setChannel(uint8_t channel);
@@ -78,6 +82,9 @@ private:
     void setAckEnable(bool enable);
 
     void setContCarrier(bool active);
+
+    void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
+
        
 private: 
     uint8_t m_channel;

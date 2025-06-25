@@ -71,10 +71,10 @@ Crazyradio::~Crazyradio()
 
 
 
-void Crazyradio::sendCrtpPacket(
+bool Crazyradio::sendCrtpPacket(
         libcrtp::CrtpLinkIdentifier * link,
         libcrtp::CrtpPacket * packet,
-        Ack & result)
+        libcrtp::CrtpPacket * responsePacket)
 {
     uint8_t data[5 + 32];
     data[4] = (link->address >> 0) & 0xFF;
@@ -86,9 +86,29 @@ void Crazyradio::sendCrtpPacket(
 
     data[5] = packet->port << 4 | packet->channel;
     memcpy(&data[6], &packet->data, packet->dataLength);
-  
+    
+
+    libcrazyradio::Crazyradio::Ack ack;
+
     setToCrtpLink(link);
-    sendPacket(data, 5 + 1 + packet->dataLength , result);
+    sendPacket(data, 5 + 1 + packet->dataLength, ack);
+    if (link->isBroadcast) return true;
+        
+    if (!ack.ack) {
+        return false;
+    } else if (!ack.size)
+    {
+        /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
+            *  The message however gets succesfully received by the crazyflie.
+            *  For now we just assume that a nullpacket would have been sent from crazyflie, in order not to break any other code.
+            */
+        std::cerr <<  "Empty response #703" << std::endl;
+        memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
+        return true;
+    } 
+    
+    ackToCrtpPacket(&ack, responsePacket);
+    return true;
 }
 
 void Crazyradio::setToCrtpLink(libcrtp::CrtpLinkIdentifier * link)

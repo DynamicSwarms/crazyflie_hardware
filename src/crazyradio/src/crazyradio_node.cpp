@@ -9,6 +9,7 @@
 
 #include "libcrazyradio/Crazyradio.hpp"
 #include "libcrtp/CrtpLinkContainer.hpp"
+#include "libcrtp/CrtpLogger.hpp"
 
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
 #include "crtp_interfaces/msg/crtp_response.hpp"
@@ -31,17 +32,16 @@ public:
         : Node("crazyradio_cpp", options)
         , m_radio()
         , m_links()
-        , m_radioPeriodMs(1) // 1000 Hz
-        , m_logEnabled(true)
+        , m_radioPeriodUs(500) // 2000 Hz polling, realistic rate is ~ 1100Hz.
     {
         this->declare_parameter("channel", 80);
         uint8_t channel = this->get_parameter("channel").as_int();
 
-        if (m_logEnabled)
-        {
-            m_logStartTime = this->get_clock()->now();
-            m_logStream.open("crazyradio_log_" + std::to_string(channel) + ".log");
-        }
+        this->declare_parameter("log_enabled", true);
+
+        m_logger = std::make_unique<libcrtp::CrtpLogger>(
+            this->get_parameter("log_enabled").as_bool(),
+            "crazyradio_log_" + std::to_string(channel) + ".log");
 
         auto qos = rclcpp::QoS(500);
         qos.reliable();
@@ -71,7 +71,7 @@ public:
 
         radio_callback_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
         radio_timer = this->create_wall_timer(
-            std::chrono::milliseconds(m_radioPeriodMs),
+            std::chrono::microseconds(m_radioPeriodUs),
             std::bind(&CrazyradioNode::radioCallback, this),
             radio_callback_group);
         
@@ -79,51 +79,24 @@ public:
          * Tick all links periodically.
          * This updates internal link states such as null packet frequency.
          */
-        m_relax_timer = this->create_wall_timer(
+        m_tick_timer = this->create_wall_timer(
             std::chrono::milliseconds(1),
             [this] {m_links.tickLinksMs(1); });
 
         m_link_quality_timer = this->create_wall_timer(
             std::chrono::milliseconds(1000),
-            std::bind(&CrazyradioNode::logLinkQuality, this));
+            std::bind(&CrazyradioNode::logLinkQualityCallback, this));
 
         RCLCPP_WARN(this->get_logger(), "Started Crazyradio Node on Channel %d", channel);
     }
 
 private:
-    std::stringstream formatCrtpPacket(
-        libcrtp::CrtpPacket *packet)
-    {
-        std::stringstream ss;
-        ss << std::dec << " [" << (int)packet->port << ":" << (int)packet->channel << "] ";
-        for (int i = 0; i < packet->dataLength; i++) ss << std::hex << (int)packet->data[i] << " ";
-        return ss;
-    } 
-
-    void logCommunication(
-        libcrtp::CrtpLinkIdentifier *link,
-        libcrtp::CrtpPacket *packet,
-        libcrtp::CrtpPacket *responsePacket,
-        bool responseValid)
-    {
-        if (m_logEnabled)
-        {
-            std::stringstream ss;
-            auto time = this->get_clock()->now() - m_logStartTime;
-            ss << "[" << (long int)(time.nanoseconds() / 1000 ) << "] "; //  in microseconds
-            ss << std::hex << (int)(uint8_t)(link->address & 0xFF);
-
-            m_logStream << ss.str() << formatCrtpPacket(packet).str() << std::endl;
-            if (responseValid) m_logStream << '\t' << formatCrtpPacket(responsePacket).str();
-            m_logStream << std::endl;
-        }
-    }
-
     void radioCallback()
     {
         libcrtp::CrtpLinkIdentifier link;
         if (chooseLink(&link))
-            communicateLink(&link); // This recursively communicates up to 4 packets        
+            communicateLink(&link, 10); // This recursively communicates up to 10 packets        
+
     }    
 
     bool chooseLink(libcrtp::CrtpLinkIdentifier *link)
@@ -143,7 +116,7 @@ private:
         bool isPortPacket = m_links.linkGetHighestPriorityPacket(link, &packet);
         if (link->isBroadcast && !isPortPacket) return; // No broadcast packet available, broadcast links do not send null packets.
                 
-        bool sendSuccess = sendCrtpPacket(link, &packet, &responsePacket);
+        bool sendSuccess = m_radio.sendCrtpPacket(link, &packet, &responsePacket);
         if (sendSuccess)
         {
             if (isPortPacket) m_links.linkNotifySuccessfullPortMessage(link, packet.port);
@@ -159,7 +132,8 @@ private:
             }
         }
 
-        logCommunication(link, &packet, &responsePacket, sendSuccess);
+        m_logger->logCommunication(link, &packet, &responsePacket, sendSuccess,
+             std::chrono::nanoseconds(get_clock()->now().nanoseconds()));
 
         if (maxPackets > 1
             && sendSuccess 
@@ -202,8 +176,90 @@ private:
         send_response_pub->publish(resp);
     }
 
+     // Destroys a link and calls all callbacks that were waiting for a response.
+    void destroyLink(libcrtp::CrtpLinkIdentifier * link)
+    {
+        std::vector<libcrtp::CrtpResponseCallback> callbacks;
+        libcrtp::CrtpPacket packet = libcrtp::nullPacket;
+        // During this time a packet might get added to the link. There is no way to check for this.
+     
+        m_links.removeLink(link, callbacks);
+        RCLCPP_WARN(this->get_logger(),"Destroying link: ID: %lX, CH: %d, CC: %ld", link->address, link->channel, callbacks.size());
+        for(auto& callback : callbacks) {
+            callback(&packet, false); // Call each callback with nullptr and false (failure)
+        }
+        publishLinkEnd(link);
+    }
+
+    // Sends a message that a link has ended.
+    void publishLinkEnd(libcrtp::CrtpLinkIdentifier *link)
+    {
+        auto msg = crtp_interfaces::msg::CrtpLink();
+        msg.channel = link->channel;
+        for (int i = 0; i < 5; i++)
+            msg.address[4 - i] = (link->address & ((uint64_t)0xFF << i * 8)) >> i * 8;
+        msg.datarate = link->datarate;
+        link_end_pub->publish(msg);
+    }
+
+    // Callback for the subscription that closes links
+    void closeLinkCallback(const crtp_interfaces::msg::CrtpLink::SharedPtr msg)
+    {
+        uint64_t address = 0;
+        for (int i = 0; i < 5; i++)
+            address |= (uint64_t)msg->address[i] << (8 * (4 - i));
+        libcrtp::CrtpLinkIdentifier link;
+        link.channel = msg->channel;
+        link.address = address;
+        link.datarate = msg->datarate;
+        destroyLink(&link);        
+    }
+
+    // Callback for the service that sends CRTP packets
+    void sendCrtpPacketCallback(
+        const std::shared_ptr<rclcpp::Service<crtp_interfaces::srv::CrtpPacketSend>> service_handle,
+        const std::shared_ptr<rmw_request_id_t> header,
+        const std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Request> request)
+    {
+        // Insert Link
+        uint64_t address = 0;
+        for (int i = 0; i < 5; i++)
+            address |= (uint64_t)request->link.address[i] << (8 * (4 - i));
+        m_links.addLink(request->link.channel, address, request->link.datarate); // Will not duplicate if already added
+
+        // Create Packet
+        libcrtp::CrtpPacket packet = {
+            (libcrtp::CrtpPort)request->packet.port,
+            request->packet.channel,
+            {/*data*/},
+            request->packet.data_length,
+            request->expects_response,
+            request->matching_bytes,
+            request->obeys_ordering};
+        for (int i = 0; i < request->packet.data_length; i++)
+            packet.data[i] = request->packet.data[i];
+
+        libcrtp::CrtpLinkIdentifier link;
+        if (m_links.getLinkIdentifier(&link, request->link.channel, address))
+        {
+            // RCLCPP_WARN(this->get_logger(),"Add Packet %X; [%d; %d]!", (uint8_t)(link.address & 0xFF), packet.port, packet.channel );
+            auto response_callback = std::bind(
+                    &CrazyradioNode::responseCallback,
+                    this,
+                    std::placeholders::_1,      // libcrtp::CrtpPacket* pkt
+                    std::placeholders::_2,      // bool success
+                    std::make_shared<rmw_request_id_t>(*header)); // shared_ptr<rmw_request_id_t> header
+            if (packet.expectsResponse) {
+                m_links.linkAddPacket(&link, &packet, response_callback);
+            } else {
+                m_links.linkAddPacket(&link, &packet, NULL);
+                response_callback(&packet, false);  // echo as response
+            }                                         
+        }
+    }
+
     // Callback for sending out link quality information regularly
-    void logLinkQuality()
+    void logLinkQualityCallback()
     {
         std::vector<libcrtp::CrtpLinkIdentifier> links;
         std::vector<double> qualities;
@@ -230,166 +286,32 @@ private:
         }   
         if (links.size()) link_quality_pub->publish(msg);
     }
-
-    // Callback for the subscription that closes links
-    void closeLinkCallback(const crtp_interfaces::msg::CrtpLink::SharedPtr msg)
+private: 
+    void responseCallback(
+        libcrtp::CrtpPacket * pkt, 
+        bool success, 
+        std::shared_ptr<rmw_request_id_t> header)
     {
-        uint64_t address = 0;
-        for (int i = 0; i < 5; i++)
-            address |= (uint64_t)msg->address[i] << (8 * (4 - i));
-        libcrtp::CrtpLinkIdentifier link;
-        link.channel = msg->channel;
-        link.address = address;
-        link.datarate = msg->datarate;
-        destroyLink(&link);        
-    }
-
-    // Destroys a link and calls all callbacks that were waiting for a response.
-    void destroyLink(libcrtp::CrtpLinkIdentifier * link)
-    {
-        std::vector<libcrtp::CrtpResponseCallback> callbacks;
-        libcrtp::CrtpPacket packet = libcrtp::nullPacket;
-        // During this time a packet might get added to the link. There is no way to check for this.
-     
-        m_links.removeLink(link, callbacks);
-        RCLCPP_WARN(this->get_logger(),"Destroying link: ID: %lX, CH: %d, CC: %ld", link->address, link->channel, callbacks.size());
-        for(auto& callback : callbacks) {
-            callback(&packet, false); // Call each callback with nullptr and false (failure)
-        }
-        publishLinkEnd(link);
-    }
-
-    // Sends a message that a link has ended.
-    void publishLinkEnd(libcrtp::CrtpLinkIdentifier *link)
-    {
-        auto msg = crtp_interfaces::msg::CrtpLink();
-        msg.channel = link->channel;
-        for (int i = 0; i < 5; i++)
-            msg.address[4 - i] = (link->address & ((uint64_t)0xFF << i * 8)) >> i * 8;
-        msg.datarate = link->datarate;
-        link_end_pub->publish(msg);
-    }
-
-    // Callback for the service that sends CRTP packets
-    void sendCrtpPacketCallback(
-        const std::shared_ptr<rclcpp::Service<crtp_interfaces::srv::CrtpPacketSend>> service_handle,
-        const std::shared_ptr<rmw_request_id_t> header,
-        const std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Request> request)
-    {
-        // Insert Link
-        uint64_t address = 0;
-        for (int i = 0; i < 5; i++)
-            address |= (uint64_t)request->link.address[i] << (8 * (4 - i));
-        m_links.addLink(request->link.channel, address, request->link.datarate);
-
-        // Create Packet
-        libcrtp::CrtpPacket packet = {
-            (libcrtp::CrtpPort)request->packet.port,
-            request->packet.channel,
-            {/*data*/},
-            request->packet.data_length,
-            request->expects_response,
-            request->matching_bytes,
-            request->obeys_ordering};
-        for (int i = 0; i < request->packet.data_length; i++)
-            packet.data[i] = request->packet.data[i];
-
-        libcrtp::CrtpLinkIdentifier link;
-        if (this->m_links.getLinkIdentifier(&link, request->link.channel, address))
-        { // release if not
-            // RCLCPP_WARN(this->get_logger(),"Add Packet %X; [%d; %d]!", (uint8_t)(link.address & 0xFF), packet.port, packet.channel );
-            if (packet.expectsResponse)
-            {
-                // Start thread which puts packet onto the queue and waits for response, if this is necessary
-                std::thread t([this, packet, channel = request->link.channel, address, service_handle, header, link]() mutable
-                {
-                    using namespace std::chrono_literals;
-                    volatile bool callback_called = false;
-
-                    auto response_callback = [this, service_handle, header, &callback_called](libcrtp::CrtpPacket *pkt, bool success)
-                        {   
-                            auto response = crtp_interfaces::srv::CrtpPacketSend::Response();
-                            response.packet.port = (uint8_t)pkt->port;
-                            response.packet.channel = pkt->channel;
-                            response.packet.data_length = pkt->dataLength;
-                            for (int i = 0; i < pkt->dataLength; i++)
-                                response.packet.data[i] = pkt->data[i];
-                            response.success = success;
-                            try {
-                                service_handle->send_response(*header, response);
-                            } catch (const std::exception& e) {
-                                // https://github.com/ros2/ros2/issues/1253#issuecomment-1702937597
-                                RCLCPP_WARN(this->get_logger(),"Caught exception:  %s; Port: %d, Ch: %d, Success: %d", e.what(), response.packet.port, response.packet.channel, success);
-                            }  
-                            callback_called = true;
-                        };
-                    this->m_links.linkAddPacket(&link, &packet, response_callback);                         
-
-                    while (!callback_called)
-                        std::this_thread::sleep_for(10ms);
-                          // std::cerr << "Thread going down\n";
-                });
-                t.detach();        
-            }
-            else
-            {
-                this->m_links.linkAddPacket(&link, &packet, NULL);
-                auto response = crtp_interfaces::srv::CrtpPacketSend::Response(); // send an empty response
-                try {
-                    service_handle->send_response(*header, response);
-                } catch (const std::exception& e) {
-                    // https://github.com/ros2/ros2/issues/1253#issuecomment-1702937597
-                    RCLCPP_WARN(this->get_logger(),"Caught exception:  %s; Port: %d, Ch: %d, unresp", e.what(), response.packet.port, response.packet.channel);
-                }  
-            }
-        }
-    }
-
-
-private:
-    
-    /**
-     * Transmits a CrtpPacket over the Crazyradio.
-     * Returns true if the packet was sent successfully.
-     * If the link is non broadcast and the packet was sent successfully, the responsePacket will contain a response from the Crazyflie.
-    */
-    bool sendCrtpPacket(
-        libcrtp::CrtpLinkIdentifier *link,
-        libcrtp::CrtpPacket *packet,
-        libcrtp::CrtpPacket *responsePacket)
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-
-        libcrazyradio::Crazyradio::Ack ack;
-        m_radio.sendCrtpPacket(link, packet, ack);
-
-
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> elapsed = end - start;
-        // std::cerr << "Packet transfer took " << elapsed.count() << " us" << std::endl;
-        
-        if (link->isBroadcast) return true;
-        
-        if (!ack.ack) {
-            return false;
-        } else if (!ack.size)
-        {
-            /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
-             *  The message however gets succesfully received by the crazyflie.
-             *  For now we just assume that a nullpacket would have been sent from crazyflie, in order not to break any other code.
-             */
-            RCLCPP_WARN(this->get_logger(), "Empty response #703");
-            memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
-            return true;
-        } 
-        
-        libcrazyradio::Crazyradio::ackToCrtpPacket(&ack, responsePacket);
-        return true;
+        crtp_interfaces::srv::CrtpPacketSend::Response response;
+        response.packet.port = (uint8_t)pkt->port;
+        response.packet.channel = pkt->channel;
+        response.packet.data_length = pkt->dataLength;
+        for (int i = 0; i < pkt->dataLength; i++)
+            response.packet.data[i] = pkt->data[i];
+        response.success = success;
+        try {
+            send_crtp_packet_service->send_response(*header, response);
+        } catch (const std::exception& e) {
+            // https://github.com/ros2/ros2/issues/1253#issuecomment-1702937597
+            RCLCPP_WARN(this->get_logger(),"Caught exception:  %s; Port: %d, Ch: %d, Success: %d", e.what(), response.packet.port, response.packet.channel, success);
+        }  
     }
 
 private:
     libcrazyradio::Crazyradio m_radio;
     libcrtp::CrtpLinkContainer m_links;
+    
+    std::unique_ptr<libcrtp::CrtpLogger> m_logger;
 
     rclcpp::CallbackGroup::SharedPtr crtp_send_callback_group;
     rclcpp::CallbackGroup::SharedPtr radio_callback_group;
@@ -397,8 +319,8 @@ private:
     rclcpp::TimerBase::SharedPtr m_link_quality_timer;
 
     rclcpp::TimerBase::SharedPtr radio_timer;
-    rclcpp::TimerBase::SharedPtr m_relax_timer;
-    uint8_t m_radioPeriodMs;
+    rclcpp::TimerBase::SharedPtr m_tick_timer;
+    uint16_t m_radioPeriodUs;
 
     rclcpp::Service<crtp_interfaces::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_service;
     rclcpp::Publisher<crtp_interfaces::msg::CrtpResponse>::SharedPtr send_response_pub;

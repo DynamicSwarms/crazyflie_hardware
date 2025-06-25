@@ -6,5 +6,6 @@ include_directories(include)
 add_library(libcrtp 
         CrtpPacketQueue.cpp
         CrtpLink.cpp
-        CrtpLinkContainer.cpp)
+        CrtpLinkContainer.cpp
+        CrtpLogger.cpp)
 
