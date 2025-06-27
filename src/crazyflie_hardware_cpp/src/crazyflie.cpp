@@ -99,6 +99,8 @@ public:
 
   ~Commander() 
   {
+    if (link->initialized)
+      link->close_link();
     link.reset();
     RCLCPP_ERROR(rclcpp::get_logger(tf_name), "Commander deconstr.");
   }
@@ -200,7 +202,7 @@ public:
 
   ~CrazyflieNode()
   {
-    RCLCPP_INFO(get_logger(), "Deconstructor called!");
+    RCLCPP_DEBUG(get_logger(), "Deconstructor called!");
   }
 
   bool init()
@@ -225,7 +227,7 @@ public:
     }
     else
     {
-      RCLCPP_INFO(get_logger(), "Configuring failed!");
+      RCLCPP_DEBUG(get_logger(), "Configuring failed!");
       return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
     }
   }
