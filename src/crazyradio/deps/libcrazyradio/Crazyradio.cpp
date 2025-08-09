@@ -59,13 +59,20 @@ Crazyradio::Crazyradio()
     setArdBytes(32);
     setAckEnable(true);
 
-    std::cerr << "Crazyradio USB starting." << std::endl;
-    sendVendorSetup(START_STOP, 1, 0, NULL, 0); // Send a start command to the radio.
+    std::cerr << "Crazyradio USB starting; ";
+    #ifdef LEGACY_RADIO
+        std::cerr << "LEGACY_RADIO: ON" << std::endl;
+    #else
+        std::cerr << "LEGACY_RADIO: OFF" << std::endl;
+        sendVendorSetup(START_STOP, 1, 0, NULL, 0); // Send a start command to the radio.
+    #endif
 }
 
 Crazyradio::~Crazyradio()
-{
-    sendVendorSetup(START_STOP, 0, 0, NULL, 0); // Send a stop command to the radio.
+{   
+    #ifndef LEGACY_RADIO
+        sendVendorSetup(START_STOP, 0, 0, NULL, 0); // Send a stop command to the radio.
+    #endif
     std::cerr << "Crazyradio USB stopped." << std::endl;
 }
 
@@ -75,25 +82,30 @@ bool Crazyradio::sendCrtpPacket(
         libcrtp::CrtpLinkIdentifier * link,
         libcrtp::CrtpPacket * packet,
         libcrtp::CrtpPacket * responsePacket)
-{
-    uint8_t data[5 + 32];
-    data[4] = (link->address >> 0) & 0xFF;
-    data[3] = (link->address >> 8) & 0xFF;
-    data[2] = (link->address >> 16) & 0xFF;
-    data[1] = (link->address >> 24) & 0xFF;
-    data[0] = (link->address >> 32) & 0xFF;
-    // std::cerr << std::hex << "Address: " << (int)data[0] << (int)data[1] << (int)data[2] << (int)data[3] << (int)data[4] << std::dec << std::endl;
-
-    data[5] = packet->port << 4 | packet->channel;
-    memcpy(&data[6], &packet->data, packet->dataLength);
-    
-
+{   
+    setToCrtpLink(link);
     libcrazyradio::Crazyradio::Ack ack;
 
-    setToCrtpLink(link);
-    sendPacket(data, 5 + 1 + packet->dataLength, ack);
-    if (link->isBroadcast) return true;
-        
+    #ifndef LEGACY_RADIO
+        uint8_t data[5 + 32];
+        data[4] = (link->address >> 0) & 0xFF;
+        data[3] = (link->address >> 8) & 0xFF;
+        data[2] = (link->address >> 16) & 0xFF;
+        data[1] = (link->address >> 24) & 0xFF;
+        data[0] = (link->address >> 32) & 0xFF;
+    
+        data[5] = packet->port << 4 | packet->channel;
+        memcpy(&data[6], &packet->data, packet->dataLength);
+        sendPacket(data, 5 + 1 + packet->dataLength, ack);
+    #else
+        uint8_t data[32];
+        data[0] = packet->port << 4 | packet->channel;
+        memcpy(&data[1], &packet->data, packet->dataLength);
+        sendPacket(data, 1 + packet->dataLength, ack);
+    #endif
+
+    
+    if (link->isBroadcast) return true;    
     if (!ack.ack) {
         return false;
     } else if (!ack.size)
@@ -141,8 +153,11 @@ void Crazyradio::setChannel(uint8_t channel)
 
 void Crazyradio::setAddress(uint64_t address)
 {
-    m_address = address;
-    return; // Now done via the packet to the radio.
+    #ifndef LEGACY_RADIO
+        m_address = address;
+        return; // Now done via the packet to the radio.
+    #endif
+    
     if (m_address != address) {
         unsigned char a[5];
         a[4] = (address >> 0) & 0xFF;
@@ -215,9 +230,12 @@ void Crazyradio::setArdBytes(uint8_t nbytes)
 }
 
 void Crazyradio::setAckEnable(bool enable)
-{
-    m_ackEnable = enable;
-    return; // Now done via the packet to the radio.
+{    
+    #ifndef LEGACY_RADIO
+        m_ackEnable = enable;
+        return; // Now done via the packet to the radio.
+    #endif
+
     if (m_ackEnable != enable) 
     {
         sendVendorSetup(ACK_ENABLE, enable, 0, NULL, 0);
