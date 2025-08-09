@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(crazyflie_hardware_gateway_interfaces REQUIRED)
 
 add_executable(gateway src/gateway.cpp)
@@ -21,6 +22,7 @@ ament_target_dependencies(
   gateway
   rclcpp
   rclcpp_components
+  ament_index_cpp
   rclcpp_lifecycle
   crazyflie_hardware_gateway_interfaces
 )

@@ -11,6 +11,9 @@
 
   <depend>crazyflie_hardware_gateway_interfaces</depend>
 
+  <depend>ament_index_cpp</depend>
+  <depend>rclcpp_components</depend>
+  
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
