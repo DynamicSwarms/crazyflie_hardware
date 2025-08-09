@@ -16,8 +16,9 @@ private:
     void crtp_response_callback(const CrtpPacket &packet) override;
 
 private:
+    std::string logger_name;
+
     rclcpp::CallbackGroup::SharedPtr callback_group;
 
-    std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr console_publisher;
 };

@@ -4,7 +4,9 @@
 using std::placeholders::_1;
 
 RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate)
-    : CrtpLink(channel, address, datarate), node(node)
+    : CrtpLink(channel, address, datarate)
+    , node(node)
+    , logger_name(node->get_name())
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto qos = rclcpp::QoS(500);
@@ -17,10 +19,10 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
         qos.get_rmw_qos_profile(),
         callback_group);
 
-    initialized = try_initialize();
+    initialized = try_initialize(node);
 }
 
-bool RosLink::try_initialize()
+bool RosLink::try_initialize(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node)
 {
     send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500));
     int timeout = 0;
@@ -28,13 +30,14 @@ bool RosLink::try_initialize()
     {
         if (timeout++ > 4 || !rclcpp::ok())
         {
-            RCLCPP_ERROR(node->get_logger(), "Interrupted while waiting for the service. Exiting.");
+            RCLCPP_ERROR(rclcpp::get_logger(logger_name), "Interrupted while waiting for the service. Exiting.");
             return false;
         }
-        RCLCPP_DEBUG(node->get_logger(), "Crazyradio not available, waiting again...");
+        RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Crazyradio not available, waiting again...");
     }
     auto sub_opt = rclcpp::SubscriptionOptions();
     sub_opt.callback_group = callback_group;
+
     link_end_sub = node->create_subscription<crtp_interfaces::msg::CrtpLink>(
         "/crazyradio/crtp_link_end",
         10,
@@ -53,6 +56,7 @@ bool RosLink::try_initialize()
         "/crazyradio/close_crtp_link",
         10,
         pub_opt);
+    
     return true;    
 }
 
@@ -118,8 +122,11 @@ void RosLink::crtp_link_end_callback(const crtp_interfaces::msg::CrtpLink::Share
 {
     if (msg->address == address)
     {
-        RCLCPP_WARN(node->get_logger(), "Connection lost, trying to shut down!");
-        node->shutdown(); // This works only if we are configured.
+        RCLCPP_WARN(rclcpp::get_logger(logger_name), "Connection lost, trying to shut down!");
+        if (auto node_shared = node.lock()) {
+            node_shared->shutdown(); // This works only if we are configured.
+        }
+        RCLCPP_WARN(rclcpp::get_logger(logger_name), "Made it to here!");
     }
 }
 
@@ -145,7 +152,7 @@ void RosLink::send_packet_no_response(CrtpRequest request)
     fill_crtp_request(req, request);
     send_crtp_packet_client->async_send_request(req);
 
-    // RCLCPP_WARN(node->get_logger(), "Sending no response! %d", request.packet.data_length);
+    // RCLCPP_WARN(rclcpp::get_logger(logger_name), "Sending no response! %d", request.packet.data_length);
 }
 
 std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
@@ -156,7 +163,7 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
     std::chrono::seconds timeout = (first_call) ? 5s : 1s; // More time to clear buffer
     first_call = false;
 
-    // RCLCPP_WARN(node->get_logger(), "Sending with response! p: %d, ch: %d, dl: %d, d1: %d er;%d, mb:%d", request.packet.port, request.packet.channel, request.packet.data_length, request.packet.data[0], request.expects_response, request.matching_bytes);
+    // RCLCPP_WARN(rclcpp::get_logger(logger_name), "Sending with response! p: %d, ch: %d, dl: %d, d1: %d er;%d, mb:%d", request.packet.port, request.packet.channel, request.packet.data_length, request.packet.data[0], request.expects_response, request.matching_bytes);
 
     auto req = std::make_shared<crtp_interfaces::srv::CrtpPacketSend::Request>();
     fill_crtp_request(req, request);
@@ -172,13 +179,21 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
             return response_to_packet(response);
         }
     }
-    RCLCPP_DEBUG(node->get_logger(), "Failed single request responded");
-    throw std::runtime_error("Communication failed!");
+    RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Failed single request responded");
+    std::stringstream ss;
+    ss << "Communication failed! "
+    << (int)request.packet.port << ", "
+    << (int)request.packet.channel << ", "
+    << (int)request.packet.data_length << ", "
+    << (int)request.packet.data[0] << ", "
+    << request.expects_response << ", "
+    << (int)request.matching_bytes;
+    throw std::runtime_error(ss.str());
 }
 
 std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpRequest> requests)
 {
-    RCLCPP_WARN(node->get_logger(), "Sending batch! %ld", requests.size());
+    RCLCPP_WARN(rclcpp::get_logger(logger_name), "Sending batch! %ld", requests.size());
     std::vector<rclcpp::Client<crtp_interfaces::srv::CrtpPacketSend>::SharedFuture> results;
 
     auto req = std::make_shared<crtp_interfaces::srv::CrtpPacketSend::Request>();
@@ -202,16 +217,16 @@ std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpReques
                 auto pkt = response_to_packet(result.get());
                 response_packets.push_back(pkt);
             } else {
-                RCLCPP_WARN(node->get_logger(), "Failed batch request. Single Message failed.");
+                RCLCPP_WARN(rclcpp::get_logger(logger_name), "Failed batch request. Single Message failed.");
                 break;
             }            
         }
         else
         {
-            RCLCPP_WARN(node->get_logger(), "Failed batch request. TimedOut.");
+            RCLCPP_WARN(rclcpp::get_logger(logger_name), "Failed batch request. TimedOut.");
             break;
         }
     }
-    RCLCPP_WARN(node->get_logger(), "Batch finished with! %ld", response_packets.size());
+    RCLCPP_WARN(rclcpp::get_logger(logger_name), "Batch finished with! %ld", response_packets.size());
     return response_packets;
 }

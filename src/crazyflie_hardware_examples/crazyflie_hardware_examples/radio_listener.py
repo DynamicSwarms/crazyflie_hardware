@@ -21,7 +21,7 @@ class ResponseListener(Node):
         data_length = response.packet.data_length
         channel = response.packet.channel
         port = response.packet.port
-        string = "[" + str(port) + ":" + str(channel) + "] "
+        string = f"cf{response.address[4]}[" + str(port) + ":" + str(channel) + "] "
         if port == 0 and channel == 0 and data_length:
             pass
         #    for i in range(data_length):

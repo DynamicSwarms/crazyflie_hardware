@@ -28,9 +28,7 @@ public:
     , m_links()
     {
         this->declare_parameter("world", "world");
-        this->declare_parameter("hz", 10);
         m_world = this->get_parameter("world").as_string();
-        m_hz = this->get_parameter("hz").as_int();
 
 
         m_add_remove_callback_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -57,12 +55,6 @@ public:
             qos,
             std::bind(&Broadcaster::position_callback, this, std::placeholders::_1), 
             sub_opt);
-            
-        int millis = (int)(1000.0 * 1.0 / (double)m_hz);
-        m_broadcast_timer = this->create_wall_timer(
-                std::chrono::milliseconds(millis),
-                std::bind(&Broadcaster::run, this),
-                m_callback_group);
     }
 
     
@@ -131,6 +123,7 @@ private:
         for (const auto &pose : msg->poses) {
             m_positions[pose.header.frame_id] = pose;       
         }
+        run();
     }
 
     std::optional<geometry_msgs::msg::PoseStamped> get_position(const std::string& frame) 
@@ -174,7 +167,7 @@ private:
             auto it = m_links.find(channel_datarate);
             if (it != m_links.end()) 
             { // Already in list.  
-                if (!it->second->initialized) it->second->try_initialize();
+                if (!it->second->initialized) it->second->try_initialize(this->shared_from_this());
             } else {
                 lock.unlock();
                 std::array<uint8_t, 5> address = {0xFF, 0xE7, 0xE7, 0xE7, 0xE7}; // Fixed for Broadcasts
@@ -212,10 +205,7 @@ private:
     double m_decay_time;
     CrtpPacker m_packer;
     std::string m_world;
-    int m_hz;
-
-
-    
+        
     rclcpp::CallbackGroup::SharedPtr m_add_remove_callback_group;
     rclcpp::Service<broadcaster_interfaces::srv::PosiPoseBroadcastObject>::SharedPtr m_add_object_service;
     rclcpp::Service<broadcaster_interfaces::srv::PosiPoseBroadcastObject>::SharedPtr m_remove_object_service;

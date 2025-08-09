@@ -21,9 +21,11 @@ private:
     rcl_interfaces::msg::SetParametersResult set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters);
 
 private:
+    std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
+    std::string logger_name;
+
     rclcpp::CallbackGroup::SharedPtr callback_group;
 
-    std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr downdload_toc_sub;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr get_toc_info_sub;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle;

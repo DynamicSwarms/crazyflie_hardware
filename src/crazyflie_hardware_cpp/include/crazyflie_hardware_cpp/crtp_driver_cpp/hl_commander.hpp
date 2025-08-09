@@ -19,9 +19,10 @@ private:
     
 
 private: 
+    std::string logger_name;
+
     rclcpp::CallbackGroup::SharedPtr callback_group; 
 
-    std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
     rclcpp::Subscription<crazyflie_interfaces::msg::Land>::SharedPtr land_sub;
     rclcpp::Subscription<crazyflie_interfaces::msg::Takeoff>::SharedPtr takeoff_sub;
     rclcpp::Subscription<crazyflie_interfaces::msg::GoTo>::SharedPtr goto_sub;

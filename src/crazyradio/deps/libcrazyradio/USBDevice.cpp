@@ -141,7 +141,7 @@ void USBDevice::open(
         throw std::runtime_error(sstr.str());
     }
 }
-
+#include <iostream>
 void USBDevice::sendVendorSetup(
     uint8_t request,
     uint16_t value,
@@ -152,7 +152,6 @@ void USBDevice::sendVendorSetup(
     if (!m_handle) {
         throw std::runtime_error("No valid device handle!");
     }
-
     int status = libusb_control_transfer(
         m_handle,
         LIBUSB_REQUEST_TYPE_VENDOR,
@@ -161,7 +160,8 @@ void USBDevice::sendVendorSetup(
         index,
         (unsigned char*)data,
         length,
-        /*timeout*/ 1000);
+        /*timeout*/ 1000);    
+    
     if (status != LIBUSB_SUCCESS) {
         throw std::runtime_error(libusb_error_name(status));
     }

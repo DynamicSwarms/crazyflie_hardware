@@ -19,6 +19,7 @@ enum
     ACK_ENABLE          = 0x10,
     SET_CONT_CARRIER    = 0x20,
     SCANN_CHANNELS      = 0x21,
+    START_STOP          = 0x23,
     LAUNCH_BOOTLOADER   = 0xFF,
 };
 
@@ -57,31 +58,77 @@ Crazyradio::Crazyradio()
     setArc(3);
     setArdBytes(32);
     setAckEnable(true);
+
+    std::cerr << "Crazyradio USB starting; ";
+    #ifdef LEGACY_RADIO
+        std::cerr << "LEGACY_RADIO: ON" << std::endl;
+    #else
+        std::cerr << "LEGACY_RADIO: OFF" << std::endl;
+        sendVendorSetup(START_STOP, 1, 0, NULL, 0); // Send a start command to the radio.
+    #endif
 }
 
 Crazyradio::~Crazyradio()
-{
+{   
+    #ifndef LEGACY_RADIO
+        sendVendorSetup(START_STOP, 0, 0, NULL, 0); // Send a stop command to the radio.
+    #endif
+    std::cerr << "Crazyradio USB stopped." << std::endl;
 }
 
 
 
-void Crazyradio::sendCrtpPacket(
+bool Crazyradio::sendCrtpPacket(
         libcrtp::CrtpLinkIdentifier * link,
         libcrtp::CrtpPacket * packet,
-        Ack & result)
-{
-    uint8_t data[32];
-    data[0] = packet->port << 4 | packet->channel;
-    memcpy(&data[1], &packet->data, packet->dataLength);
-
+        libcrtp::CrtpPacket * responsePacket)
+{   
     setToCrtpLink(link);
-    sendPacket(data, 1 + packet->dataLength , result);
+    libcrazyradio::Crazyradio::Ack ack;
+
+    #ifndef LEGACY_RADIO
+        uint8_t data[5 + 32];
+        data[4] = (link->address >> 0) & 0xFF;
+        data[3] = (link->address >> 8) & 0xFF;
+        data[2] = (link->address >> 16) & 0xFF;
+        data[1] = (link->address >> 24) & 0xFF;
+        data[0] = (link->address >> 32) & 0xFF;
+    
+        data[5] = packet->port << 4 | packet->channel;
+        memcpy(&data[6], &packet->data, packet->dataLength);
+        sendPacket(data, 5 + 1 + packet->dataLength, ack);
+    #else
+        uint8_t data[32];
+        data[0] = packet->port << 4 | packet->channel;
+        memcpy(&data[1], &packet->data, packet->dataLength);
+        sendPacket(data, 1 + packet->dataLength, ack);
+    #endif
+
+    
+    if (link->isBroadcast) return true;    
+    if (!ack.ack) {
+        return false;
+    } else if (!ack.size)
+    {
+        /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
+            *  The message however gets succesfully received by the crazyflie.
+            *  For now we just assume that a nullpacket would have been sent from crazyflie, in order not to break any other code.
+            */
+        std::cerr <<  "Empty response #703" << std::endl;
+        memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
+        return true;
+    } 
+    
+    ackToCrtpPacket(&ack, responsePacket);
+    return true;
 }
 
 void Crazyradio::setToCrtpLink(libcrtp::CrtpLinkIdentifier * link)
 {
     setChannel(link->channel);
     setAddress(link->address);
+    setAckEnable(! link->isBroadcast); 
+   
     switch (link->datarate) 
     {
         case 2: 
@@ -93,7 +140,6 @@ void Crazyradio::setToCrtpLink(libcrtp::CrtpLinkIdentifier * link)
         default: 
             setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_250KPS);
     }  
-    setAckEnable(! link->isBroadcast); 
 }
 
 void Crazyradio::setChannel(uint8_t channel)
@@ -107,6 +153,11 @@ void Crazyradio::setChannel(uint8_t channel)
 
 void Crazyradio::setAddress(uint64_t address)
 {
+    #ifndef LEGACY_RADIO
+        m_address = address;
+        return; // Now done via the packet to the radio.
+    #endif
+    
     if (m_address != address) {
         unsigned char a[5];
         a[4] = (address >> 0) & 0xFF;
@@ -179,7 +230,12 @@ void Crazyradio::setArdBytes(uint8_t nbytes)
 }
 
 void Crazyradio::setAckEnable(bool enable)
-{
+{    
+    #ifndef LEGACY_RADIO
+        m_ackEnable = enable;
+        return; // Now done via the packet to the radio.
+    #endif
+
     if (m_ackEnable != enable) 
     {
         sendVendorSetup(ACK_ENABLE, enable, 0, NULL, 0);
@@ -232,20 +288,13 @@ void Crazyradio::sendPacket(
             sizeof(result) - 1,
             &transferred,
             /*timeout*/ 100);
-        
-        if (status == LIBUSB_ERROR_TIMEOUT) std::cerr << "timeout in read\n";
-        
-        if (status != LIBUSB_SUCCESS) 
-        {
-            // TODO: On Node restart throwing this error will block 
-            // throw std::runtime_error(libusb_error_name(status));
-        } 
-
         result.size = transferred - 1;
 
-        //if (m_enableLogging) {
-        //    logAck(result);
-        //}
+        if (status == LIBUSB_ERROR_TIMEOUT) 
+            std::cerr << "USB readback timeout" << std::endl;
+        
+        if (status != LIBUSB_SUCCESS) 
+            std::cerr << "USB readback failed." << std::endl;
     }
 }
 

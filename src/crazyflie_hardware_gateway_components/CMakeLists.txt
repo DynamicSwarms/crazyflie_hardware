@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(crtp_interfaces)
+project(crazyflie_hardware_gateway_components)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,23 +7,26 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
+find_package(crazyflie_hardware_gateway_interfaces REQUIRED)
 
-
-find_package(rosidl_default_generators REQUIRED)
-find_package(std_msgs REQUIRED)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/CrtpLink.msg"
-  "msg/CrtpLinkQuality.msg"
-  "msg/CrtpLinkQualities.msg"
-  "msg/CrtpPacket.msg"
-  "msg/CrtpResponse.msg"
-  "srv/CrtpPacketSend.srv"
-  DEPENDENCIES std_msgs 
+add_executable(gateway src/gateway.cpp)
+target_include_directories(gateway PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(gateway PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+ament_target_dependencies(
+  gateway
+  rclcpp
+  rclcpp_components
+  rclcpp_lifecycle
+  crazyflie_hardware_gateway_interfaces
 )
+
+install(TARGETS gateway
+  DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

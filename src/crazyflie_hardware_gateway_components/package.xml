@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>crazyflie_hardware_cpp</name>
+  <name>crazyflie_hardware_gateway_components</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="vinzenz@malke.info">winni</maintainer>
@@ -9,15 +9,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>crazyflie_interfaces</depend>
-  <depend>broadcaster_interfaces</depend>
-  <depend>object_tracker_interfaces</depend>
-  <depend>crtp_cpp</depend>
-  <depend>crtp_interfaces</depend>
-  <depend>rclcpp</depend>
-  <depend>rclcpp_components</depend>
-
-
+  <depend>crazyflie_hardware_gateway_interfaces</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

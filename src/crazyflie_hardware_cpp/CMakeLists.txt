@@ -14,6 +14,7 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 find_package(crtp_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(crtp_interfaces REQUIRED)
 find_package(crazyflie_interfaces REQUIRED)
 find_package(object_tracker_interfaces REQUIRED)
@@ -42,6 +43,8 @@ set(CRTP_DRIVER_SRCS
 )
 
 add_library(crtp_driver_cpp ${CRTP_DRIVER_SRCS})
+set_target_properties(crtp_driver_cpp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 target_compile_features(crtp_driver_cpp PUBLIC cxx_std_17)
 target_include_directories(crtp_driver_cpp PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
@@ -64,6 +67,7 @@ target_link_libraries(broadcaster
 ament_target_dependencies(crazyflie
   crtp_cpp
   rclcpp
+  rclcpp_components
   crtp_interfaces
   rclcpp_lifecycle
   lifecycle_msgs)
@@ -79,6 +83,20 @@ install(TARGETS crazyflie
 
 install(TARGETS broadcaster
   DESTINATION lib/${PROJECT_NAME})
+
+## Also register crazyflie as component
+# create ament index resource which references the libraries in the binary dir
+add_library(crazyflie_component SHARED src/crazyflie.cpp)
+target_compile_definitions(crazyflie_component
+  PRIVATE "COMPOSITION_BUILDING_DLL")
+target_link_libraries(crazyflie_component crtp_driver_cpp)
+ament_target_dependencies(crazyflie_component
+  rclcpp
+  crtp_cpp
+  rclcpp_components)
+
+rclcpp_components_register_nodes(crazyflie_component "CrazyflieNode")
+install(TARGETS crazyflie_component DESTINATION lib)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

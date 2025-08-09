@@ -23,25 +23,31 @@
 class Commander
 {
 public:
+// 
   Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate)
       : node(node)
-      , link(node, channel, address, datarate)
-      , console(node, &link)
-      , hl_commander(node, &link)
-      , generic_commander(node, &link)
-      , parameters(node, &link)
-      , logging(node, &link)
-      , localization(node, &link, get_tf_name(address))
+      , link(std::make_unique<RosLink>(node, channel, address, datarate))
       , tf_name(get_tf_name(address))
+      , configured(false)
   {
     try
     {
-      if (!link.initialized) {
+      if (!link->initialized) {
         throw std::runtime_error("Link initialization failed!");
       }
+      
+      // Create submodules
+      console = std::make_unique<Console>(node, link.get());
+      hl_commander = std::make_unique<HighLevelCommander>(node, link.get());
+      generic_commander = std::make_unique<GenericCommander>(node, link.get());
+      parameters = std::make_unique<Parameters>(node, link.get());
+      logging = std::make_unique<Logging>(node, link.get());
+      localization = std::make_unique<Localization>(node, link.get(), tf_name);
+
+
       // The initalization might fail because of the connection.
-      parameters.initialize_parameters();
-      logging.initialize_logging();
+      parameters->initialize_parameters();
+      logging->initialize_logging();
 
       RCLCPP_WARN(node->get_logger(), "Setting default Parameters");
 
@@ -66,7 +72,7 @@ public:
       if (send_external_position)
       {
         RCLCPP_WARN(node->get_logger(), "Setting up tracking services.");
-        bool external_tracking_success = localization.start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
+        bool external_tracking_success = localization->start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
         if (!external_tracking_success)
           throw std::runtime_error("Adding to tracking failed!");
 
@@ -74,9 +80,9 @@ public:
       }
       else
       {
-        logging.start_logging_pose();
+        logging->start_logging_pose();
       }
-      logging.start_logging_pm();
+      logging->start_logging_pm();
       configured = true;
     }
     catch (const std::exception &exc)
@@ -88,10 +94,29 @@ public:
 
   bool stop_external_tracking()
   {
-    return localization.stop_external_tracking();
+    return localization->stop_external_tracking();
+  }
+
+  ~Commander() 
+  {
+    if (link->initialized)
+      link->close_link();
+    link.reset();
+    RCLCPP_ERROR(rclcpp::get_logger(tf_name), "Commander deconstr.");
   }
 
 private:
+  void tracking_lost_callback(const std_msgs::msg::String::SharedPtr msg)
+  {
+    if (msg->data == this->tf_name) {
+      RCLCPP_INFO(rclcpp::get_logger(tf_name), "Tracking lost. Shutting down.");
+      hl_commander->send_stop(0);
+      if (auto node_shared = node.lock()) {
+        node_shared->shutdown();
+      }
+    }
+  }
+
   std::string get_tf_name(const std::array<uint8_t, 5> &address)
   {
     std::stringstream ss;
@@ -99,27 +124,18 @@ private:
     return ss.str();
   }
 
-  void tracking_lost_callback(const std_msgs::msg::String::SharedPtr msg)
-  {
-    if (msg->data == this->tf_name) {
-      RCLCPP_INFO(node->get_logger(), "Tracking lost. Shutting down.");
-      hl_commander.send_stop(0);
-      node->shutdown();
-    }
-  }
-
-  std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node;
+  std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr localization_lost_sub;
   std::string tf_name;
 
-  RosLink link;
-  Console console;
-  HighLevelCommander hl_commander;
-  GenericCommander generic_commander;
-  Parameters parameters;
-  Logging logging;
-  Localization localization;
+  std::unique_ptr<RosLink> link;
+  std::unique_ptr<Console> console;
+  std::unique_ptr<HighLevelCommander> hl_commander;
+  std::unique_ptr<GenericCommander> generic_commander;
+  std::unique_ptr<Parameters> parameters;
+  std::unique_ptr<Logging> logging;
+  std::unique_ptr<Localization> localization;
 
 public:
   bool configured;
@@ -131,6 +147,7 @@ class CrazyflieNode : public rclcpp_lifecycle::LifecycleNode
 public:
   CrazyflieNode(const rclcpp::NodeOptions &options)
       : rclcpp_lifecycle::LifecycleNode("crazyflie", options)
+      , commander_initialized(false)
   {
     rcl_interfaces::msg::ParameterDescriptor readonly_descriptor;
     readonly_descriptor.read_only = true;
@@ -183,12 +200,15 @@ public:
     address = {0xE7, 0xE7, 0xE7, 0xE7, id};
   }
 
+  ~CrazyflieNode()
+  {
+    RCLCPP_DEBUG(get_logger(), "Deconstructor called!");
+  }
+
   bool init()
   {
-
     //!!! Makeshared not in constructor
-    auto node_ptr = this->shared_from_this();
-    commander = std::make_unique<Commander>(node_ptr, channel, address, datarate);
+    commander = std::make_unique<Commander>(this->shared_from_this(), channel, address, datarate);
     commander_initialized = true;
     return commander->configured;
   }
@@ -207,7 +227,7 @@ public:
     }
     else
     {
-      RCLCPP_INFO(get_logger(), "Configuring failed!");
+      RCLCPP_DEBUG(get_logger(), "Configuring failed!");
       return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
     }
   }
@@ -242,7 +262,7 @@ public:
 
   void shutdown_cleanly()
   {
-    RCLCPP_DEBUG(get_logger(), "Shutting down cleanly.");
+    RCLCPP_INFO(get_logger(), "Shutting down cleanly.");
     if (commander_initialized)
     {
       if (!commander->stop_external_tracking())
@@ -250,8 +270,6 @@ public:
         RCLCPP_INFO(get_logger(), "Failed stopping external positioning.");
       }
     }
-    rclcpp::shutdown();
-    exit(0);
   }
 
 private:
@@ -280,9 +298,13 @@ int main(int argc, char **argv)
   auto node = std::make_shared<CrazyflieNode>(options);
   rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(node->get_node_base_interface());
-  executor.spin();
+  while (rclcpp::ok() &&  !(node->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_FINALIZED)) executor.spin_some();
   executor.remove_node(node->get_node_base_interface());
   // rclcpp::spin(node->get_node_base_interface());
   rclcpp::shutdown();
   return 0;
 }
+
+
+#include "rclcpp_components/register_node_macro.hpp"
+RCLCPP_COMPONENTS_REGISTER_NODE(CrazyflieNode)
