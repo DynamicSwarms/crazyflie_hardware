@@ -38,7 +38,7 @@ void Logging::start_logging_pose()
     std::vector<std::string> variables = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimateZ.quat"};
     LoggingLogic::add_block(POSE_BLOCK_ID, variables);
 
-    LoggingLogic::start_block(POSE_BLOCK_ID, 10); // 10 Hz
+    LoggingLogic::start_block(POSE_BLOCK_ID, 5); // 20 Hz
 
     if (auto node_shared = node.lock())
     {
