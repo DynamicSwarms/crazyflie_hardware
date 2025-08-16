@@ -37,7 +37,9 @@ void Console::crtp_response_callback(const CrtpPacket &packet)
     }
 }
 
-void Console::console_message(const std::string)
+void Console::console_message(const std::string message)
 {
-    return;
+    auto msg = std_msgs::msg::String();
+    msg.data = message;
+    console_publisher->publish(msg);
 }
