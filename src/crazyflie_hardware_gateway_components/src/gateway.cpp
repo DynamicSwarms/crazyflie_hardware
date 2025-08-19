@@ -50,11 +50,16 @@ public:
   , executor_(executor)
   , crazyflies_()
   {
+    auto service_qos = rmw_qos_profile_services_default;
+    service_qos.depth = 100; // This way it is possible to queue up multiple add requestst
+
     add_service_ = this->create_service<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie>(
-      "~/add_crazyflie", std::bind(&CrazyflieGateway::handle_add_crazyflie, this, std::placeholders::_1, std::placeholders::_2));
+      "~/add_crazyflie", std::bind(&CrazyflieGateway::handle_add_crazyflie, this, std::placeholders::_1, std::placeholders::_2),
+      service_qos);
 
     remove_service_ = this->create_service<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie>(
-      "~/remove_crazyflie", std::bind(&CrazyflieGateway::handle_remove_crazyflie, this, std::placeholders::_1, std::placeholders::_2));
+      "~/remove_crazyflie", std::bind(&CrazyflieGateway::handle_remove_crazyflie, this, std::placeholders::_1, std::placeholders::_2),
+      service_qos);
     
     cleanup_timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),

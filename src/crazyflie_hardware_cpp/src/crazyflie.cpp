@@ -58,8 +58,6 @@ public:
         rclcpp::Parameter set_param(param.first, param.second.get_parameter_value());
         node->set_parameter(set_param);
       }
-      rclcpp::Parameter set_param("kalman.resetEstimation", 1);
-      node->set_parameter(set_param);
 
       int id = node->get_parameter("id").as_int();
       std::vector<double> initial_position = node->get_parameter("initial_position").as_double_array();
@@ -76,7 +74,10 @@ public:
         if (!external_tracking_success)
           throw std::runtime_error("Adding to tracking failed!");
 
-          localization_lost_sub = node->create_subscription<std_msgs::msg::String>("/tracker/object_tracking_lost", 10, std::bind(&Commander::tracking_lost_callback, this, std::placeholders::_1));
+
+        rclcpp::Parameter kalman_reset_param("kalman.resetEstimation", 1);
+        node->set_parameter(kalman_reset_param);
+        localization_lost_sub = node->create_subscription<std_msgs::msg::String>("/tracker/object_tracking_lost", 10, std::bind(&Commander::tracking_lost_callback, this, std::placeholders::_1));
       }
       else
       {
