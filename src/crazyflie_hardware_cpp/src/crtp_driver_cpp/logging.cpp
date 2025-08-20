@@ -53,7 +53,7 @@ void Logging::start_logging_pm()
     std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled"};
     LoggingLogic::add_block(STATE_BLOCK_ID, variables);
 
-    LoggingLogic::start_block(STATE_BLOCK_ID, 100); // 1 Hz
+    LoggingLogic::start_block(STATE_BLOCK_ID, 50); // 2 Hz
 
     if (auto node_shared = node.lock())
     {
