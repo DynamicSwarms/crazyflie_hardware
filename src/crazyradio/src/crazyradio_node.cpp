@@ -184,7 +184,7 @@ private:
         // During this time a packet might get added to the link. There is no way to check for this.
      
         m_links.removeLink(link, callbacks);
-        RCLCPP_WARN(this->get_logger(),"Destroying link: ID: %lX, CH: %d, CC: %ld", link->address, link->channel, callbacks.size());
+        RCLCPP_DEBUG(this->get_logger(),"Destroying link: ID: %lX, CH: %d, CC: %ld", link->address, link->channel, callbacks.size());
         for(auto& callback : callbacks) {
             callback(&packet, false); // Call each callback with nullptr and false (failure)
         }

@@ -49,7 +49,7 @@ public:
       parameters->initialize_parameters();
       logging->initialize_logging();
 
-      RCLCPP_WARN(node->get_logger(), "Setting default Parameters");
+      RCLCPP_DEBUG(node->get_logger(), "Setting default Parameters");
 
       std::map<std::string, rclcpp::Parameter> default_params;
       node->get_node_parameters_interface()->get_parameters_by_prefix("default_firmware_params", default_params);
@@ -69,7 +69,7 @@ public:
 
       if (send_external_position)
       {
-        RCLCPP_WARN(node->get_logger(), "Setting up tracking services.");
+        RCLCPP_DEBUG(node->get_logger(), "Setting up tracking services.");
         bool external_tracking_success = localization->start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
         if (!external_tracking_success)
           throw std::runtime_error("Adding to tracking failed!");
@@ -103,7 +103,6 @@ public:
     if (link->initialized)
       link->close_link();
     link.reset();
-    RCLCPP_ERROR(rclcpp::get_logger(tf_name), "Commander deconstr.");
   }
 
 private:
@@ -220,7 +219,6 @@ public:
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_configure(const rclcpp_lifecycle::State &)
   {
-    RCLCPP_INFO(get_logger(), "Configuring...");
     if (this->init())
     {
       RCLCPP_INFO(get_logger(), "Successfully configured!");
@@ -263,7 +261,7 @@ public:
 
   void shutdown_cleanly()
   {
-    RCLCPP_INFO(get_logger(), "Shutting down cleanly.");
+    RCLCPP_DEBUG(get_logger(), "Shutting down cleanly.");
     if (commander_initialized)
     {
       if (!commander->stop_external_tracking())

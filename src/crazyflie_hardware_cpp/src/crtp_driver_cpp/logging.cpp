@@ -49,7 +49,7 @@ void Logging::start_logging_pose()
 
 void Logging::start_logging_pm()
 {
-    RCLCPP_WARN(rclcpp::get_logger(logger_name), "Starting State logging.");
+    RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Starting State logging.");
     std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled"};
     LoggingLogic::add_block(STATE_BLOCK_ID, variables);
 

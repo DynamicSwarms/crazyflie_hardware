@@ -126,7 +126,6 @@ void RosLink::crtp_link_end_callback(const crtp_interfaces::msg::CrtpLink::Share
         if (auto node_shared = node.lock()) {
             node_shared->shutdown(); // This works only if we are configured.
         }
-        RCLCPP_WARN(rclcpp::get_logger(logger_name), "Made it to here!");
     }
 }
 
