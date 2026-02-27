@@ -181,21 +181,6 @@ void Crazyradio::sendPacket(
         &transferred,
         /*timeout*/ 10);
     
-    if (transferred >= sizeof(result)) {
-        std::cerr << "Received longer response than expected, ignoring extra data. Received " << transferred << " bytes, expected " << sizeof(result) << " bytes." << std::endl;
-        // For debugging: print the received ack data
-        std::cerr << "Out: "; 
-        for (int i = 0; i < length; i++) {
-            std::cerr << std::hex << (int)data[i] << " ";
-        }
-        std::cerr << "| In: ";
-        std::cerr << std::dec << " | ";
-        for (int i = 0; i < transferred; i++) {
-            std::cerr << std::hex << (int)((unsigned char*)&result)[i] << " ";
-        }
-        std::cerr << std::dec << std::endl;
-    }
-
     if (status == LIBUSB_ERROR_TIMEOUT) 
         std::cerr << "USB readback timeout" << std::endl;
     

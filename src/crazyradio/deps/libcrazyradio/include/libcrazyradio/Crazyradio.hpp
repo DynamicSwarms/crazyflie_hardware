@@ -23,8 +23,7 @@ public:
         uint8_t invalid_settings:1;
         uint8_t reserved:1;
         uint8_t retry:4;
-        uint8_t data[31];
-        uint8_t buffer;
+        uint8_t data[32];
     }__attribute__((packed));
 
     enum Datarate
