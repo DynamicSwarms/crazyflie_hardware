@@ -56,19 +56,19 @@ public:
         libcrtp::CrtpPacket * responsePacket);
         
 private:
-    void sendPacket(
-        const uint8_t* data,
-        uint32_t length, 
-        bool ackEnabled,
-        Ack& result
-    );
-
     void sendPacketInline(
         const uint8_t* data,
         uint32_t length, 
         Datarate datarate,
         uint8_t channel,
         uint64_t address,
+        bool ackEnabled,
+        Ack& result
+    );
+
+    void sendPacket(
+        const uint8_t* data,
+        uint32_t length, 
         bool ackEnabled,
         Ack& result
     );

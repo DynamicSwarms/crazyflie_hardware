@@ -5,7 +5,6 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
-#include <bitset>
 
 #include <libusb-1.0/libusb.h>
 namespace libcrazyradio {
@@ -120,6 +119,75 @@ bool Crazyradio::sendCrtpPacket(
     return true;
 }
 
+void Crazyradio::sendPacketInline(
+    const uint8_t* data,
+    uint32_t length, 
+    Datarate datarate,
+    uint8_t channel,
+    uint64_t address,
+    bool ackEnabled,
+    Ack& result
+)
+{
+    uint8_t inlineData[40];
+    inlineData[0] = 8 + length;
+    inlineData[1] = datarate | (ackEnabled << 4);
+    inlineData[2] = channel;
+    inlineData[3] = (address >> 32) & 0xFF;
+    inlineData[4] = (address >> 24) & 0xFF;
+    inlineData[5] = (address >> 16) & 0xFF;
+    inlineData[6] = (address >> 8) & 0xFF;
+    inlineData[7] = (address >> 0) & 0xFF;
+    memcpy(&inlineData[8], data, length);
+
+    sendPacket(inlineData, 8 + length, ackEnabled,result);
+}
+
+void Crazyradio::sendPacket(
+    const uint8_t * data,
+    uint32_t length,
+    bool ackEnabled,
+    Ack& result
+)
+{
+    result.ack = false;
+
+    int status, transferred;
+
+    if (!m_handle) throw std::runtime_error("No valid device handle!");
+
+    status = libusb_bulk_transfer(
+        m_handle, 
+        (0x01 | LIBUSB_ENDPOINT_OUT),
+        (uint8_t *)data,
+        length, 
+        &transferred,
+        /*timeout*/ 100);
+
+    if (status != LIBUSB_SUCCESS) throw std::runtime_error(libusb_error_name(status));
+
+    if (length != (uint32_t)transferred) {
+        std::stringstream sstr;
+        sstr << "Did transfer " << transferred << " but " << length << " was requested!";
+        throw std::runtime_error(sstr.str());
+    }
+
+    // Read result; in inline mode also ackDisabled packets will send a response.
+    status = libusb_bulk_transfer(
+        m_handle,
+        /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),
+        (unsigned char*)&result,
+        sizeof(result),
+        &transferred,
+        /*timeout*/ 10);
+
+    if (status == LIBUSB_ERROR_TIMEOUT) 
+        std::cerr << "USB readback timeout" << std::endl;
+    
+    if (status != LIBUSB_SUCCESS) 
+        std::cerr << "USB readback failed: " << libusb_error_name(status) << std::endl;
+}
+
 void Crazyradio::setPower(Power power)
 {
     sendVendorSetup(SET_RADIO_POWER, power, 0, NULL, 0);
@@ -164,76 +232,6 @@ void Crazyradio::setInlineMode(bool enable)
 {
     sendVendorSetup(SET_INLINE_MODE, enable, 0, NULL, 0);
 }
-
-void Crazyradio::sendPacket(
-    const uint8_t * data,
-    uint32_t length,
-    bool ackEnabled,
-    Ack& result
-)
-{
-    result.ack = false;
-
-    int status, transferred;
-
-    if (!m_handle) throw std::runtime_error("No valid device handle!");
-
-    status = libusb_bulk_transfer(
-        m_handle, 
-        (0x01 | LIBUSB_ENDPOINT_OUT),
-        (uint8_t *)data,
-        length, 
-        &transferred,
-        /*timeout*/ 100);
-
-    if (status != LIBUSB_SUCCESS) throw std::runtime_error(libusb_error_name(status));
-
-    if (length != (uint32_t)transferred) {
-        std::stringstream sstr;
-        sstr << "Did transfer " << transferred << " but " << length << " was requested!";
-        throw std::runtime_error(sstr.str());
-    }
-
-    // Read result; in inline mode also ackDisabled packets will send a response.
-    status = libusb_bulk_transfer(
-        m_handle,
-        /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),
-        (unsigned char*)&result,
-        sizeof(result),
-        &transferred,
-        /*timeout*/ 100);
-
-    if (status == LIBUSB_ERROR_TIMEOUT) 
-        std::cerr << "USB readback timeout" << std::endl;
-    
-    if (status != LIBUSB_SUCCESS) 
-        std::cerr << "USB readback failed." << std::endl;
-}
-
-void Crazyradio::sendPacketInline(
-    const uint8_t* data,
-    uint32_t length, 
-    Datarate datarate,
-    uint8_t channel,
-    uint64_t address,
-    bool ackEnabled,
-    Ack& result
-)
-{
-    uint8_t inlineData[40];
-    inlineData[0] = 8 + length;
-    inlineData[1] = datarate | (ackEnabled << 4);
-    inlineData[2] = channel;
-    inlineData[3] = (address >> 32) & 0xFF;
-    inlineData[4] = (address >> 24) & 0xFF;
-    inlineData[5] = (address >> 16) & 0xFF;
-    inlineData[6] = (address >> 8) & 0xFF;
-    inlineData[7] = (address >> 0) & 0xFF;
-    memcpy(&inlineData[8], data, length);
-
-    sendPacket(inlineData, 8 + length, ackEnabled,result);
-}
-
 
 void Crazyradio::ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet)
 {
