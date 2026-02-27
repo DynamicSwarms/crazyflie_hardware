@@ -20,9 +20,11 @@ public:
         uint8_t total_length; // total length including the header
         uint8_t ack:1;
         uint8_t rssi:1;
-        uint8_t invalid_settings:2;
+        uint8_t invalid_settings:1;
+        uint8_t reserved:1;
         uint8_t retry:4;
         uint8_t data[31];
+        uint8_t buffer;
     }__attribute__((packed));
 
     enum Datarate

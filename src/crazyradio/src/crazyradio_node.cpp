@@ -132,7 +132,7 @@ private:
             }
         }
 
-        m_logger->logCommunication(link, &packet, &responsePacket, sendSuccess,
+        m_logger->logCommunication(link, &packet, &responsePacket, sendSuccess && !link->isBroadcast,
              std::chrono::nanoseconds(get_clock()->now().nanoseconds()));
 
         if (maxPackets > 1
