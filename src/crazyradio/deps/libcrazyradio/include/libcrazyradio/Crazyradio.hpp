@@ -15,15 +15,14 @@ public:
     {
         Ack()
         : ack(0)
-        , size(0)
         {}
 
+        uint8_t total_length; // total length including the header
         uint8_t ack:1;
-        uint8_t powerDet:1;
+        uint8_t rssi:1;
+        uint8_t invalid_settings:2;
         uint8_t retry:4;
-        uint8_t data[32];
-
-        uint8_t size;
+        uint8_t data[31];
     }__attribute__((packed));
 
     enum Datarate
@@ -60,16 +59,19 @@ private:
     void sendPacket(
         const uint8_t* data,
         uint32_t length, 
+        bool ackEnabled,
         Ack& result
     );
 
-    void setToCrtpLink(libcrtp::CrtpLinkIdentifier * link);
-
-    void setChannel(uint8_t channel);
-
-    void setAddress(uint64_t address);
-
-    void setDatarate(Datarate datarate);
+    void sendPacketInline(
+        const uint8_t* data,
+        uint32_t length, 
+        Datarate datarate,
+        uint8_t channel,
+        uint64_t address,
+        bool ackEnabled,
+        Ack& result
+    );
 
     void setPower(Power power);
 
@@ -79,19 +81,11 @@ private:
 
     void setArdBytes(uint8_t nbytes);
 
-    void setAckEnable(bool enable);
-
     void setContCarrier(bool active);
 
+    void setInlineMode(bool enable);
+
     void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
-
-       
-private: 
-    uint8_t m_channel;
-    uint64_t m_address;
-    Datarate m_datarate;
-    bool m_ackEnable;
-
 };
 
 

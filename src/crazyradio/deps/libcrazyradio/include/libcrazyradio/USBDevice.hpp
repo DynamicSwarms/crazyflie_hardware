@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <utility>
 
 // forward declarations
 struct libusb_context;
@@ -29,11 +30,18 @@ protected:
         const unsigned char* data,
         uint16_t length);
 
+public:
+  const std::pair<int, int> version() const
+  {
+    return std::make_pair(m_versionMajor, m_versionMinor);
+  }
+
 protected:
     libusb_context* m_ctx;
     libusb_device_handle *m_handle;
 
-    float m_version;
+    int m_versionMajor;
+    int m_versionMinor;
 
 private:
   uint16_t m_idVendor;

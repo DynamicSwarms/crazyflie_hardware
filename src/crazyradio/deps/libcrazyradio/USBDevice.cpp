@@ -10,7 +10,6 @@ USBDevice::USBDevice(
     uint16_t idProduct)
     : m_ctx(NULL)
     , m_handle(NULL)
-    , m_version(0.0)
     , m_idVendor(idVendor)
     , m_idProduct(idProduct)
 {
@@ -115,9 +114,8 @@ void USBDevice::open(
         if (err != LIBUSB_SUCCESS) {
             throw std::runtime_error(libusb_error_name(err));
         }
-        std::stringstream sstr;
-        sstr << std::hex << (deviceDescriptor.bcdDevice >> 8) << "." << (deviceDescriptor.bcdDevice & 0xFF);
-        sstr >> m_version;
+        m_versionMajor = deviceDescriptor.bcdDevice >> 8;
+        m_versionMinor = deviceDescriptor.bcdDevice & 0xFF;
     }
     libusb_free_device_list(list, 1);
 

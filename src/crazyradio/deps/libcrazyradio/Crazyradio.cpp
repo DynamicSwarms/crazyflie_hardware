@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
+#include <bitset>
 
 #include <libusb-1.0/libusb.h>
 namespace libcrazyradio {
@@ -19,16 +20,12 @@ enum
     ACK_ENABLE          = 0x10,
     SET_CONT_CARRIER    = 0x20,
     SCANN_CHANNELS      = 0x21,
-    START_STOP          = 0x23,
+    SET_INLINE_MODE     = 0x23,
     LAUNCH_BOOTLOADER   = 0xFF,
 };
 
 Crazyradio::Crazyradio() 
-    : USBDevice(0x1915, 0x7777),
-    m_datarate(Datarate_250KPS),
-    m_address(0xDEADBEEF),
-    m_channel(0),
-    m_ackEnable(false) // need to be differnt in order to initially set
+    : USBDevice(0x1915, 0x7777)
 {
     bool success = false;
     std::vector<std::string> errors; // Store errors for potential later use.
@@ -50,29 +47,27 @@ Crazyradio::Crazyradio()
         }
         throw std::runtime_error(combinedError);
     }
-    setDatarate(Datarate_2MPS);
-    setChannel(2);
+    
     setContCarrier(false);
-    setAddress(0xE7E7E7E7E7);
     setPower(Power_0DBM);
     setArc(3);
     setArdBytes(32);
-    setAckEnable(true);
+    
+    const auto version = this->version();
+    const bool is_supported_crazyradio2 = (version.first >= 5 && version.second >= 1) && // Crazyradio 2.0 with first working firmware
+                                          (version.first != 0x99); // but not a Crazyradio PA
+    if (!is_supported_crazyradio2) {
+        throw std::runtime_error("Unsupported Crazyradio version: " + std::to_string(version.first) + "." + std::to_string(version.second) 
+        + "Please use a Crazyradio 2.0 with up to date firmware.");
+    }
 
-    std::cerr << "Crazyradio USB starting; ";
-    #ifdef LEGACY_RADIO
-        std::cerr << "LEGACY_RADIO: ON" << std::endl;
-    #else
-        std::cerr << "LEGACY_RADIO: OFF" << std::endl;
-        sendVendorSetup(START_STOP, 1, 0, NULL, 0); // Send a start command to the radio.
-    #endif
+    setInlineMode(true); 
+
+    std::cerr << "Crazyradio USB initialized with Inline Mode enabled." << std::endl;
 }
 
 Crazyradio::~Crazyradio()
 {   
-    #ifndef LEGACY_RADIO
-        sendVendorSetup(START_STOP, 0, 0, NULL, 0); // Send a stop command to the radio.
-    #endif
     std::cerr << "Crazyradio USB stopped." << std::endl;
 }
 
@@ -83,32 +78,34 @@ bool Crazyradio::sendCrtpPacket(
         libcrtp::CrtpPacket * packet,
         libcrtp::CrtpPacket * responsePacket)
 {   
-    setToCrtpLink(link);
     libcrazyradio::Crazyradio::Ack ack;
 
-    #ifndef LEGACY_RADIO
-        uint8_t data[5 + 32];
-        data[4] = (link->address >> 0) & 0xFF;
-        data[3] = (link->address >> 8) & 0xFF;
-        data[2] = (link->address >> 16) & 0xFF;
-        data[1] = (link->address >> 24) & 0xFF;
-        data[0] = (link->address >> 32) & 0xFF;
-    
-        data[5] = packet->port << 4 | packet->channel;
-        memcpy(&data[6], &packet->data, packet->dataLength);
-        sendPacket(data, 5 + 1 + packet->dataLength, ack);
-    #else
-        uint8_t data[32];
-        data[0] = packet->port << 4 | packet->channel;
-        memcpy(&data[1], &packet->data, packet->dataLength);
-        sendPacket(data, 1 + packet->dataLength, ack);
-    #endif
+    uint8_t data[32];
+    data[0] = packet->port << 4 | packet->channel;
+    memcpy(&data[1], &packet->data, packet->dataLength);
 
+    Datarate datarate;
+    switch (link->datarate)
+    {
+        case 2: datarate = libcrazyradio::Crazyradio::Datarate_2MPS; break;
+        case 1: datarate = libcrazyradio::Crazyradio::Datarate_1MPS; break;
+        default: datarate = libcrazyradio::Crazyradio::Datarate_250KPS; break;
+    }
+
+    sendPacketInline(
+        data,
+        1 + packet->dataLength, 
+        datarate,
+        link->channel,
+        link->address,
+        ! link->isBroadcast,
+        ack
+    );
     
     if (link->isBroadcast) return true;    
     if (!ack.ack) {
         return false;
-    } else if (!ack.size)
+    } else if (ack.total_length < 2) // If acked, there must be at least a nullpacket beeing sent back (channel/port set)
     {
         /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
             *  The message however gets succesfully received by the crazyflie.
@@ -121,77 +118,6 @@ bool Crazyradio::sendCrtpPacket(
     
     ackToCrtpPacket(&ack, responsePacket);
     return true;
-}
-
-void Crazyradio::setToCrtpLink(libcrtp::CrtpLinkIdentifier * link)
-{
-    setChannel(link->channel);
-    setAddress(link->address);
-    setAckEnable(! link->isBroadcast); 
-   
-    switch (link->datarate) 
-    {
-        case 2: 
-            setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_2MPS);
-            break;
-        case 1: 
-            setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_1MPS);
-            break;
-        default: 
-            setDatarate(libcrazyradio::Crazyradio::Datarate::Datarate_250KPS);
-    }  
-}
-
-void Crazyradio::setChannel(uint8_t channel)
-{
-    if (m_channel != channel)
-    {
-        sendVendorSetup(SET_RADIO_CHANNEL, channel, 0, NULL, 0);
-        m_channel = channel;
-    }
-}
-
-void Crazyradio::setAddress(uint64_t address)
-{
-    #ifndef LEGACY_RADIO
-        m_address = address;
-        return; // Now done via the packet to the radio.
-    #endif
-    
-    if (m_address != address) {
-        unsigned char a[5];
-        a[4] = (address >> 0) & 0xFF;
-        a[3] = (address >> 8) & 0xFF;
-        a[2] = (address >> 16) & 0xFF;
-        a[1] = (address >> 24) & 0xFF;
-        a[0] = (address >> 32) & 0xFF;
-
-        //sendVendorSetup(SET_RADIO_ADDRESS, 0, 0, a, 5);
-        // unsigned char a[] = {0xe7, 0xe7, 0xe7, 0xe7, 0x02};
-
-        /*int status = */libusb_control_transfer(
-            m_handle,
-            LIBUSB_REQUEST_TYPE_VENDOR,
-            SET_RADIO_ADDRESS,
-            0,
-            0,
-            a,
-            5,
-            /*timeout*/ 1000);
-         //if (status != LIBUSB_SUCCESS) {
-         //    std::cerr << "sendVendorSetup: " << libusb_error_name(status) << std::endl;
-         //}
-        m_address = address;
-    }
-}
-
-void Crazyradio::setDatarate(Datarate datarate)
-{
-    if (m_datarate != datarate)
-    {
-        sendVendorSetup(SET_DATA_RATE, datarate, 0, NULL, 0);
-        m_datarate = datarate;
-    }
 }
 
 void Crazyradio::setPower(Power power)
@@ -229,34 +155,24 @@ void Crazyradio::setArdBytes(uint8_t nbytes)
     sendVendorSetup(SET_RADIO_ARD, 0x80 | nbytes, 0, NULL, 0);
 }
 
-void Crazyradio::setAckEnable(bool enable)
-{    
-    #ifndef LEGACY_RADIO
-        m_ackEnable = enable;
-        return; // Now done via the packet to the radio.
-    #endif
-
-    if (m_ackEnable != enable) 
-    {
-        sendVendorSetup(ACK_ENABLE, enable, 0, NULL, 0);
-        m_ackEnable = enable;
-    }
-}
-
 void Crazyradio::setContCarrier(bool active)
 {
     sendVendorSetup(SET_CONT_CARRIER, active, 0, NULL, 0);
 }
 
+void Crazyradio::setInlineMode(bool enable)
+{
+    sendVendorSetup(SET_INLINE_MODE, enable, 0, NULL, 0);
+}
 
 void Crazyradio::sendPacket(
     const uint8_t * data,
     uint32_t length,
+    bool ackEnabled,
     Ack& result
 )
 {
     result.ack = false;
-    result.size = 0;
 
     int status, transferred;
 
@@ -278,24 +194,44 @@ void Crazyradio::sendPacket(
         throw std::runtime_error(sstr.str());
     }
 
-    if (m_ackEnable) 
-    {
-        // Read result
-        status = libusb_bulk_transfer(
-            m_handle,
-            /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),
-            (unsigned char*)&result,
-            sizeof(result) - 1,
-            &transferred,
-            /*timeout*/ 100);
-        result.size = transferred - 1;
+    // Read result; in inline mode also ackDisabled packets will send a response.
+    status = libusb_bulk_transfer(
+        m_handle,
+        /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),
+        (unsigned char*)&result,
+        sizeof(result),
+        &transferred,
+        /*timeout*/ 100);
 
-        if (status == LIBUSB_ERROR_TIMEOUT) 
-            std::cerr << "USB readback timeout" << std::endl;
-        
-        if (status != LIBUSB_SUCCESS) 
-            std::cerr << "USB readback failed." << std::endl;
-    }
+    if (status == LIBUSB_ERROR_TIMEOUT) 
+        std::cerr << "USB readback timeout" << std::endl;
+    
+    if (status != LIBUSB_SUCCESS) 
+        std::cerr << "USB readback failed." << std::endl;
+}
+
+void Crazyradio::sendPacketInline(
+    const uint8_t* data,
+    uint32_t length, 
+    Datarate datarate,
+    uint8_t channel,
+    uint64_t address,
+    bool ackEnabled,
+    Ack& result
+)
+{
+    uint8_t inlineData[40];
+    inlineData[0] = 8 + length;
+    inlineData[1] = datarate | (ackEnabled << 4);
+    inlineData[2] = channel;
+    inlineData[3] = (address >> 32) & 0xFF;
+    inlineData[4] = (address >> 24) & 0xFF;
+    inlineData[5] = (address >> 16) & 0xFF;
+    inlineData[6] = (address >> 8) & 0xFF;
+    inlineData[7] = (address >> 0) & 0xFF;
+    memcpy(&inlineData[8], data, length);
+
+    sendPacket(inlineData, 8 + length, ackEnabled,result);
 }
 
 
@@ -303,9 +239,9 @@ void Crazyradio::ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet)
 {
     packet->port = (libcrtp::CrtpPort)((ack->data[0] >> 4) & 0xF);
     packet->channel = ack->data[0] & 0b11;
-    for (int i = 0; i < ack->size; i++) 
-        packet->data[i] = ack->data[i+1];
-    packet->dataLength = ack->size -1;
+    for (int i = 0; i < ack->total_length - 3; i++) // total_length includes the header (2bytes) and channel/port byte
+        packet->data[i] = ack->data[i + 1];
+    packet->dataLength = ack->total_length - 3;
 }
 
 
