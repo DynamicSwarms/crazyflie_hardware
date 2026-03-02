@@ -10,7 +10,6 @@ data_files.append(
 data_files.append(
     ("share/" + package_name + "/launch", ["launch/crazyradio.launch.py"])
 )
-data_files.append(("share/" + package_name + "/launch", ["launch/crazy.launch.py"]))
 
 setup(
     name=package_name,

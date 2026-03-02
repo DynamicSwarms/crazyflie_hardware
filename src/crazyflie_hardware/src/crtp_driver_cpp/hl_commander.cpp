@@ -1,48 +1,71 @@
 #include "crazyflie_hardware/crtp_driver_cpp/hl_commander.hpp"
+
 using std::placeholders::_1;
+using std::placeholders::_2;
 
-HighLevelCommander::HighLevelCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)
+HighLevelCommander::HighLevelCommander(
+    std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface, 
+    std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
+    CrtpLink * link)
     : HighLevelCommanderLogic(link)
-    , logger_name(node->get_name())
+    , m_logging_interface(node_logging_interface)
+    , m_callback_group(node_base_interface->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive))
 {
-    callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    auto sub_opt = rclcpp::SubscriptionOptions();
-    sub_opt.callback_group = callback_group;
+    (void)node_topics_interface;
 
-    land_sub = node->create_subscription<crazyflie_interfaces::msg::Land>(
+    m_land_service = rclcpp::create_service<crazyflie_interfaces::srv::Land>(
+        node_base_interface,
+        node_services_interface,
         "~/land",
-        10,
-        std::bind(&HighLevelCommander::land_callback, this, _1),
-        sub_opt);
+        std::bind(&HighLevelCommander::land_service, this, _1, _2),
+        rmw_qos_profile_services_default,
+        m_callback_group
+    );
 
-    takeoff_sub = node->create_subscription<crazyflie_interfaces::msg::Takeoff>(
+    m_takeoff_service = rclcpp::create_service<crazyflie_interfaces::srv::Takeoff>(
+        node_base_interface,
+        node_services_interface,
         "~/takeoff",
-        10,
-        std::bind(&HighLevelCommander::takeoff_callback, this, _1),
-        sub_opt);
+        std::bind(&HighLevelCommander::takeoff_service, this, _1, _2),
+        rmw_qos_profile_services_default,
+        m_callback_group
+    );
 
-    goto_sub = node->create_subscription<crazyflie_interfaces::msg::GoTo>(
+    m_goto_service = rclcpp::create_service<crazyflie_interfaces::srv::GoTo>(
+        node_base_interface,
+        node_services_interface,
         "~/go_to",
-        10,
-        std::bind(&HighLevelCommander::goto_callback, this, _1),
-        sub_opt);
+        std::bind(&HighLevelCommander::goto_service, this, _1, _2),
+        rmw_qos_profile_services_default,
+        m_callback_group
+    );
 
-    RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "High Level Commander initialized");
+
+    RCLCPP_DEBUG(node_logging_interface->get_logger(), "High Level Commander initialized");
 };
 
-void HighLevelCommander::land_callback(const crazyflie_interfaces::msg::Land::SharedPtr msg)
+void HighLevelCommander::land_service(
+    const crazyflie_interfaces::srv::Land::Request::SharedPtr request, 
+    crazyflie_interfaces::srv::Land::Response::SharedPtr response)
 {
-    HighLevelCommanderLogic::send_land(msg->height, (double)(msg->duration.sec + msg->duration.nanosec * 1e-9), msg->group_mask, msg->yaw);
+    (void)response;
+    HighLevelCommanderLogic::send_land(request->height, (double)(request->duration.sec + request->duration.nanosec * 1e-9), request->group_mask, request->yaw);
 }
 
-void HighLevelCommander::takeoff_callback(const crazyflie_interfaces::msg::Takeoff::SharedPtr msg)
+void HighLevelCommander::takeoff_service(
+    const crazyflie_interfaces::srv::Takeoff::Request::SharedPtr request, 
+    crazyflie_interfaces::srv::Takeoff::Response::SharedPtr response)
 {
-
-    HighLevelCommanderLogic::send_takeoff(msg->height, (double)(msg->duration.sec + msg->duration.nanosec * 1e-9), msg->group_mask, msg->yaw);
+    (void)response;
+    HighLevelCommanderLogic::send_takeoff(request->height, (double)(request->duration.sec + request->duration.nanosec * 1e-9), request->group_mask, request->yaw);
 }
 
-void HighLevelCommander::goto_callback(const crazyflie_interfaces::msg::GoTo::SharedPtr msg)
+void HighLevelCommander::goto_service(
+    const crazyflie_interfaces::srv::GoTo::Request::SharedPtr request, 
+    crazyflie_interfaces::srv::GoTo::Response::SharedPtr response)
 {
-
-    HighLevelCommanderLogic::send_go_to(msg->goal.x, msg->goal.y, msg->goal.z, msg->yaw, (double)(msg->duration.sec + msg->duration.nanosec * 1e-9), msg->relative, msg->group_mask);
+    (void)response;
+    HighLevelCommanderLogic::send_go_to(request->goal.x, request->goal.y, request->goal.z, request->yaw, (double)(request->duration.sec + request->duration.nanosec * 1e-9), request->relative, request->group_mask);
 }

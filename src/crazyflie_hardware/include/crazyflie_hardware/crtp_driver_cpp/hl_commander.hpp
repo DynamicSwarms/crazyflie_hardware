@@ -1,29 +1,43 @@
 
 
 #include "rclcpp/rclcpp.hpp"
+
 #include "crtp_cpp/logic/hl_commander_logic.hpp"
-#include "crazyflie_interfaces/msg/takeoff.hpp"
-#include "crazyflie_interfaces/msg/land.hpp"
-#include "crazyflie_interfaces/msg/go_to.hpp"
-#include "rclcpp_lifecycle/lifecycle_node.hpp"
+
+#include "crazyflie_interfaces/srv/takeoff.hpp"
+#include "crazyflie_interfaces/srv/land.hpp"
+#include "crazyflie_interfaces/srv/go_to.hpp"
 
 
 class HighLevelCommander : public HighLevelCommanderLogic {
 public:
-    HighLevelCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link);
+    HighLevelCommander(
+        std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface, 
+        std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
+        CrtpLink * link);
 private: 
 
-    void land_callback(const crazyflie_interfaces::msg::Land::SharedPtr msg);
-    void takeoff_callback(const crazyflie_interfaces::msg::Takeoff::SharedPtr msg);
-    void goto_callback(const crazyflie_interfaces::msg::GoTo::SharedPtr msg);
+    void land_service(
+        const crazyflie_interfaces::srv::Land::Request::SharedPtr request, 
+        crazyflie_interfaces::srv::Land::Response::SharedPtr response);
+
+    void takeoff_service(
+        const crazyflie_interfaces::srv::Takeoff::Request::SharedPtr request, 
+        crazyflie_interfaces::srv::Takeoff::Response::SharedPtr response);
+
+    void goto_service(
+        const crazyflie_interfaces::srv::GoTo::Request::SharedPtr request, 
+        crazyflie_interfaces::srv::GoTo::Response::SharedPtr response);
     
 
 private: 
-    std::string logger_name;
+    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> m_logging_interface;
 
-    rclcpp::CallbackGroup::SharedPtr callback_group; 
+    rclcpp::CallbackGroup::SharedPtr m_callback_group; 
 
-    rclcpp::Subscription<crazyflie_interfaces::msg::Land>::SharedPtr land_sub;
-    rclcpp::Subscription<crazyflie_interfaces::msg::Takeoff>::SharedPtr takeoff_sub;
-    rclcpp::Subscription<crazyflie_interfaces::msg::GoTo>::SharedPtr goto_sub;
+    std::shared_ptr<rclcpp::Service<crazyflie_interfaces::srv::Land>> m_land_service;
+    std::shared_ptr<rclcpp::Service<crazyflie_interfaces::srv::Takeoff>> m_takeoff_service;
+    std::shared_ptr<rclcpp::Service<crazyflie_interfaces::srv::GoTo>> m_goto_service;
 };

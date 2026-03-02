@@ -25,9 +25,10 @@ void LoggingLogic::reset() {
     link->send_packet(packer.reset());
 }
 
-void LoggingLogic::add_block(int id, const std::vector<std::string>& variables) {
+bool
+LoggingLogic::add_block(int id, const std::vector<std::string>& variables) {
     std::vector<std::pair<uint8_t, uint16_t>> vars;
-    blocks[id] = std::vector<LogTocEntry>();
+    auto block_entries = std::vector<LogTocEntry>();
 
     for (const auto& variable_name : variables) {
         size_t dot = variable_name.find('.');
@@ -36,16 +37,24 @@ void LoggingLogic::add_block(int id, const std::vector<std::string>& variables) 
             std::string group = variable_name.substr(0, dot);
             std::string name = variable_name.substr(dot + 1);
 
+            bool found = false;
             for (const auto& entry : LoggingLogic::toc_entries) {
                 if (entry.group == group && entry.name == name) {
                     vars.push_back({entry.type, entry.id});
-                    blocks[id].push_back(entry);
+                    block_entries.push_back(entry);
+                    found = true;
+                    break;
                 }
-            } // else "Error: Element not found for variable"
+            } 
+            if (!found) {
+                return false; // "Error: Variable not found in TOC"
+            }
         }
     }    
     
     link->send_packet(packer.create_block(id, vars));
+    blocks[id] = block_entries;
+    return true;
 }
 
 std::vector<float> LoggingLogic::unpack_block(int block_id, const std::vector<uint8_t>& data) {

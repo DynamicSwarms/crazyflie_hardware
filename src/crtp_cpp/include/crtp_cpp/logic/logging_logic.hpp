@@ -19,7 +19,7 @@ public:
 
     void start_block(int id, int period_ms_d10);
     void stop_block(int id);
-    void add_block(int id, const std::vector<std::string>& variables);
+    bool add_block(int id, const std::vector<std::string>& variables);
     void reset();
 
     std::vector<float> unpack_block(int block_id, const std::vector<uint8_t>& data);

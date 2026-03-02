@@ -9,7 +9,7 @@
 #include "crtp_cpp/packer/crtp_packer.hpp"
 
 
-#include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
+#include "crazyflie_hardware/crtp_link_ros.hpp"
 
 #include <map>
 #include <string>

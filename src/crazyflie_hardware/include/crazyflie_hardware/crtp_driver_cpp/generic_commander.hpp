@@ -2,25 +2,32 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "crtp_cpp/logic/generic_commander_logic.hpp"
-#include "crazyflie_interfaces/msg/notify_setpoints_stop.hpp"
+
 #include "crazyflie_interfaces/msg/position.hpp"
-#include "rclcpp_lifecycle/lifecycle_node.hpp"
+#include "crazyflie_interfaces/srv/notify_setpoints_stop.hpp"
 
 
 class GenericCommander : public GenericCommanderLogic {
 public:
-    GenericCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link);
+    GenericCommander(
+        std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface, 
+        std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface, 
+        std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
+        CrtpLink * link);
 private: 
 
-    void notify_setpoints_stop_callback(const crazyflie_interfaces::msg::NotifySetpointsStop::SharedPtr msg);
     void cmd_position_callback(const crazyflie_interfaces::msg::Position::SharedPtr msg);
     
+    void notify_setpoints_stop_service(
+        const crazyflie_interfaces::srv::NotifySetpointsStop::Request::SharedPtr request, 
+        crazyflie_interfaces::srv::NotifySetpointsStop::Response::SharedPtr response);
 
 private: 
-    std::string logger_name;
+    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> m_logging_interface;
 
-    rclcpp::CallbackGroup::SharedPtr callback_group; 
+    rclcpp::CallbackGroup::SharedPtr m_callback_group; 
 
-    rclcpp::Subscription<crazyflie_interfaces::msg::NotifySetpointsStop>::SharedPtr notify_setpoints_stop_sub;
-    rclcpp::Subscription<crazyflie_interfaces::msg::Position>::SharedPtr cmd_position_sub;
+    std::shared_ptr<rclcpp::Subscription<crazyflie_interfaces::msg::Position>> m_cmd_position_sub;
+    std::shared_ptr<rclcpp::Service<crazyflie_interfaces::srv::NotifySetpointsStop>> m_notify_setpoints_stop_service;
 };

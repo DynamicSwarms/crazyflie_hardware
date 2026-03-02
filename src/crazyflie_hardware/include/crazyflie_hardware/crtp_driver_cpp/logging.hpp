@@ -3,18 +3,28 @@
 #include "rclcpp/rclcpp.hpp"
 #include "crtp_cpp/logic/logging_logic.hpp"
 
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/logblock.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/logblock.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
-#include "crazyflie_interfaces/msg/generic_log_data.hpp"
+#include "crazyflie_interfaces/msg/log_data_generic.hpp"
 #include "crazyflie_interfaces/msg/pose_stamped_array.hpp"
-#include "crazyflie_interfaces/msg/log_block.hpp"
+
+#include "crazyflie_interfaces/srv/add_logging.hpp"
+#include "crazyflie_interfaces/srv/remove_logging.hpp"
 
 #include "std_msgs/msg/empty.hpp"
 
 class Logging : public LoggingLogic {
 public:
-    Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link);
+    Logging(
+        std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node,
+        std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface, 
+        std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface, 
+        std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeTimersInterface> node_timers_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeClockInterface> node_clock_interface,
+        CrtpLink * link);
 
     void initialize_logging();
 
@@ -26,7 +36,19 @@ private:
     void download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg);
     void get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg);
 
-    void m_create_log_block(const crazyflie_interfaces::msg::LogBlock::SharedPtr msg);
+    void m_add_log_block_service(
+        const std::shared_ptr<crazyflie_interfaces::srv::AddLogging::Request> request,
+        std::shared_ptr<crazyflie_interfaces::srv::AddLogging::Response> response
+    );
+
+    void m_remove_log_block_service(
+        const std::shared_ptr<crazyflie_interfaces::srv::RemoveLogging::Request> request,
+        std::shared_ptr<crazyflie_interfaces::srv::RemoveLogging::Response> response
+    );
+
+    bool m_create_log_block(
+        const std::string &block_name,
+        const std::vector<std::string> &variables);
 
     void crtp_response_callback(const CrtpPacket&  packet) override; 
 
@@ -41,21 +63,28 @@ private:
 
 
 private: 
-    std::string logger_name;
-    std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
+    std::weak_ptr<rclcpp_lifecycle::LifecycleNode> m_node;
+    std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> m_base_interface;
+    std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> m_topics_interface;
+    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> m_logging_interface;
+    std::shared_ptr<rclcpp::node_interfaces::NodeTimersInterface> m_timers_interface;
+    std::shared_ptr<rclcpp::node_interfaces::NodeClockInterface> m_clock_interface;
 
 
-    rclcpp::CallbackGroup::SharedPtr callback_group; 
+    rclcpp::CallbackGroup::SharedPtr m_callback_group; 
 
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr downdload_toc_sub;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr get_toc_info_sub;
-    rclcpp::Subscription<crazyflie_interfaces::msg::LogBlock>::SharedPtr m_create_log_block_sub;
+    
+    std::shared_ptr<rclcpp::Service<crazyflie_interfaces::srv::AddLogging>> m_add_log_block_server;
+    std::shared_ptr<rclcpp::Service<crazyflie_interfaces::srv::RemoveLogging>> m_remove_log_block_server;
 
     bool log_state;
     bool log_pose;
-    rclcpp::Publisher<crazyflie_interfaces::msg::GenericLogData>::SharedPtr log_state_pub;
+    rclcpp::Publisher<crazyflie_interfaces::msg::LogDataGeneric>::SharedPtr log_state_pub;
     rclcpp::Publisher<crazyflie_interfaces::msg::PoseStampedArray>::SharedPtr log_pose_pub;
 
     uint8_t next_log_block_id = 2;
     std::map<int, std::shared_ptr<LogBlock>> m_log_blocks;
+    std::map<std::string, int> m_log_block_ids;
 };  

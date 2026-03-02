@@ -11,13 +11,13 @@
 #include "crtp_cpp/logic/hl_commander_logic.hpp"
 #include "crtp_cpp/logic/console_logic.hpp"
 
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/hl_commander.hpp"
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/generic_commander.hpp"
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/parameters.hpp"
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/logging.hpp"
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/console.hpp"
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/localization.hpp"
-#include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/hl_commander.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/generic_commander.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/parameters.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/logging.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/console.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/localization.hpp"
+#include "crazyflie_hardware/crtp_link_ros.hpp"
 // #include "crtp_cpp/logic/link_layer_logic.hpp"
 
 class Commander
@@ -26,8 +26,8 @@ public:
 // 
   Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate)
       : node(node)
-      , link(std::make_unique<RosLink>(node, channel, address, datarate))
       , tf_name(get_tf_name(address))
+      , link(std::make_unique<RosLink>(node, channel, address, datarate))
       , configured(false)
   {
     try
@@ -38,10 +38,28 @@ public:
       
       // Create submodules
       console = std::make_unique<Console>(node, link.get());
-      hl_commander = std::make_unique<HighLevelCommander>(node, link.get());
-      generic_commander = std::make_unique<GenericCommander>(node, link.get());
+      hl_commander = std::make_unique<HighLevelCommander>(
+        node->get_node_base_interface(),
+        node->get_node_topics_interface(),
+        node->get_node_services_interface(),
+        node->get_node_logging_interface(),
+        link.get());
+      generic_commander = std::make_unique<GenericCommander>(
+        node->get_node_base_interface(),
+        node->get_node_topics_interface(),
+        node->get_node_services_interface(),       
+        node->get_node_logging_interface(),
+        link.get());
       parameters = std::make_unique<Parameters>(node, link.get());
-      logging = std::make_unique<Logging>(node, link.get());
+      logging = std::make_unique<Logging>(
+        node,
+        node->get_node_base_interface(),
+        node->get_node_topics_interface(),
+        node->get_node_services_interface(),
+        node->get_node_logging_interface(),
+        node->get_node_timers_interface(),
+        node->get_node_clock_interface(),
+        link.get());
       localization = std::make_unique<Localization>(node, link.get(), tf_name);
 
 
