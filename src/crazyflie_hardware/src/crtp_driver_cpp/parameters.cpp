@@ -1,4 +1,4 @@
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/parameters.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/parameters.hpp"
 using std::placeholders::_1;
 
 Parameters::Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)

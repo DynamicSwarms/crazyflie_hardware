@@ -1,4 +1,4 @@
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/generic_commander.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/generic_commander.hpp"
 using std::placeholders::_1;
 
 GenericCommander::GenericCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)

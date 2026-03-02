@@ -1,4 +1,4 @@
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/logblock.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/logblock.hpp"
 
 LogBlock::LogBlock(
     std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,

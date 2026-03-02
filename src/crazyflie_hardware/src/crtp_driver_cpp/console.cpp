@@ -1,4 +1,4 @@
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/console.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/console.hpp"
 using std::placeholders::_1;
 
 Console::Console(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)

@@ -1,4 +1,4 @@
-#include "crazyflie_hardware_cpp/crtp_driver_cpp/hl_commander.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/hl_commander.hpp"
 using std::placeholders::_1;
 
 HighLevelCommander::HighLevelCommander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)

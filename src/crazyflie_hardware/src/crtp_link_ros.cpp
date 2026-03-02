@@ -1,4 +1,4 @@
-#include "crazyflie_hardware_cpp/crtp_link_ros.hpp"
+#include "crazyflie_hardware/crtp_link_ros.hpp"
 #include <iostream>
 #include <chrono>
 using std::placeholders::_1;
