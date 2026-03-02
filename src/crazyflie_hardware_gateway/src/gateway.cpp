@@ -65,7 +65,7 @@ public:
       std::chrono::milliseconds(100),
       std::bind(&CrazyflieGateway::cleanup_callback, this));
   
-    factory_ = create_component_factory("crazyflie_hardware_cpp", "CrazyflieNode");
+    factory_ = create_component_factory("crazyflie_hardware", "CrazyflieNode");
 
     RCLCPP_INFO(get_logger(), "Crazyflie Gateway ready.");
   }
