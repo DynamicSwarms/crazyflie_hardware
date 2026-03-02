@@ -29,6 +29,12 @@ Logging::Logging(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink
         std::bind(&Logging::get_toc_info_callback, this, _1),
         sub_opt);
 
+    m_create_log_block_sub = node->create_subscription<crazyflie_interfaces::msg::LogBlock>(
+        "~/create_log_block",
+        10,
+        std::bind(&Logging::m_create_log_block, this, _1),
+        sub_opt);
+
     RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Logging  initialized");
 }
 
@@ -60,6 +66,30 @@ void Logging::start_logging_pm()
         log_state_pub = node_shared->create_publisher<crazyflie_interfaces::msg::GenericLogData>("~/state", 10);
         log_state = true;
     }
+}
+
+void Logging::m_create_log_block(const crazyflie_interfaces::msg::LogBlock::SharedPtr msg)
+{
+    std::vector<std::string> variables = msg->variables;
+    std::string name = msg->name;
+
+    if (auto node_shared = node.lock())
+    {
+        m_log_blocks[next_log_block_id] = std::make_shared<LogBlock>(
+            node_shared->get_node_base_interface(),
+            node_shared->get_node_topics_interface(),
+            node_shared->get_node_logging_interface(),
+            node_shared->get_node_timers_interface(),
+            callback_group,
+            name,
+            std::bind(&Logging::m_start_logging_block, this, next_log_block_id, std::placeholders::_1),
+            std::bind(&Logging::m_stop_logging_block, this, next_log_block_id)
+        );
+        LoggingLogic::add_block(next_log_block_id, variables);
+        next_log_block_id++;
+    }
+
+    RCLCPP_INFO(rclcpp::get_logger(logger_name), "Created log block with name: %s", msg->name.c_str());
 }
 
 void Logging::crtp_response_callback(const CrtpPacket &packet)
@@ -117,6 +147,10 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
             posearray.poses.push_back(pose);
 
             log_pose_pub->publish(posearray);
+        }
+        if (m_log_blocks.count(block_id))
+        {
+            m_log_blocks[block_id]->m_publish_log_data(double_values);
         }
         // if (values.size()) RCLCPP_WARN(rclcpp::get_logger(logger_name), "LogBlock ID:%d , %f", block_id, values[0]);
     }
