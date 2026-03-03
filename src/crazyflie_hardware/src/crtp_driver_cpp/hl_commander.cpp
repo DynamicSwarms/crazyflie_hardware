@@ -10,7 +10,7 @@ HighLevelCommander::HighLevelCommander(
     std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
     CrtpLink * link)
     : HighLevelCommanderLogic(link)
-    , m_logging_interface(node_logging_interface)
+    , m_logger(node_logging_interface->get_logger().get_child("HighLevelCommander"))
     , m_callback_group(node_base_interface->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive))
 {
     (void)node_topics_interface;
@@ -43,7 +43,7 @@ HighLevelCommander::HighLevelCommander(
     );
 
 
-    RCLCPP_DEBUG(node_logging_interface->get_logger(), "High Level Commander initialized");
+    RCLCPP_DEBUG(m_logger, "High Level Commander initialized");
 };
 
 void HighLevelCommander::land_service(

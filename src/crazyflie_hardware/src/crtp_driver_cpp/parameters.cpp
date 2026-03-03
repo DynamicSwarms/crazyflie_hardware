@@ -1,28 +1,35 @@
 #include "crazyflie_hardware/crtp_driver_cpp/parameters.hpp"
 using std::placeholders::_1;
 
-Parameters::Parameters(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink *link)
+Parameters::Parameters(
+    std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> node_parameters_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
+    CrtpLink *link)
     : ParametersLogic(link, std::string("mein_pfad"))
-    , node(node)
-    , logger_name(node->get_name())
+    , m_parameters_interface(node_parameters_interface)
+    , m_logger(node_logging_interface->get_logger().get_child("Parameters"))
+    , m_callback_group(node_base_interface->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive))
 {
-    callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_opt = rclcpp::SubscriptionOptions();
-    sub_opt.callback_group = callback_group;
+    sub_opt.callback_group = m_callback_group;
 
-    downdload_toc_sub = node->create_subscription<std_msgs::msg::Empty>(
+    m_downdload_toc_sub = rclcpp::create_subscription<std_msgs::msg::Empty>(
+        node_topics_interface,
         "~/download_parameters_toc",
         10,
-        std::bind(&Parameters::download_toc_callback, this, _1),
+        std::bind(&Parameters::m_download_toc_callback, this, _1),
         sub_opt);
 
-    get_toc_info_sub = node->create_subscription<std_msgs::msg::Empty>(
+    m_get_toc_info_sub = rclcpp::create_subscription<std_msgs::msg::Empty>(
+        node_topics_interface,
         "~/get_parameters_toc_info",
         10,
-        std::bind(&Parameters::get_toc_info_callback, this, _1),
+        std::bind(&Parameters::m_get_toc_info_callback, this, _1),
         sub_opt);
 
-    RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Parameters  initialized");
+    RCLCPP_DEBUG(m_logger, "Parameters  initialized");
 }
 
 void Parameters::initialize_parameters()
@@ -37,19 +44,19 @@ void Parameters::initialize_parameters()
         ss << group << "." << name;
         if (entry.isInteger())
         {
-            if (auto node_shared = node.lock()) node_shared->declare_parameter(ss.str(), rclcpp::PARAMETER_INTEGER);
+            m_parameters_interface->declare_parameter(ss.str(), rclcpp::PARAMETER_INTEGER);
         }
         else if (entry.isDouble())
         {
-            if (auto node_shared = node.lock()) node_shared->declare_parameter(ss.str(), rclcpp::PARAMETER_DOUBLE);
+            m_parameters_interface->declare_parameter(ss.str(), rclcpp::PARAMETER_DOUBLE);
         }
     }
-    if (auto node_shared = node.lock()) {
-        param_callback_handle = node_shared->add_on_set_parameters_callback(std::bind(&Parameters::set_parameter_callback, this, std::placeholders::_1));    
-    }
+    
+    m_param_callback_handle = m_parameters_interface->add_on_set_parameters_callback(std::bind(&Parameters::m_set_parameter_callback, this, std::placeholders::_1));    
+    
 }
 
-rcl_interfaces::msg::SetParametersResult Parameters::set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters)
+rcl_interfaces::msg::SetParametersResult Parameters::m_set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters)
 {
     // This gets called if a parameter gets set. We want to set it on the crazyflie as well.
 
@@ -68,11 +75,11 @@ rcl_interfaces::msg::SetParametersResult Parameters::set_parameter_callback(cons
 
             if (param.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER)
             {
-                result.successful = send_set_parameter(group, name, std::variant<int, double>((int)param.as_int()));
+                result.successful = ParametersLogic::send_set_parameter(group, name, std::variant<int, double>((int)param.as_int()));
             }
             else if (param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE)
             {
-                result.successful = send_set_parameter(group, name, std::variant<int, double>(param.as_double()));
+                result.successful = ParametersLogic::send_set_parameter(group, name, std::variant<int, double>(param.as_double()));
             }
         }
 
@@ -82,8 +89,9 @@ rcl_interfaces::msg::SetParametersResult Parameters::set_parameter_callback(cons
     return result;
 }
 
-void Parameters::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg)
+void Parameters::m_download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {
+    (void)msg;
     ParametersLogic::send_download_toc_items();
     ParametersLogic::write_to_file();
 
@@ -92,8 +100,9 @@ void Parameters::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg
     // RCLCPP_WARN(node->get_logger(), "%d", success);
 }
 
-void Parameters::get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg)
+void Parameters::m_get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {
+    (void)msg;
     auto [nbr_of_items, crc] = ParametersLogic::send_get_toc_info();
-    RCLCPP_WARN(rclcpp::get_logger(logger_name), "%d, %X", nbr_of_items, crc);
+    RCLCPP_WARN(m_logger, "%d, %X", nbr_of_items, crc);
 }

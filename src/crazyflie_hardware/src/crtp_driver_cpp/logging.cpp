@@ -20,7 +20,7 @@ Logging::Logging(
     , m_node(node)
     , m_base_interface(node_base_interface)
     , m_topics_interface(node_topics_interface)
-    , m_logging_interface(node_logging_interface)
+    , m_logger(node_logging_interface->get_logger().get_child("Logging"))
     , m_timers_interface(node_timers_interface)
     , m_clock_interface(node_clock_interface)
     , m_callback_group(node_base_interface->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive))
@@ -63,12 +63,12 @@ Logging::Logging(
         m_callback_group
     );
 
-    RCLCPP_DEBUG(m_logging_interface->get_logger(), "Logging  initialized");
+    RCLCPP_DEBUG(m_logger, "Logging  initialized");
 }
 
 void Logging::start_logging_pose()
 {
-    RCLCPP_WARN(m_logging_interface->get_logger(), "Starting Pose logging.");
+    RCLCPP_WARN(m_logger, "Starting Pose logging.");
     std::vector<std::string> variables = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimateZ.quat"};
     LoggingLogic::add_block(POSE_BLOCK_ID, variables);
     LoggingLogic::start_block(POSE_BLOCK_ID, 5); // 20 Hz
@@ -86,7 +86,7 @@ void Logging::start_logging_pose()
 
 void Logging::start_logging_pm()
 {
-    RCLCPP_DEBUG(m_logging_interface->get_logger(), "Starting State logging.");
+    RCLCPP_DEBUG(m_logger, "Starting State logging.");
     std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled"};
     LoggingLogic::add_block(STATE_BLOCK_ID, variables);
 
@@ -109,19 +109,19 @@ Logging::m_add_log_block_service(
     std::shared_ptr<crazyflie_interfaces::srv::AddLogging::Response> response
 )
 {
-    RCLCPP_INFO(m_logging_interface->get_logger(), "Received request to add log block: %s", request->topic_name.c_str());
+    RCLCPP_INFO(m_logger, "Received request to add log block: %s", request->topic_name.c_str());
     if (m_create_log_block(request->topic_name, request->vars))
     {
         int period_ms_d10 = 1000 / request->frequency;
         period_ms_d10 /= 10; // convert ms to d10ms
         LoggingLogic::start_block(next_log_block_id - 1, period_ms_d10);
         response->success = true;
-        RCLCPP_INFO(m_logging_interface->get_logger(), "Successfully created log block: %s", request->topic_name.c_str());
+        RCLCPP_INFO(m_logger, "Successfully created log block: %s", request->topic_name.c_str());
     }
     else
     {
         response->success = false;
-        RCLCPP_ERROR(m_logging_interface->get_logger(), "Failed to create log block: %s.");
+        RCLCPP_ERROR(m_logger, "Failed to create log block: %s.", request->topic_name.c_str());
     }
 }
 
@@ -131,7 +131,7 @@ Logging::m_remove_log_block_service(
     std::shared_ptr<crazyflie_interfaces::srv::RemoveLogging::Response> response
 )
 {
-    RCLCPP_INFO(m_logging_interface->get_logger(), "Received request to remove log block: %s", request->topic_name.c_str());
+    RCLCPP_INFO(m_logger, "Received request to remove log block: %s", request->topic_name.c_str());
     if (m_log_block_ids.count(request->topic_name)) {
         LoggingLogic::stop_block(m_log_block_ids[request->topic_name]);
         m_log_blocks.erase(m_log_block_ids[request->topic_name]);
@@ -149,20 +149,20 @@ Logging::m_create_log_block(
 {   
     if (m_log_block_ids.count(block_name))
     {
-        RCLCPP_ERROR(m_logging_interface->get_logger(), "Log block with name: %s already exists.", block_name.c_str());
+        RCLCPP_ERROR(m_logger, "Log block with name: %s already exists.", block_name.c_str());
         return false;
     }
 
     if (!LoggingLogic::add_block(next_log_block_id, variables))
     {
-        RCLCPP_ERROR(m_logging_interface->get_logger(), "Failed to create log block with name: %s. Variable not found in TOC.", block_name.c_str());
+        RCLCPP_ERROR(m_logger, "Failed to create log block with name: %s. Variable not found in TOC.", block_name.c_str());
         return false;
     }
 
     m_log_blocks[next_log_block_id] = std::make_shared<LogBlock>(
         m_base_interface,
         m_topics_interface,
-        m_logging_interface,
+        m_logger,
         m_timers_interface,
         m_callback_group,
         block_name
@@ -171,14 +171,14 @@ Logging::m_create_log_block(
     next_log_block_id++;
 
     return true;
-    RCLCPP_INFO(m_logging_interface->get_logger(), "Created log block with name: %s", block_name.c_str());
+    RCLCPP_INFO(m_logger, "Created log block with name: %s", block_name.c_str());
 }
 
 void Logging::crtp_response_callback(const CrtpPacket &packet)
 {
     if (packet.channel == CONTROL_CHANNEL)
     {
-        RCLCPP_WARN(m_logging_interface->get_logger(), "Received Control Packet: %d", packet.data[0]);
+        RCLCPP_WARN(m_logger, "Received Control Packet: %d", packet.data[0]);
         // Should never receive because it is a responed packet.
     }
     if (packet.channel == LOGDATA_CHANNEL && packet.data_length >= 4)
@@ -201,7 +201,7 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
             //  Values 5 is tumbled
             if ((int)values[5])
             {
-                RCLCPP_WARN(m_logging_interface->get_logger(), "System tumbled. Shutting Down");
+                RCLCPP_WARN(m_logger, "System tumbled. Shutting Down");
                 if (auto node_shared = m_node.lock()) node_shared->shutdown();
             }
 
@@ -261,5 +261,5 @@ void Logging::get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {
     (void)msg;
     auto [nbr_of_items, crc] = LoggingLogic::send_get_toc_info();
-    RCLCPP_WARN(m_logging_interface->get_logger(), "%d, %X", nbr_of_items, crc);
+    RCLCPP_WARN(m_logger, "%d, %X", nbr_of_items, crc);
 }

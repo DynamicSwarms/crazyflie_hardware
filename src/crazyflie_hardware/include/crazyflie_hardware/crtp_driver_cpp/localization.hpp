@@ -14,7 +14,13 @@
 
 class Localization : public LocalizationLogic {
 public:
-    Localization(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, CrtpLink * link, std::string tf_name);
+    Localization(
+        std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeGraphInterface> node_graph_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
+        CrtpLink * link, 
+        std::string tf_name);
 public: 
 
     bool stop_external_tracking();
@@ -37,18 +43,20 @@ private:
     bool remove_from_broadcaster();
 
 private: 
-    std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
-    std::string logger_name;
+    std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> m_base_interface;
+    std::shared_ptr<rclcpp::node_interfaces::NodeGraphInterface> m_graph_interface;
+    std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> m_services_interface;
+    rclcpp::Logger m_logger;
 
-    bool is_beeing_tracked; 
-    bool is_beeing_broadcasted;
+    std::string m_tf_name;
 
-    int channel_;
-    int data_rate_;
-    
-    std::string tf_name;
+    bool m_is_beeing_tracked; 
+    bool m_is_beeing_broadcasted;
 
-    rclcpp::CallbackGroup::SharedPtr callback_group; 
+    int m_channel;
+    int m_datarate;
 
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr console_publisher;
+    rclcpp::CallbackGroup::SharedPtr m_callback_group; 
+
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr m_console_publisher;
 };

@@ -66,7 +66,7 @@ private:
     std::weak_ptr<rclcpp_lifecycle::LifecycleNode> m_node;
     std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> m_base_interface;
     std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> m_topics_interface;
-    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> m_logging_interface;
+    rclcpp::Logger m_logger;
     std::shared_ptr<rclcpp::node_interfaces::NodeTimersInterface> m_timers_interface;
     std::shared_ptr<rclcpp::node_interfaces::NodeClockInterface> m_clock_interface;
 

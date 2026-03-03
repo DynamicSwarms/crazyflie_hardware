@@ -26,6 +26,7 @@ set(${PROJECT_NAME}_SRCS
   src/crtp_cpp/packer/logging_packer.cpp
   src/crtp_cpp/packer/parameters_packer.cpp
   src/crtp_cpp/packer/toc_packer.cpp
+  src/crtp_cpp/packer/platform_packer.cpp
 
   src/crtp_cpp/logic/basic_commander_logic.cpp
   src/crtp_cpp/logic/console_logic.cpp
@@ -37,6 +38,7 @@ set(${PROJECT_NAME}_SRCS
   src/crtp_cpp/logic/logic.cpp
   src/crtp_cpp/logic/parameters_logic.cpp
   src/crtp_cpp/logic/toc_logic.cpp
+  src/crtp_cpp/logic/platform_logic.cpp
 
   src/crtp_cpp/logic/logtocentry.cpp
 )  

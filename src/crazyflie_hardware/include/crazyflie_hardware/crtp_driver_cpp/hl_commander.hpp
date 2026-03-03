@@ -33,7 +33,7 @@ private:
     
 
 private: 
-    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> m_logging_interface;
+    rclcpp::Logger m_logger;
 
     rclcpp::CallbackGroup::SharedPtr m_callback_group; 
 

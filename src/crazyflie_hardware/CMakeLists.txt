@@ -40,6 +40,8 @@ set(CRTP_DRIVER_SRCS
   src/crtp_driver_cpp/logblock.cpp
   src/crtp_driver_cpp/console.cpp  
   src/crtp_driver_cpp/localization.cpp
+  src/crtp_driver_cpp/platform.cpp
+  src/crtp_driver_cpp/link_layer.cpp
   src/crtp_link_ros.cpp
 )
 

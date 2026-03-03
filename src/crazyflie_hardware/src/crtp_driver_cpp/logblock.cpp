@@ -3,12 +3,12 @@
 LogBlock::LogBlock(
     std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface, 
-    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
+    rclcpp::Logger logger,
     std::shared_ptr<rclcpp::node_interfaces::NodeTimersInterface> node_timers_interface,
     std::shared_ptr<rclcpp::CallbackGroup> callback_group,
     const std::string name) 
     : m_base_interface(node_base_interface)
-    , m_logging_interface(node_logging_interface)
+    , m_logger(logger.get_child(name))
     , m_timers_interface(node_timers_interface)
     , m_callback_group(callback_group)
     , m_block_name(name)

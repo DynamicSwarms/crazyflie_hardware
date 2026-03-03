@@ -10,7 +10,7 @@ GenericCommander::GenericCommander(
     std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
     CrtpLink *link)
     : GenericCommanderLogic(link)
-    , m_logging_interface(node_logging_interface)
+    , m_logger(node_logging_interface->get_logger().get_child("GenericCommander"))
     , m_callback_group(node_base_interface->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive))
 {
     auto sub_opt = rclcpp::SubscriptionOptions();
@@ -32,7 +32,7 @@ GenericCommander::GenericCommander(
         m_callback_group
     );
         
-    RCLCPP_DEBUG(node_logging_interface->get_logger(), "Generic Commander initialized");
+    RCLCPP_DEBUG(m_logger, "Generic Commander initialized");
 };
 
 void GenericCommander::cmd_position_callback(const crazyflie_interfaces::msg::Position::SharedPtr msg)

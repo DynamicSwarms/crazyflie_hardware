@@ -17,6 +17,10 @@
 #include "crazyflie_hardware/crtp_driver_cpp/logging.hpp"
 #include "crazyflie_hardware/crtp_driver_cpp/console.hpp"
 #include "crazyflie_hardware/crtp_driver_cpp/localization.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/platform.hpp"
+#include "crazyflie_hardware/crtp_driver_cpp/link_layer.hpp"
+
+
 #include "crazyflie_hardware/crtp_link_ros.hpp"
 // #include "crtp_cpp/logic/link_layer_logic.hpp"
 
@@ -37,7 +41,11 @@ public:
       }
       
       // Create submodules
-      console = std::make_unique<Console>(node, link.get());
+      console = std::make_unique<Console>(
+        node->get_node_base_interface(),
+        node->get_node_topics_interface(),
+        node->get_node_logging_interface(),
+        link.get());
       hl_commander = std::make_unique<HighLevelCommander>(
         node->get_node_base_interface(),
         node->get_node_topics_interface(),
@@ -50,7 +58,12 @@ public:
         node->get_node_services_interface(),       
         node->get_node_logging_interface(),
         link.get());
-      parameters = std::make_unique<Parameters>(node, link.get());
+      parameters = std::make_unique<Parameters>(
+        node->get_node_base_interface(),
+        node->get_node_topics_interface(),
+        node->get_node_parameters_interface(),
+        node->get_node_logging_interface(),
+        link.get());
       logging = std::make_unique<Logging>(
         node,
         node->get_node_base_interface(),
@@ -60,7 +73,21 @@ public:
         node->get_node_timers_interface(),
         node->get_node_clock_interface(),
         link.get());
-      localization = std::make_unique<Localization>(node, link.get(), tf_name);
+      localization = std::make_unique<Localization>(
+        node->get_node_base_interface(),
+        node->get_node_graph_interface(),
+        node->get_node_services_interface(),
+        node->get_node_logging_interface(),
+        link.get(), 
+        tf_name);
+      platform = std::make_unique<Platform>(
+        node->get_node_base_interface(),
+        node->get_node_logging_interface(),
+        link.get());
+      link_layer = std::make_unique<LinkLayer>(
+        node->get_node_base_interface(),
+        node->get_node_logging_interface(),
+        link.get());
 
 
       // The initalization might fail because of the connection.
@@ -77,10 +104,8 @@ public:
         node->set_parameter(set_param);
       }
 
-      int id = node->get_parameter("id").as_int();
       std::vector<double> initial_position = node->get_parameter("initial_position").as_double_array();
       bool send_external_position = node->get_parameter("send_external_position").as_bool();
-      bool send_external_pose = node->get_parameter("send_external_pose").as_bool();
       double max_initial_deviation = node->get_parameter("max_initial_deviation").as_double();
       int marker_configuration_index = node->get_parameter("marker_configuration_index").as_int();
       int dynamics_configuration_index = node->get_parameter("dynamics_configuration_index").as_int();
@@ -154,6 +179,8 @@ private:
   std::unique_ptr<Parameters> parameters;
   std::unique_ptr<Logging> logging;
   std::unique_ptr<Localization> localization;
+  std::unique_ptr<Platform> platform;
+  std::unique_ptr<LinkLayer> link_layer;
 
 public:
   bool configured;
@@ -273,13 +300,14 @@ public:
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_shutdown(const rclcpp_lifecycle::State &state)
   {
+    (void)state;
     shutdown_cleanly();
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
   }
 
   void shutdown_cleanly()
   {
-    RCLCPP_DEBUG(get_logger(), "Shutting down cleanly.");
+    RCLCPP_INFO(get_logger(), "Shutting down cleanly.");
     if (commander_initialized)
     {
       if (!commander->stop_external_tracking())

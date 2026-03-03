@@ -17,6 +17,13 @@
 
 #include <memory>
 #include <filesystem>
+
+#include "signal.h"
+
+
+std::atomic_bool sigint_received(false);
+std::atomic_bool gateway_shutdown_done(false);
+
 class GatewayException : public std::runtime_error
 {
 public:
@@ -167,6 +174,25 @@ private:
         }
       }
     }
+
+    static bool shutdown_completed = false;
+    if (sigint_received.load() && !shutdown_completed)
+    {
+        shutdown_completed = true;
+        if (crazyflies_.empty()) gateway_shutdown_done.store(true);
+        else RCLCPP_INFO(this->get_logger(), "Shutting down all crazyflies due to SIGINT.");
+        std::vector<std::pair<uint8_t, uint8_t>> keys_to_remove;
+        for (const auto& [key, entry] : crazyflies_) {
+          keys_to_remove.push_back(key);
+        }
+        for (auto &key : keys_to_remove)
+        {
+          std::pair<bool, std::string> result = remove_crazyflie(key.first, key.second);
+          if (!result.first) RCLCPP_WARN(this->get_logger(), "Failed to remove crazyflie with id %d: %s", key.first, result.second.c_str());
+          else RCLCPP_INFO(this->get_logger(), "Successfully removed crazyflie with id %d.", key.first);
+        }
+        gateway_shutdown_done.store(true);
+    }
   }
 
   void handle_add_crazyflie(const std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie::Request> request,
@@ -272,7 +298,7 @@ private:
     std::string fq_class_name = "rclcpp_components::NodeFactoryTemplate<" + class_name + ">";
 
     class_loader::ClassLoader * loader;
-    RCLCPP_INFO(get_logger(), "Load Library: %s", library_path.c_str());
+    RCLCPP_DEBUG(get_logger(), "Load Library: %s", library_path.c_str());
     try {
       loader_ = std::make_unique<class_loader::ClassLoader>(library_path);
     } catch (const std::exception & ex) {
@@ -285,9 +311,9 @@ private:
 
     auto classes = loader->getAvailableClasses<rclcpp_components::NodeFactory>();
     for (const auto & clazz : classes) {
-      RCLCPP_INFO(get_logger(), "Found class: %s", clazz.c_str());
+      RCLCPP_DEBUG(get_logger(), "Found class: %s", clazz.c_str());
       if (clazz == class_name || clazz == fq_class_name) {
-        RCLCPP_INFO(get_logger(), "Instantiate class: %s", clazz.c_str());
+        RCLCPP_DEBUG(get_logger(), "Instantiate class: %s", clazz.c_str());
         return loader->createInstance<rclcpp_components::NodeFactory>(clazz);
       }
     }
@@ -306,9 +332,28 @@ protected:
   std::weak_ptr<rclcpp::Executor> executor_;
 };
 
+void sigint_handler(int signum)
+{
+    (void)signum;
+    sigint_received.store(true);
+    int safey_counter = 0;
+    while (!gateway_shutdown_done.load())
+    { 
+        safey_counter++;
+        if (safey_counter > 500) break;// 3 seconds timeout
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (gateway_shutdown_done.load()) std::cerr << "Gateway shut down cleanly after SIGINT." << std::endl;
+    else std::cerr << "Gateway shutdown after SIGINT timed out." << std::endl;
+}
+
 
 int main(int argc, char ** argv)
 {
+  signal(SIGINT, sigint_handler);
+  // Install before rclcpp this way rclcpp will store it as a "old" handler and execute it before its own shutdown
+
+
   rclcpp::init(argc, argv);
   auto exec = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
   auto options = rclcpp::NodeOptions();
@@ -316,14 +361,7 @@ int main(int argc, char ** argv)
   auto node = std::make_shared<CrazyflieGateway>(exec, options);
   exec->add_node(node);
   exec->spin();
-  //  while (true) 
-  //  {
-  //    try {
-  //      exec->spin_some();
-  //    } catch (const std::exception &exc)   {
-  //        RCLCPP_INFO(rclcpp::get_logger("gateway"), "Caught in gateway loop: %s", exc.what());
-  //    }
-  //    
-  //  }
+  exec->remove_node(node);
+  rclcpp::shutdown();
   return 0;
 }
