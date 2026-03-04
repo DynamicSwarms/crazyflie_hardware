@@ -11,7 +11,8 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../libcrtp ${CMAKE_CURRENT_BINARY_DIR
 add_library(libradio
         crazyradio/Crazyradio.cpp
         crazyradio/USBDevice.cpp
-        udpradio/Udpradio.cpp)
+        udpradio/Udpradio.cpp
+        udpradio/Firmwarelink.cpp)
 
 target_include_directories(libradio PUBLIC
   ${CMAKE_CURRENT_LIST_DIR}

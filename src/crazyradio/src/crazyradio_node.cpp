@@ -47,7 +47,7 @@ public:
             m_logEnabled,
             "crazyradio_log_" + std::to_string(channel) + ".log");
 
-        auto qos = rclcpp::QoS(500);
+        auto qos = rclcpp::QoS(1000);
         qos.reliable();
         qos.keep_all();
         qos.durability_volatile();
