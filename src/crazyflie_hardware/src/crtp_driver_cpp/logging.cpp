@@ -88,7 +88,11 @@ void Logging::start_logging_pm()
 {
     RCLCPP_DEBUG(m_logger, "Starting State logging.");
     std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled"};
-    LoggingLogic::add_block(STATE_BLOCK_ID, variables);
+    if (!LoggingLogic::add_block(STATE_BLOCK_ID, variables))
+    {
+        RCLCPP_ERROR(m_logger, "Failed to create state log block. Variable not found in TOC.");
+        return;
+    }
 
     LoggingLogic::start_block(STATE_BLOCK_ID, 50); // 2 Hz
 

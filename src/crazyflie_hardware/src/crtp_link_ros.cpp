@@ -175,17 +175,20 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
     {   
         auto response = result.get();
         if (response->success) {
+            RCLCPP_WARN(rclcpp::get_logger(logger_name), "Single request responded with success!");
             return response_to_packet(response);
-        }
-    }
+        } else RCLCPP_WARN(rclcpp::get_logger(logger_name), "Failed single request responded with success false!");
+    } else RCLCPP_WARN(rclcpp::get_logger(logger_name), "Failed single request responded with timeout!");
     RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Failed single request responded");
     std::stringstream ss;
-    ss << "Communication failed! "
+    ss << "Failed single request packet: "
     << (int)request.packet.port << ", "
-    << (int)request.packet.channel << ", "
-    << (int)request.packet.data_length << ", "
-    << (int)request.packet.data[0] << ", "
-    << request.expects_response << ", "
+    << (int)request.packet.channel << ", ";
+    for (int i = 0; i < request.packet.data_length; i++)
+    {
+        ss << (int)request.packet.data[i] << " ";
+    }
+    ss << "?" << request.expects_response << ", "
     << (int)request.matching_bytes;
     throw std::runtime_error(ss.str());
 }

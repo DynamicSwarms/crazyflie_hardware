@@ -51,6 +51,8 @@ class ResponseListener(Node):
 
         if port == 0:  # ignore console
             return
+        if port == 9 and channel == 0:
+            return  # sitl log
 
         if port == 5 and channel == 2:  # ignore parameter data
             return

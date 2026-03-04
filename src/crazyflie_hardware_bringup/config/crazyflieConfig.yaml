@@ -1,8 +1,6 @@
 /**:
   ros__parameters:
     default_firmware_params:
-      ring:
-        effect: 1
       commander:
         enHighLevel: 1
       stabilizer:
