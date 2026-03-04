@@ -2,13 +2,13 @@
 
 #include <stdint.h>
 #include "USBDevice.hpp"
-
+#include "interface/IRadio.hpp"
 
 #include "libcrtp/CrtpPacket.hpp"
 #include "libcrtp/CrtpLink.hpp"
 
-namespace libcrazyradio {
-class Crazyradio : public USBDevice
+namespace libradio::crazyradio {
+class Crazyradio : public libradio::IRadio, public USBDevice
 {
 public:
     struct Ack
@@ -52,9 +52,9 @@ public:
      * If the link is non broadcast and the packet was sent successfully, the responsePacket will contain a response from the Crazyflie.
     */
     bool sendCrtpPacket(
-        libcrtp::CrtpLinkIdentifier * link,
-        libcrtp::CrtpPacket * packet,
-        libcrtp::CrtpPacket * responsePacket);
+        const libcrtp::CrtpLinkIdentifier * link,
+        const libcrtp::CrtpPacket * packet,
+        libcrtp::CrtpPacket * responsePacket) override;
         
 private:
     void sendPacketInline(

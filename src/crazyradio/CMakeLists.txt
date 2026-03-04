@@ -3,7 +3,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 project(crazyradio)
 
-add_subdirectory(deps/libcrazyradio)
+add_subdirectory(deps/libradio)
 
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -27,9 +27,11 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-include_directories(
-  deps/libcrazyradio/include
-)
+#include_directories(
+#  deps/libradio/interface
+#  deps/libradio/crazyradio/include
+#  deps/libradio/udpradio/include
+#)
 
 
 add_executable(crazyradio_node 
@@ -42,7 +44,7 @@ ament_target_dependencies(crazyradio_node
 
 #dependencies for node from local libs
 target_link_libraries(crazyradio_node
-  libcrazyradio)
+  libradio)
 
 install(TARGETS   
   crazyradio_node 

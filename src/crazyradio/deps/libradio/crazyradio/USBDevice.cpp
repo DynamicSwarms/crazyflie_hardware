@@ -1,4 +1,4 @@
-#include "libcrazyradio/USBDevice.hpp"
+#include "crazyradio/USBDevice.hpp"
 
 #include <sstream>
 #include <stdexcept>

@@ -7,7 +7,9 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/qos.hpp"
 
-#include "libcrazyradio/Crazyradio.hpp"
+#include "crazyradio/Crazyradio.hpp"
+#include "udpradio/Udpradio.hpp"
+#include "interface/IRadio.hpp"
 #include "libcrtp/CrtpLinkContainer.hpp"
 #include "libcrtp/CrtpLogger.hpp"
 
@@ -30,17 +32,19 @@ class CrazyradioNode : public rclcpp::Node
 public:
     CrazyradioNode(const rclcpp::NodeOptions &options)
         : Node("crazyradio_cpp", options)
-        , m_radio()
         , m_links()
         , m_radioPeriodUs(500) // 2000 Hz polling, realistic rate is ~ 1100Hz.
     {
-        this->declare_parameter("channel", 80);
-        uint8_t channel = this->get_parameter("channel").as_int();
+        bool useUDPRadio = this->declare_parameter("use_udpradio", rclcpp::ParameterValue(true)).get<bool>();
+        if (!useUDPRadio) m_radio = std::make_unique<libradio::crazyradio::Crazyradio>();
+        else m_radio = std::make_unique<libradio::udpradio::UDPRadio>();
 
-        this->declare_parameter("log_enabled", true);
+        uint8_t channel = this->declare_parameter("channel", rclcpp::ParameterValue(80)).get<uint8_t>();
+        
+        bool m_logEnabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
 
         m_logger = std::make_unique<libcrtp::CrtpLogger>(
-            this->get_parameter("log_enabled").as_bool(),
+            m_logEnabled,
             "crazyradio_log_" + std::to_string(channel) + ".log");
 
         auto qos = rclcpp::QoS(500);
@@ -116,7 +120,7 @@ private:
         bool isPortPacket = m_links.linkGetHighestPriorityPacket(link, &packet);
         if (link->isBroadcast && !isPortPacket) return; // No broadcast packet available, broadcast links do not send null packets.
                 
-        bool sendSuccess = m_radio.sendCrtpPacket(link, &packet, &responsePacket);
+        bool sendSuccess = m_radio->sendCrtpPacket(link, &packet, &responsePacket);
         if (sendSuccess)
         {
             if (isPortPacket) m_links.linkNotifySuccessfullPortMessage(link, packet.port);
@@ -308,7 +312,7 @@ private:
     }
 
 private:
-    libcrazyradio::Crazyradio m_radio;
+    std::unique_ptr<libradio::IRadio> m_radio;
     libcrtp::CrtpLinkContainer m_links;
     
     std::unique_ptr<libcrtp::CrtpLogger> m_logger;

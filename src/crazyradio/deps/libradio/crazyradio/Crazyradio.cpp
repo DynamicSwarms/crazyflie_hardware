@@ -1,4 +1,4 @@
-#include "libcrazyradio/Crazyradio.hpp"
+#include "crazyradio/Crazyradio.hpp"
 
 
 #include <sstream>
@@ -7,7 +7,7 @@
 #include <cstring>
 
 #include <libusb-1.0/libusb.h>
-namespace libcrazyradio {
+namespace libradio::crazyradio {
 enum
 {
     SET_RADIO_CHANNEL   = 0x01,
@@ -73,11 +73,11 @@ Crazyradio::~Crazyradio()
 
 
 bool Crazyradio::sendCrtpPacket(
-        libcrtp::CrtpLinkIdentifier * link,
-        libcrtp::CrtpPacket * packet,
+        const libcrtp::CrtpLinkIdentifier * link,
+        const libcrtp::CrtpPacket * packet,
         libcrtp::CrtpPacket * responsePacket)
 {   
-    libcrazyradio::Crazyradio::Ack ack;
+    libradio::crazyradio::Crazyradio::Ack ack;
 
     uint8_t data[32];
     data[0] = packet->port << 4 | packet->channel;
@@ -86,9 +86,9 @@ bool Crazyradio::sendCrtpPacket(
     Datarate datarate;
     switch (link->datarate)
     {
-        case 2: datarate = libcrazyradio::Crazyradio::Datarate_2MPS; break;
-        case 1: datarate = libcrazyradio::Crazyradio::Datarate_1MPS; break;
-        default: datarate = libcrazyradio::Crazyradio::Datarate_250KPS; break;
+        case 2: datarate = libradio::crazyradio::Crazyradio::Datarate_2MPS; break;
+        case 1: datarate = libradio::crazyradio::Crazyradio::Datarate_1MPS; break;
+        default: datarate = libradio::crazyradio::Crazyradio::Datarate_250KPS; break;
     }
 
     sendPacketInline(
