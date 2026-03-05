@@ -37,8 +37,11 @@ public:
     {
         bool useUDPRadio = this->declare_parameter("use_udpradio", rclcpp::ParameterValue(true)).get<bool>();
         if (!useUDPRadio) m_radio = std::make_unique<libradio::crazyradio::Crazyradio>();
-        else m_radio = std::make_unique<libradio::udpradio::UDPRadio>();
-
+        else {
+            m_radio = std::make_unique<libradio::udpradio::UDPRadio>();
+            m_radioPeriodUs = 100; // 10_000 Hz
+        }
+        
         uint8_t channel = this->declare_parameter("channel", rclcpp::ParameterValue(80)).get<uint8_t>();
         
         bool m_logEnabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
