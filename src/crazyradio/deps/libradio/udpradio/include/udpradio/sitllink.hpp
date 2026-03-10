@@ -53,9 +53,9 @@ private:
 private:
     int m_fd{-1};
     
-    struct sockaddr_in m_in_address;
-    struct sockaddr_in m_out_address;
-    socklen_t m_address_len{sizeof(m_out_address)};
+    struct sockaddr_in m_my_address;
+    struct sockaddr_in m_remote_address;
+    socklen_t m_address_len{sizeof(m_my_address)};
 
     bool m_is_connected{false};   
     

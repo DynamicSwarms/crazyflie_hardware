@@ -18,15 +18,19 @@ SITLlink::SITLlink(uint16_t port)
         throw std::runtime_error("UdpRadio: socket() failed");
     }
 
-    m_in_address.sin_family = AF_INET;
-    m_in_address.sin_addr.s_addr = INADDR_ANY;
-    m_in_address.sin_port = htons(port);
+    m_my_address.sin_family = AF_INET;
+    m_my_address.sin_addr.s_addr = INADDR_ANY;
+    m_my_address.sin_port = htons(0);
 
-    if (bind(m_fd, reinterpret_cast<sockaddr*>(&m_in_address), sizeof(m_in_address)) < 0) {
+    if (bind(m_fd, reinterpret_cast<sockaddr*>(&m_my_address), sizeof(m_my_address)) < 0) {
         close(m_fd);
         m_fd = -1;
         throw std::runtime_error("UdpRadio: bind() failed");
     }
+
+    m_remote_address.sin_family = AF_INET;
+    m_remote_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    m_remote_address.sin_port = htons(port);
 
     // Set socket to non-blocking mode
     int flags = fcntl(m_fd, F_GETFL, 0);
@@ -88,20 +92,18 @@ SITLlink::socket_transfer(
     const uint8_t* data, size_t size,
     uint8_t* receive_data)
 {
-    if (m_is_connected) {
-        ssize_t sent = sendto(
-            m_fd, data, size, 0,
-            reinterpret_cast<const sockaddr*>(&m_out_address), sizeof(m_out_address)
-        );
-        
-        if (sent < 0) {
-            std::cerr << "UDP Radio: sendto() failed\n";
-        }
+    ssize_t sent = sendto(
+        m_fd, data, size, 0,
+        reinterpret_cast<const sockaddr*>(&m_remote_address), sizeof(m_remote_address)
+    );
+    
+    if (sent < 0) {
+        std::cerr << "UDP Radio: sendto() failed\n";
     }
 
     ssize_t r = recvfrom(
         m_fd, receive_data, kMaxDatagram, 0,
-        reinterpret_cast<sockaddr*>(&m_out_address), &m_address_len
+        reinterpret_cast<sockaddr*>(&m_remote_address), &m_address_len
     );
 
     if (r > 0) m_is_connected = true;
