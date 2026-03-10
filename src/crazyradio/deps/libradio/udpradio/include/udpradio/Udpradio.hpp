@@ -7,7 +7,7 @@
 #include "libcrtp/CrtpPacket.hpp"
 #include "libcrtp/CrtpLink.hpp"
 #include <map>
-#include "udpradio/Firmwarelink.hpp"
+#include "udpradio/sitllink.hpp"
 #include <memory> 
 namespace libradio::udpradio {
 class UDPRadio : public libradio::IRadio
@@ -34,7 +34,7 @@ private:
     sockaddr_in m_remoteAddr{};
     bool m_handshakeDone{false};
 
-    std::map<std::pair<uint8_t, uint64_t>, std::unique_ptr<firmwarelink::Firmwarelink>> m_links; 
+    std::map<std::pair<uint8_t, uint64_t>, std::unique_ptr<sitllink::SITLlink>> m_links; 
 };
 
 } // namepsace libradio::udpradio

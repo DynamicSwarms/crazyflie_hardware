@@ -12,7 +12,7 @@ add_library(libradio
         crazyradio/Crazyradio.cpp
         crazyradio/USBDevice.cpp
         udpradio/Udpradio.cpp
-        udpradio/Firmwarelink.cpp)
+        udpradio/sitllink.cpp)
 
 target_include_directories(libradio PUBLIC
   ${CMAKE_CURRENT_LIST_DIR}

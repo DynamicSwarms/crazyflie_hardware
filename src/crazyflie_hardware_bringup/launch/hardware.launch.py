@@ -16,6 +16,7 @@ def generate_radios(context):
             package="crazyradio",
             executable="crazyradio_node",
             name=f"crazyradio{channel}",
+            # prefix=["gdbserver localhost:3000"],
             parameters=[{"channel": channel}],
         )
 
