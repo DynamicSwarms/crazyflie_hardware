@@ -202,7 +202,7 @@ std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpReques
     {
         fill_crtp_request(req, request);
         auto res = send_crtp_packet_client->async_send_request(req);
-        results.push_back(res);
+        results.push_back(res.future.share());
     }
 
     std::vector<CrtpPacket> response_packets;

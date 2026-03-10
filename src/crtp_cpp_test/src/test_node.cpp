@@ -28,15 +28,21 @@ public:
 
   std::optional<CrtpPacket> send_packet(CrtpRequest request)override
   {
+    (void) request;
     return CrtpPacket();
-
   }
   std::vector<CrtpPacket> send_batch_request(const std::vector<CrtpRequest>)override
   {
     std::vector<CrtpPacket> vec;
     return vec;
   }
- 
+  
+  void add_callback(uint8_t port, const CrtpCallbackType& callback) override
+  {
+    (void) port;
+    (void) callback;
+  }
+
 
 };
 

@@ -7,5 +7,6 @@ LinkLayer::LinkLayer(
     : LinkLayerLogic(link)
     , m_logger(node_logging_interface->get_logger().get_child("LinkLayer"))
 {
+    (void)node_base_interface;
     RCLCPP_DEBUG(m_logger, "LinkLayer initialized");
 }

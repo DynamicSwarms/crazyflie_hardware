@@ -54,8 +54,8 @@ public:
     std::weak_ptr<rclcpp::Executor> executor,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : Node("crazyflie_hardware_gateway", options)
-  , executor_(executor)
   , crazyflies_()
+  , executor_(executor)
   {
     auto service_qos = rmw_qos_profile_services_default;
     service_qos.depth = 100; // This way it is possible to queue up multiple add requestst

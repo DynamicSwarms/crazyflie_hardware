@@ -7,6 +7,7 @@ Platform::Platform(
     : PlatformLogic(link)
     , m_logger(node_logging_interface->get_logger().get_child("Platform"))
 {
+    (void)node_base_interface;
     int protocol;
     std::string firmware;
     std::string device_type;

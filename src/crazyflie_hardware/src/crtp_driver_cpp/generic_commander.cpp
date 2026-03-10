@@ -45,5 +45,6 @@ GenericCommander::notify_setpoints_stop_service(
     const crazyflie_interfaces::srv::NotifySetpointsStop::Request::SharedPtr request,
     crazyflie_interfaces::srv::NotifySetpointsStop::Response::SharedPtr response)
 {    
+    (void)response; // Is empty
     GenericCommanderLogic::send_notify_setpoints_stop(request->remain_valid_millisecs);
 }

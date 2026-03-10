@@ -24,7 +24,7 @@ public:
 
     std::vector<float> unpack_block(int block_id, const std::vector<uint8_t>& data);
 private:
-    virtual void crtp_response_callback(const CrtpPacket&  packet) {};
+    virtual void crtp_response_callback(const CrtpPacket&  packet) = 0;
 
 
 private:

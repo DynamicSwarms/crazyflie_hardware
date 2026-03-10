@@ -28,7 +28,9 @@ CrtpRequest
 PlatformPacker::set_cont_wave(bool enable) 
 {
     CrtpRequest request;
-    std::vector<uint8_t> data = {PLATFORM_COMMAND_SET_CONT_WAVE};
+    std::vector<uint8_t> data = {
+        PLATFORM_COMMAND_SET_CONT_WAVE,
+        static_cast<uint8_t>(enable ? 1 : 0)};
     request.packet = prepare_packet(CHANNEL_PLATFORM, data);
     request.expects_response = true;
     request.matching_bytes = 1;
@@ -39,7 +41,9 @@ CrtpRequest
 PlatformPacker::request_arming(bool requested_state) 
 {
     CrtpRequest request;
-    std::vector<uint8_t> data = {PLATFORM_COMMAND_REQUEST_ARMING, requested_state ? 1 : 0};
+    std::vector<uint8_t> data = {
+        PLATFORM_COMMAND_REQUEST_ARMING,
+        static_cast<uint8_t>(requested_state ? 1 : 0)};
     request.packet = prepare_packet(CHANNEL_PLATFORM, data);
     request.expects_response = true;
     request.matching_bytes = 1;

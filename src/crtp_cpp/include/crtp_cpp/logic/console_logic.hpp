@@ -22,7 +22,7 @@ public:
     void send_consolepacket();
 
 private:
-    virtual void crtp_response_callback(const CrtpPacket &packet) {};
+    virtual void crtp_response_callback(const CrtpPacket &packet) = 0;
 
 private:
     ConsolePacker packer;

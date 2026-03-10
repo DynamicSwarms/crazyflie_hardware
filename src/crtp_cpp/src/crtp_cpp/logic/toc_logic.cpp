@@ -8,7 +8,9 @@
 
 template <class T>
 TocLogic<T>::TocLogic(CrtpLink *crtp_link, const std::string &path, uint8_t port)
-    : Logic(crtp_link), toc_cache_path(path), packer(TocPacker(port)) {}
+    : Logic(crtp_link)
+    , packer(TocPacker(port))
+    , toc_cache_path(path) {}
 
 template <class T>
 bool TocLogic<T>::load_from_file(uint32_t crc)

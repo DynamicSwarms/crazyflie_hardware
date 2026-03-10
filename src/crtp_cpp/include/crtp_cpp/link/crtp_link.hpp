@@ -34,11 +34,11 @@ public:
   CrtpLink(int channel, std::array<uint8_t, 5> address, int datarate);
 
   virtual void close_link() {};
-  virtual void add_callback(uint8_t port, const CrtpCallbackType& callback) {};
+  virtual void add_callback(uint8_t port, const CrtpCallbackType& callback) = 0;
 
-  virtual void send_packet_no_response(CrtpRequest packet) {};
-  virtual std::optional<CrtpPacket> send_packet(CrtpRequest request){}  ;
-  virtual std::vector<CrtpPacket> send_batch_request(const std::vector<CrtpRequest> requests){} ;
+  virtual void send_packet_no_response(CrtpRequest packet) = 0;
+  virtual std::optional<CrtpPacket> send_packet(CrtpRequest request) = 0  ;
+  virtual std::vector<CrtpPacket> send_batch_request(const std::vector<CrtpRequest> requests) = 0 ;
 
 protected:
   int channel;

@@ -228,6 +228,7 @@ private:
         const std::shared_ptr<rmw_request_id_t> header,
         const std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Request> request)
     {
+        (void)service_handle;
         // Insert Link
         uint64_t address = 0;
         for (int i = 0; i < 5; i++)

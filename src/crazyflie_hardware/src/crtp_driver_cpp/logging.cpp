@@ -191,6 +191,7 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
         uint8_t ts1 = packet.data[1];
         uint8_t ts2 = packet.data[2];
         uint8_t ts3 = packet.data[3];
+        uint32_t timestamp = (ts3 << 16) | (ts2 << 8) | ts1; 
 
         // RCLCPP_WARN(rclcpp::get_logger(logger_name), "Received Block with id %d", block_id);
 
@@ -213,6 +214,7 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
             for (size_t i = 0; i < values.size(); i++) {
                 msg.values.push_back(values[i]);
             }
+            msg.timestamp = timestamp;
             log_state_pub->publish(msg);
         }
         if (block_id == POSE_BLOCK_ID && log_pose && values.size() == 4)
@@ -253,6 +255,7 @@ void Logging::initialize_logging()
 
 void Logging::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg)
 {
+    (void)msg;
     LoggingLogic::send_download_toc_items();
     LoggingLogic::write_to_file();
 
