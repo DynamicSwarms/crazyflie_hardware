@@ -11,7 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(ament_index_cpp REQUIRED)
-find_package(crazyflie_hardware_gateway_interfaces REQUIRED)
+find_package(crazyflie_interfaces REQUIRED)
 
 add_executable(gateway src/gateway.cpp)
 target_include_directories(gateway PUBLIC
@@ -24,7 +24,7 @@ ament_target_dependencies(
   rclcpp_components
   ament_index_cpp
   rclcpp_lifecycle
-  crazyflie_hardware_gateway_interfaces
+  crazyflie_interfaces
 )
 
 install(TARGETS gateway

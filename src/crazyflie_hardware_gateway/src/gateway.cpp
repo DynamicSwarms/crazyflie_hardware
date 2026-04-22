@@ -12,8 +12,8 @@
 #include "class_loader/class_loader.hpp"
 
 
-#include "crazyflie_hardware_gateway_interfaces/srv/add_crazyflie.hpp"
-#include "crazyflie_hardware_gateway_interfaces/srv/remove_crazyflie.hpp"
+#include "crazyflie_interfaces/srv/add_crazyflie.hpp"
+#include "crazyflie_interfaces/srv/remove_crazyflie.hpp"
 
 #include <memory>
 #include <filesystem>
@@ -60,11 +60,11 @@ public:
     auto service_qos = rmw_qos_profile_services_default;
     service_qos.depth = 100; // This way it is possible to queue up multiple add requestst
 
-    add_service_ = this->create_service<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie>(
+    add_service_ = this->create_service<crazyflie_interfaces::srv::AddCrazyflie>(
       "~/add_crazyflie", std::bind(&CrazyflieGateway::handle_add_crazyflie, this, std::placeholders::_1, std::placeholders::_2),
       service_qos);
 
-    remove_service_ = this->create_service<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie>(
+    remove_service_ = this->create_service<crazyflie_interfaces::srv::RemoveCrazyflie>(
       "~/remove_crazyflie", std::bind(&CrazyflieGateway::handle_remove_crazyflie, this, std::placeholders::_1, std::placeholders::_2),
       service_qos);
     
@@ -80,7 +80,7 @@ public:
 private: 
   std::pair<bool, std::string> add_crazyflie(int id, 
     int channel, 
-    const geometry_msgs::msg::Point & initial_position,
+    const geometry_msgs::msg::Pose & initial_pose,
     const std::string & type)
   {
     RCLCPP_INFO(get_logger(), "Adding Crazyflie with Channel: %d, Id: %d", channel, id);
@@ -91,7 +91,7 @@ private:
       return std::make_pair(false, "Crazyflie with id '" + std::to_string(id) + "' already exists.");
     }
 
-    auto options = create_node_options(id, channel, initial_position, type);
+    auto options = create_node_options(id, channel, initial_pose, type);
     try {
       auto node = factory_->create_node_instance(options);
       auto exec = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
@@ -195,28 +195,67 @@ private:
     }
   }
 
-  void handle_add_crazyflie(const std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie::Request> request,
-                            std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie::Response> response)
+  void handle_add_crazyflie(const std::shared_ptr<crazyflie_interfaces::srv::AddCrazyflie::Request> request,
+                            std::shared_ptr<crazyflie_interfaces::srv::AddCrazyflie::Response> response)
   {
-    auto [success, msg] = add_crazyflie(request->id, request->channel, request->initial_position, request->type);
+    auto [id, channel] = uri_to_id_channel(request->uri);
+    auto [success, msg] = add_crazyflie(id, channel, request->initial_pose, request->type);
     response->success = success;
     response->msg = msg;
   }
 
-  void handle_remove_crazyflie(const std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie::Request> request,
-                               std::shared_ptr<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie::Response> response)
+  void handle_remove_crazyflie(const std::shared_ptr<crazyflie_interfaces::srv::RemoveCrazyflie::Request> request,
+                               std::shared_ptr<crazyflie_interfaces::srv::RemoveCrazyflie::Response> response)
   {
-    auto [success, msg] = remove_crazyflie(request->id, request->channel);
+    auto [id, channel] = uri_to_id_channel(request->uri);
+    auto [success, msg] = remove_crazyflie(id, channel);
 
     response->success = success;
     response->msg = msg;
   }
 
 private: 
+  std::pair<uint8_t, uint8_t> 
+  uri_to_id_channel(const std::string & uri)
+  {
+    const std::string prefix = "radio://";
+    if (uri.rfind(prefix, 0) != 0) {
+        throw GatewayException("URI must start with 'radio://'");
+    }
+
+    try {
+        const auto payload = uri.substr(prefix.length());
+        const auto parts = rcpputils::split(payload, '/');
+        if (parts.size() < 4) {
+          throw GatewayException("URI must have format radio://<dongle>/<channel>/<datarate>/<address>");
+        }
+
+        const int channel = std::stoi(parts[1]);
+        if (channel < 0 || channel > 255) {
+          throw GatewayException("Channel out of range [0,255]");
+        }
+
+        const std::string & address = parts[3];
+        if (address.size() < 2) {
+          throw GatewayException("Address must contain at least one byte");
+        }
+
+        const std::string id_hex = address.substr(address.size() - 2);
+        const int id = std::stoi(id_hex, nullptr, 16);
+        if (id < 0 || id > 255) {
+          throw GatewayException("ID out of range [0,255]");
+        }
+
+        return {static_cast<uint8_t>(id), static_cast<uint8_t>(channel)};
+    } catch (...) {
+        throw GatewayException("Failed to parse URI; expected radio://<dongle>/<channel>/<datarate>/<address> with hex address");
+    }
+  }
+
   rclcpp::NodeOptions
   create_node_options(int id, 
                       int channel, 
-                      const geometry_msgs::msg::Point & initial_position,
+                      const geometry_msgs::msg::Pose & initial_pose,
                       const std::string & type)
   {
 
@@ -238,9 +277,9 @@ private:
 
     std::ostringstream pos_stream;
     pos_stream << std::fixed << std::setprecision(1) << "[" 
-              << initial_position.x << "," 
-              << initial_position.y << "," 
-              << initial_position.z << "]";
+              << initial_pose.position.x << "," 
+              << initial_pose.position.y << "," 
+              << initial_pose.position.z << "]";
     
     add_parameter("initial_position", pos_stream.str());
 
@@ -320,8 +359,8 @@ private:
     return {};
   }
 
-  rclcpp::Service<crazyflie_hardware_gateway_interfaces::srv::AddCrazyflie>::SharedPtr add_service_;
-  rclcpp::Service<crazyflie_hardware_gateway_interfaces::srv::RemoveCrazyflie>::SharedPtr remove_service_;
+  rclcpp::Service<crazyflie_interfaces::srv::AddCrazyflie>::SharedPtr add_service_;
+  rclcpp::Service<crazyflie_interfaces::srv::RemoveCrazyflie>::SharedPtr remove_service_;
   rclcpp::TimerBase::SharedPtr cleanup_timer_;
 
   std::unique_ptr<class_loader::ClassLoader> loader_;
