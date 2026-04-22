@@ -35,7 +35,7 @@ public:
         , m_links()
         , m_radioPeriodUs(500) // 2000 Hz polling, realistic rate is ~ 1100Hz.
     {
-        bool useUDPRadio = this->declare_parameter("use_udpradio", rclcpp::ParameterValue(true)).get<bool>();
+        bool useUDPRadio = this->declare_parameter("use_udpradio", rclcpp::ParameterValue(false)).get<bool>();
         if (!useUDPRadio) m_radio = std::make_unique<libradio::crazyradio::Crazyradio>();
         else {
             m_radio = std::make_unique<libradio::udpradio::UDPRadio>();
@@ -94,7 +94,11 @@ public:
             std::chrono::milliseconds(1000),
             std::bind(&CrazyradioNode::logLinkQualityCallback, this));
 
-        RCLCPP_WARN(this->get_logger(), "Started Crazyradio Node on Channel %d", channel);
+        if (useUDPRadio) {
+            RCLCPP_WARN(this->get_logger(), "Started Crazyradio Node in SITL mode on Channel %d", channel);
+        } else {
+            RCLCPP_WARN(this->get_logger(), "Started Crazyradio Node on Channel %d", channel);
+        }
     }
 
 private:
