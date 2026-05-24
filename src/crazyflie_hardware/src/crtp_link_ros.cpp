@@ -9,14 +9,11 @@ RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int chan
     , logger_name(node->get_name())
 {
     callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    auto qos = rclcpp::QoS(500);
-    qos.reliable();
-    qos.keep_all();
-    qos.durability_volatile();
+    auto qos = rclcpp::ServicesQoS().keep_all().reliable().durability_volatile();
 
     send_crtp_packet_client = node->create_client<crtp_interfaces::srv::CrtpPacketSend>(
         "crazyradio/send_crtp_packet" + std::to_string(channel),
-        qos.get_rmw_qos_profile(),
+        qos,
         callback_group);
 
     initialized = try_initialize(node);

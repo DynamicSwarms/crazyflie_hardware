@@ -52,8 +52,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 target_link_libraries(${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
 
 
-ament_target_dependencies(${PROJECT_NAME}
-  "ament_index_cpp"
+target_link_libraries(${PROJECT_NAME}
+  ament_index_cpp::ament_index_cpp
 )
 
 target_compile_definitions(${PROJECT_NAME}

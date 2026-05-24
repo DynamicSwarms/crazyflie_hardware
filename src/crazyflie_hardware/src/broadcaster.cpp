@@ -4,7 +4,8 @@
 #include <rclcpp/callback_group.hpp>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
-#include "crazyflie_interfaces/msg/pose_stamped_array.hpp"
+#include "crazyflie_interfaces/msg/pose_named.hpp"
+#include "crazyflie_interfaces/msg/pose_named_array.hpp"
 #include "broadcaster_interfaces/srv/posi_pose_broadcast_object.hpp"
 #include "crtp_cpp/packer/crtp_packer.hpp"
 
@@ -35,12 +36,12 @@ public:
         m_add_object_service = this->create_service<broadcaster_interfaces::srv::PosiPoseBroadcastObject>(
             "add_posi_pose_object",
             std::bind(&Broadcaster::add_object_callback, this, std::placeholders::_1, std::placeholders::_2),
-            rmw_qos_profile_services_default,
+            rclcpp::ServicesQoS(),
             m_add_remove_callback_group);
         m_remove_object_service = this->create_service<broadcaster_interfaces::srv::PosiPoseBroadcastObject>(
             "remove_posi_pose_object",
             std::bind(&Broadcaster::add_object_callback, this, std::placeholders::_1, std::placeholders::_2),
-            rmw_qos_profile_services_default,
+            rclcpp::ServicesQoS(),
             m_add_remove_callback_group);
 
 
@@ -50,7 +51,7 @@ public:
         auto qos = rclcpp::QoS(rclcpp::KeepLast(100)).best_effort().durability_volatile();
         auto sub_opt = rclcpp::SubscriptionOptions();
         sub_opt.callback_group = m_callback_group;
-        m_position_subscription = this->create_subscription<crazyflie_interfaces::msg::PoseStampedArray>(
+        m_position_subscription = this->create_subscription<crazyflie_interfaces::msg::PoseNamedArray>(
             "/cf_positions", 
             qos,
             std::bind(&Broadcaster::position_callback, this, std::placeholders::_1), 
@@ -73,9 +74,9 @@ private:
 
                 uint8_t id = get_id_from_frame(frame);
                 std::vector<int16_t> position = {
-                    (int16_t)(pose.pose.position.x * 1000),
-                    (int16_t)(pose.pose.position.y * 1000),
-                    (int16_t)(pose.pose.position.z * 1000)};
+                    (int16_t)(pose.position.x * 1000),
+                    (int16_t)(pose.position.y * 1000),
+                    (int16_t)(pose.position.z * 1000)};
                 link_objects[id] = position;
             }
             if (!link_objects.empty()) {
@@ -119,21 +120,22 @@ private:
         } 
     }
 
-    void position_callback(const crazyflie_interfaces::msg::PoseStampedArray::SharedPtr msg) {
+    void position_callback(const crazyflie_interfaces::msg::PoseNamedArray::SharedPtr msg) {
         for (const auto &pose : msg->poses) {
-            m_positions[pose.header.frame_id] = pose;       
+            m_positions[pose.name] = pose;       
         }
         run();
     }
 
-    std::optional<geometry_msgs::msg::PoseStamped> get_position(const std::string& frame) 
+    std::optional<geometry_msgs::msg::Pose> get_position(const std::string& frame) 
     {
         // Retrieve a position. But if it is to old -> reject.
         std::unique_lock<std::mutex> lock(m_mutex);
         auto it = m_positions.find(frame);
         if (it != m_positions.end()) {
-            geometry_msgs::msg::PoseStamped pose = it->second;
-            rclcpp::Time pose_time = rclcpp::Time(pose.header.stamp);
+            geometry_msgs::msg::Pose pose = it->second.pose;
+            auto header = it->second.header;
+            rclcpp::Time pose_time = rclcpp::Time(header.stamp);
 
             rclcpp::Time now = this->get_clock()->now();
             rclcpp::Duration decay_duration = rclcpp::Duration::from_seconds(m_decay_time);
@@ -211,12 +213,12 @@ private:
     rclcpp::Service<broadcaster_interfaces::srv::PosiPoseBroadcastObject>::SharedPtr m_remove_object_service;
 
     rclcpp::CallbackGroup::SharedPtr m_callback_group;
-    rclcpp::Subscription<crazyflie_interfaces::msg::PoseStampedArray>::SharedPtr  m_position_subscription;
+    rclcpp::Subscription<crazyflie_interfaces::msg::PoseNamedArray>::SharedPtr  m_position_subscription;
     rclcpp::TimerBase::SharedPtr m_broadcast_timer;
 
 
     mutable std::mutex m_mutex;
-    std::map<std::string, geometry_msgs::msg::PoseStamped> m_positions;
+    std::map<std::string, crazyflie_interfaces::msg::PoseNamed> m_positions;
     std::map<std::string, std::pair<int, int>> m_objects; // Pair of channel, datarate
     std::map<std::pair<int, int>, std::shared_ptr<RosLink>> m_links;
 };

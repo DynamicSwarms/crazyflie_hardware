@@ -22,7 +22,11 @@ setup(
     maintainer_email="rosrunner@todo.todo",
     description="TODO: Package description",
     license="TODO: License declaration",
-    tests_require=["pytest"],
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
     entry_points={
         "console_scripts": [
             "radiolistener = crazyflie_hardware_examples.radio_listener:main",

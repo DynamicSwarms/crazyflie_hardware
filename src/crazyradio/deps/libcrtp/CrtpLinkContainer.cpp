@@ -1,5 +1,5 @@
 #include "libcrtp/CrtpLinkContainer.hpp"
-
+#include <cstdlib>
 namespace libcrtp {
 
 CrtpLinkContainer::CrtpLinkContainer() 

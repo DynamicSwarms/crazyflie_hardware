@@ -38,9 +38,9 @@ add_executable(crazyradio_node
   src/crazyradio_node.cpp)
 
 #dependencies for node from ros packages
-ament_target_dependencies(crazyradio_node
-  rclcpp
-  crtp_interfaces)
+target_link_libraries(crazyradio_node
+  rclcpp::rclcpp
+  crtp_interfaces::crtp_interfaces)
 
 #dependencies for node from local libs
 target_link_libraries(crazyradio_node

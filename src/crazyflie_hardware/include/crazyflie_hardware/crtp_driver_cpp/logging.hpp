@@ -7,7 +7,7 @@
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 #include "crazyflie_interfaces/msg/log_data_generic.hpp"
-#include "crazyflie_interfaces/msg/pose_stamped_array.hpp"
+#include "crazyflie_interfaces/msg/pose_named_array.hpp"
 
 #include "crazyflie_interfaces/srv/add_logging.hpp"
 #include "crazyflie_interfaces/srv/remove_logging.hpp"
@@ -82,7 +82,7 @@ private:
     bool log_state;
     bool log_pose;
     rclcpp::Publisher<crazyflie_interfaces::msg::LogDataGeneric>::SharedPtr log_state_pub;
-    rclcpp::Publisher<crazyflie_interfaces::msg::PoseStampedArray>::SharedPtr log_pose_pub;
+    rclcpp::Publisher<crazyflie_interfaces::msg::PoseNamedArray>::SharedPtr log_pose_pub;
 
     uint8_t next_log_block_id = 2;
     std::map<int, std::shared_ptr<LogBlock>> m_log_blocks;

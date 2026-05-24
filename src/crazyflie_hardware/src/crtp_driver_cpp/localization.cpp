@@ -71,7 +71,7 @@ bool Localization::add_to_tracker(
         m_graph_interface,
         m_services_interface,
         "/tracker/add_object",
-        rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
+        rclcpp::ServicesQoS().keep_last(1),
         m_callback_group);
     
     if (!client->wait_for_service(1s))
@@ -125,7 +125,7 @@ bool Localization::add_to_broadcaster(int channel, int datarate)
         m_graph_interface,
         m_services_interface,
         "/add_posi_pose_object",
-        rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
+        rclcpp::ServicesQoS().keep_last(1),
         m_callback_group);
     
     if (!client->wait_for_service(1s))
@@ -171,7 +171,7 @@ bool Localization::remove_from_tracker()
         m_graph_interface,
         m_services_interface,            
         "/tracker/remove_object",
-        rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
+        rclcpp::ServicesQoS().keep_last(1),
         m_callback_group);
     
     if (!client->wait_for_service(100ms))
@@ -201,7 +201,7 @@ bool Localization::remove_from_broadcaster()
         m_graph_interface,
         m_services_interface,
         "/remove_posi_pose_object",
-        rclcpp::QoS(rclcpp::KeepLast(1)).get_rmw_qos_profile(),
+        rclcpp::ServicesQoS().keep_last(1),
         m_callback_group);
 
     if (!client->wait_for_service(100ms))

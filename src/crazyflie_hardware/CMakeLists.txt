@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.10)
 project(crazyflie_hardware)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -53,33 +53,37 @@ target_include_directories(crtp_driver_cpp PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
 )
-ament_target_dependencies(crtp_driver_cpp 
-  rclcpp
-  crtp_cpp
-  crazyflie_interfaces
-  object_tracker_interfaces
-  broadcaster_interfaces
-  crtp_interfaces
-  rclcpp_lifecycle)
+target_link_libraries(crtp_driver_cpp
+  rclcpp::rclcpp
+  crtp_cpp::crtp_cpp
+  crazyflie_interfaces::crazyflie_interfaces
+  object_tracker_interfaces::object_tracker_interfaces
+  broadcaster_interfaces::broadcaster_interfaces
+  crtp_interfaces::crtp_interfaces
+  rclcpp_lifecycle::rclcpp_lifecycle)
+
+install(TARGETS crtp_driver_cpp
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib)
 
 target_link_libraries(crazyflie
                     crtp_driver_cpp)
 target_link_libraries(broadcaster
                     crtp_driver_cpp)
 
-ament_target_dependencies(crazyflie
-  crtp_cpp
-  rclcpp
-  rclcpp_components
-  crtp_interfaces
-  rclcpp_lifecycle
-  lifecycle_msgs)
+target_link_libraries(crazyflie
+  crtp_cpp::crtp_cpp
+  rclcpp::rclcpp
+  rclcpp_components::component
+  crtp_interfaces::crtp_interfaces
+  rclcpp_lifecycle::rclcpp_lifecycle
+  lifecycle_msgs::lifecycle_msgs)
 
-ament_target_dependencies(broadcaster
-  crtp_cpp
-  rclcpp
-  crtp_interfaces
-  broadcaster_interfaces)
+target_link_libraries(broadcaster
+  crtp_cpp::crtp_cpp
+  rclcpp::rclcpp
+  crtp_interfaces::crtp_interfaces
+  broadcaster_interfaces::broadcaster_interfaces)
 
 install(TARGETS crazyflie
   DESTINATION lib/${PROJECT_NAME})
@@ -93,10 +97,10 @@ add_library(crazyflie_component SHARED src/crazyflie.cpp)
 target_compile_definitions(crazyflie_component
   PRIVATE "COMPOSITION_BUILDING_DLL")
 target_link_libraries(crazyflie_component crtp_driver_cpp)
-ament_target_dependencies(crazyflie_component
-  rclcpp
-  crtp_cpp
-  rclcpp_components)
+target_link_libraries(crazyflie_component
+  rclcpp::rclcpp
+  crtp_cpp::crtp_cpp
+  rclcpp_components::component)
 
 rclcpp_components_register_nodes(crazyflie_component "CrazyflieNode")
 install(TARGETS crazyflie_component DESTINATION lib)

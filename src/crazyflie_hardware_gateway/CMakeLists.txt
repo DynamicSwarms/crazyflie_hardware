@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.10)
 project(crazyflie_hardware_gateway)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -18,13 +18,12 @@ target_include_directories(gateway PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(gateway PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
-ament_target_dependencies(
-  gateway
-  rclcpp
-  rclcpp_components
-  ament_index_cpp
-  rclcpp_lifecycle
-  crazyflie_interfaces
+target_link_libraries(gateway
+  rclcpp::rclcpp
+  rclcpp_components::component
+  ament_index_cpp::ament_index_cpp
+  rclcpp_lifecycle::rclcpp_lifecycle
+  crazyflie_interfaces::crazyflie_interfaces
 )
 
 install(TARGETS gateway

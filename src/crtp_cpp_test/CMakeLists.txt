@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.10)
 project(crtp_cpp_test)
 
 
@@ -14,9 +14,9 @@ find_package(crtp_cpp REQUIRED)
 add_executable(test_node 
     src/test_node.cpp)
 
-ament_target_dependencies(test_node
-  crtp_cpp
-  rclcpp)
+target_link_libraries(test_node
+  crtp_cpp::crtp_cpp
+  rclcpp::rclcpp)
 
 
 install(TARGETS 

@@ -50,16 +50,14 @@ public:
             m_logEnabled,
             "crazyradio_log_" + std::to_string(channel) + ".log");
 
-        auto qos = rclcpp::QoS(1000);
-        qos.reliable();
-        qos.keep_all();
-        qos.durability_volatile();
+
+        auto qos = rclcpp::ServicesQoS().keep_all().reliable().durability_volatile();
 
         crtp_send_callback_group = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
         send_crtp_packet_service = this->create_service<crtp_interfaces::srv::CrtpPacketSend>(
             "crazyradio/send_crtp_packet" + std::to_string(channel),
             std::bind(&CrazyradioNode::sendCrtpPacketCallback, this, _1, _2, _3),
-            qos.get_rmw_qos_profile(),
+            qos,
             crtp_send_callback_group);
 
         send_response_pub = this->create_publisher<crtp_interfaces::msg::CrtpResponse>(

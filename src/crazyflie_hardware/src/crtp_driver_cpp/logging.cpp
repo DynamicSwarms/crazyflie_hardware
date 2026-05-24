@@ -75,7 +75,7 @@ void Logging::start_logging_pose()
 
     auto publisher_options = rclcpp::PublisherOptions();
     publisher_options.callback_group = m_callback_group;
-    log_pose_pub = rclcpp::create_publisher<crazyflie_interfaces::msg::PoseStampedArray>(
+    log_pose_pub = rclcpp::create_publisher<crazyflie_interfaces::msg::PoseNamedArray>(
         m_topics_interface,
         "/cf_positions",
         rclcpp::QoS(10),
@@ -219,12 +219,16 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
         }
         if (block_id == POSE_BLOCK_ID && log_pose && values.size() == 4)
         {
-            auto posearray = crazyflie_interfaces::msg::PoseStampedArray();
+            auto posearray = crazyflie_interfaces::msg::PoseNamedArray();
+            posearray.header.stamp = m_clock_interface->get_clock()->now();
+            posearray.header.frame_id = "world";
+
             float q[4];
             quatdecompress(values[3], q);
-            geometry_msgs::msg::PoseStamped pose;
+            crazyflie_interfaces::msg::PoseNamed pose;
             pose.header.stamp = m_clock_interface->get_clock()->now();
-            pose.header.frame_id = m_base_interface->get_name();
+            pose.name = m_base_interface->get_name();
+            pose.rotation_valid = true;
 
             pose.pose.position.x = values[0];
             pose.pose.position.y = values[1];
