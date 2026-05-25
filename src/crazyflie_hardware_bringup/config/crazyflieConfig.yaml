@@ -4,8 +4,8 @@
       commander:
         enHighLevel: 1
       stabilizer:
-        estimator: 2
-        controller: 2
+        estimator: 2 # 1 Complementary, 2 EKF, 3 UKF
+        controller: 2 # 1 PID, 2 MEL, 3 INDI, 4 Brescianini, 5 Lee
       locSrv:
         extPosStdDev: 1e-2
         extQuatStdDev: 0.5e-1
