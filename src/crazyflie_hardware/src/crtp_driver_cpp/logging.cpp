@@ -1,6 +1,8 @@
 #include "crazyflie_hardware/crtp_driver_cpp/logging.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 
+#include <cmath>
+
 using std::placeholders::_1;
 using std::placeholders::_2;
 
@@ -69,7 +71,7 @@ Logging::Logging(
 void Logging::start_logging_pose()
 {
     RCLCPP_WARN(m_logger, "Starting Pose logging.");
-    std::vector<std::string> variables = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimateZ.quat"};
+    std::vector<std::string> variables = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimate.roll", "stateEstimate.pitch", "stateEstimate.yaw"};
     LoggingLogic::add_block(POSE_BLOCK_ID, variables);
     LoggingLogic::start_block(POSE_BLOCK_ID, 5); // 20 Hz
 
@@ -217,27 +219,37 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
             msg.timestamp = timestamp;
             log_state_pub->publish(msg);
         }
-        if (block_id == POSE_BLOCK_ID && log_pose && values.size() == 4)
+        if (block_id == POSE_BLOCK_ID && log_pose && values.size() == 6)
         {
             auto posearray = crazyflie_interfaces::msg::PoseNamedArray();
             posearray.header.stamp = m_clock_interface->get_clock()->now();
             posearray.header.frame_id = "world";
 
-            float q[4];
-            quatdecompress(values[3], q);
+            
             crazyflie_interfaces::msg::PoseNamed pose;
             pose.header.stamp = m_clock_interface->get_clock()->now();
             pose.name = m_base_interface->get_name();
             pose.rotation_valid = true;
-
+            
             pose.pose.position.x = values[0];
             pose.pose.position.y = values[1];
             pose.pose.position.z = values[2];
 
-            pose.pose.orientation.x = q[0];
-            pose.pose.orientation.y = q[1];
-            pose.pose.orientation.z = q[2];
-            pose.pose.orientation.w = q[3];
+            const double roll = values[3] / 180.0 * M_PI; 
+            const double pitch = - values[4] / 180.0 * M_PI; // legacy CF2 body frame has pitch inverted
+            const double yaw = values[5] / 180.0 * M_PI; 
+
+            const double cy = std::cos(yaw * 0.5);
+            const double sy = std::sin(yaw * 0.5);
+            const double cp = std::cos(pitch * 0.5);
+            const double sp = std::sin(pitch * 0.5);
+            const double cr = std::cos(roll * 0.5);
+            const double sr = std::sin(roll * 0.5);
+
+            pose.pose.orientation.w = cr * cp * cy + sr * sp * sy;
+            pose.pose.orientation.x = sr * cp * cy - cr * sp * sy;
+            pose.pose.orientation.y = cr * sp * cy + sr * cp * sy;
+            pose.pose.orientation.z = cr * cp * sy - sr * sp * cy;
             posearray.poses.push_back(pose);
 
             log_pose_pub->publish(posearray);
