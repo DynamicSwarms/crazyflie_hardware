@@ -58,8 +58,8 @@ class CrtpLinkContainer
         bool linkGetHighestPriorityPacket(CrtpLinkIdentifier * link, CrtpPacket * packet);
         bool linkReleasePacket(CrtpLinkIdentifier  * link_id, CrtpPacket * responsePacket, CrtpResponseCallback & callback);
 
-        void linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id);
-        void linkNotifySuccessfullPortMessage(CrtpLinkIdentifier * link_id, CrtpPort port);
+        void linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id, bool responseIsNullpacket);
+        void linkNotifySuccessfullPortMessage(CrtpLinkIdentifier * link_id, CrtpPort port, bool responseIsNullpacket);
         bool linkNotifyFailedNullpacket(CrtpLinkIdentifier * link_id);
         bool linkNotifyFailedPortMessage(CrtpLinkIdentifier * link_id);
 

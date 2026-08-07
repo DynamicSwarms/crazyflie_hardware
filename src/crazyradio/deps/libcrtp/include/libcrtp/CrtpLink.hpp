@@ -54,12 +54,12 @@ class CrtpLink
          * A nullpacket from polling was successfully sent. 
          * Reset connection stats.
         */
-        void notifySuccessfullNullpacket();
+        void notifySuccessfullNullpacket(bool responseIsNullpacket);
 
         /**
          * Will remove the message from the Port because it was successfully sent out. 
         */
-        void notifySuccessfullPortMessage(CrtpPort port);
+        void notifySuccessfullPortMessage(CrtpPort port, bool responseIsNullpacket);
 
         /** 
          * Notifies about a failed nullpacket attempt, returns true if link shall die.
@@ -112,7 +112,7 @@ class CrtpLink
     // Configurable parameters
     private: 
         uint8_t m_failedMessagesMaximum;
-        uint32_t m_nullpacketPeriodMs;
+        uint32_t m_nullpacketRelaxationMs;
         uint32_t m_lastSuccessfullMessageTimeoutMs;
         uint32_t m_failedMessageRetryTimeoutMs;
     
@@ -122,7 +122,7 @@ class CrtpLink
         uint32_t m_timeSinceLastSuccessfullMessageMs;
 
         uint8_t m_failedPortMessagesCount;
-        uint32_t m_timeSinceLastNullpacketMs;
+        uint32_t m_timeSinceLastReceivedNullpacketMs;
         uint32_t m_timeSinceLastFailedPortMessageMs;
         uint64_t m_linkQuality; // 64 bits of failed and successful messages (bits)
 };

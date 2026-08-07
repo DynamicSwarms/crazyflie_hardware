@@ -24,13 +24,13 @@ CrtpLink::CrtpLink(
     , m_datarate(datarate)
     , m_isBroadcast(((address >> 4 * 8) & 0xFF) == 0xFF) // Broadcasting Links have 0xFF as the first byte of the address (cfs have 0xE7)   
     , m_failedMessagesMaximum(100) // After this many failed messages we consider the link dead, we also wait m_failedMessageRetryTimeout before retrying
-    , m_nullpacketPeriodMs(10) // At most 100 Hz for ping messages
+    , m_nullpacketRelaxationMs(10) // Wait at least 10 ms if a nullpacket was received (probably CF doesnt want to talk right now)
     , m_lastSuccessfullMessageTimeoutMs(2000) // If 2 seconds no Communication -> Fail refardless of how many messages failed before.
     , m_failedMessageRetryTimeoutMs(30) // If a message fails, we wait 30 ms before retrying
     , m_failedMessagesCount(0)
     , m_timeSinceLastSuccessfullMessageMs(0)
     , m_failedPortMessagesCount(0)
-    , m_timeSinceLastNullpacketMs(0)
+    , m_timeSinceLastReceivedNullpacketMs(0)
     , m_timeSinceLastFailedPortMessageMs(m_failedMessageRetryTimeoutMs) // Do not wait before sending first message
     , m_linkQuality(~0) // 64 bits of failed and successful messages (bits)
 {
@@ -86,21 +86,21 @@ CrtpPort CrtpLink::getPriorityPort() const
     return CrtpPort::NO_PORT;
 }
 
-void CrtpLink::notifySuccessfullNullpacket()
+void CrtpLink::notifySuccessfullNullpacket(bool responseIsNullpacket)
 {
-    m_timeSinceLastNullpacketMs = 0;
+    if (responseIsNullpacket) m_timeSinceLastReceivedNullpacketMs = 0;
     onSuccessfullMessage();
 }
 
-void CrtpLink::notifySuccessfullPortMessage(CrtpPort port)
+void CrtpLink::notifySuccessfullPortMessage(CrtpPort port, bool responseIsNullpacket)
 {
+    if (responseIsNullpacket) m_timeSinceLastReceivedNullpacketMs = 0;
     m_crtpPortQueues[port].sendPacketSuccess();
     onSuccessfullMessage();
 }
 
 bool CrtpLink::notifyFailedNullpacket()
 {
-    m_timeSinceLastNullpacketMs = 0;
     return onFailedMessage();
 }
 
@@ -121,17 +121,14 @@ void CrtpLink::retrieveAllCallbacks(std::vector<CrtpResponseCallback>& callbacks
 
 void CrtpLink::tickMs(uint8_t ms)
 {
-    m_timeSinceLastNullpacketMs += ms;
+    m_timeSinceLastReceivedNullpacketMs += ms;
     m_timeSinceLastSuccessfullMessageMs += ms;
     m_timeSinceLastFailedPortMessageMs += ms;
 }
 
 bool CrtpLink::isRelaxed() const
 {
-    // if (m_failedMessagesCount) // If we have failed messages and need to sent packets, we should not send nullpackets
-    //     for (const auto& [port, queue] : m_crtpPortQueues) if (! queue.isEmtpy()) return false; 
-    
-    return m_timeSinceLastNullpacketMs >= m_nullpacketPeriodMs;
+    return m_timeSinceLastReceivedNullpacketMs >= m_nullpacketRelaxationMs;
 }
 
 
@@ -185,7 +182,8 @@ bool CrtpLink::onFailedMessage()
     /**
      * Fail after m_failedMessagesMaximum or if lastSuccessfullMessage > m_lastSuccessfullMessageTimeout
     */
-    if (m_failedMessagesCount > m_failedMessagesMaximum || m_timeSinceLastSuccessfullMessageMs > m_lastSuccessfullMessageTimeoutMs) 
+    if (m_failedMessagesCount > m_failedMessagesMaximum
+        || m_timeSinceLastSuccessfullMessageMs > m_lastSuccessfullMessageTimeoutMs)
     {
         return true;
     }

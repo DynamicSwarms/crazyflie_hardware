@@ -104,8 +104,7 @@ private:
     {
         libcrtp::CrtpLinkIdentifier link;
         if (chooseLink(&link))
-            communicateLink(&link, 10); // This recursively communicates up to 10 packets        
-
+            communicateLink(&link);
     }    
 
     bool chooseLink(libcrtp::CrtpLinkIdentifier *link)
@@ -117,7 +116,7 @@ private:
         else return m_links.getRandomRelaxedNonBroadcastLink(link);
     }
 
-    void communicateLink(libcrtp::CrtpLinkIdentifier *link, int maxPackets = 4)
+    void communicateLink(libcrtp::CrtpLinkIdentifier *link)
     {
         libcrtp::CrtpPacket packet = libcrtp::nullPacket;
         libcrtp::CrtpPacket responsePacket;
@@ -128,8 +127,8 @@ private:
         bool sendSuccess = m_radio->sendCrtpPacket(link, &packet, &responsePacket);
         if (sendSuccess)
         {
-            if (isPortPacket) m_links.linkNotifySuccessfullPortMessage(link, packet.port);
-            else m_links.linkNotifySuccessfullNullpacket(link);
+            if (isPortPacket) m_links.linkNotifySuccessfullPortMessage(link, packet.port, libcrtp::isNullPacket(&responsePacket));
+            else m_links.linkNotifySuccessfullNullpacket(link, libcrtp::isNullPacket(&responsePacket));
             handleReponsePacket(link, &responsePacket);
         } else {
             bool shallDie;
@@ -143,13 +142,6 @@ private:
 
         m_logger->logCommunication(link, &packet, &responsePacket, sendSuccess && !link->isBroadcast,
              std::chrono::nanoseconds(get_clock()->now().nanoseconds()));
-
-        if (maxPackets > 1
-            && sendSuccess 
-            && (link->isBroadcast || !libcrtp::isNullPacket(&responsePacket)))
-        {
-            communicateLink(link, maxPackets - 1);
-        }
     }
 
     void handleReponsePacket(libcrtp::CrtpLinkIdentifier *link, libcrtp::CrtpPacket *responsePacket)

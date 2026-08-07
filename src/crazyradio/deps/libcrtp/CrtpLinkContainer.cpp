@@ -191,22 +191,22 @@ bool CrtpLinkContainer::linkReleasePacket(CrtpLinkIdentifier * link_id,
     return false;
 }
 
-void CrtpLinkContainer::linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id)
+void CrtpLinkContainer::linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id, bool responseIsNullpacket)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
     CrtpLink * link;
     if (linkFromIdentifier(&link, link_id)) {
-        link->notifySuccessfullNullpacket();
+        link->notifySuccessfullNullpacket(responseIsNullpacket);
     }
 }
 
 
-void CrtpLinkContainer::linkNotifySuccessfullPortMessage(CrtpLinkIdentifier * link_id, CrtpPort port)
+void CrtpLinkContainer::linkNotifySuccessfullPortMessage(CrtpLinkIdentifier * link_id, CrtpPort port, bool responseIsNullpacket)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
     CrtpLink * link;
     if (linkFromIdentifier(&link, link_id)) {
-        link->notifySuccessfullPortMessage(port);
+        link->notifySuccessfullPortMessage(port, responseIsNullpacket);
     }
 }
 
