@@ -80,9 +80,6 @@ bool Crazyradio::sendCrtpPacket(
     libradio::crazyradio::Crazyradio::Ack ack;
 
     uint8_t data[32];
-    data[0] = packet->port << 4 | packet->channel;
-    memcpy(&data[1], &packet->data, packet->dataLength);
-
     Datarate datarate;
     switch (link->datarate)
     {
@@ -90,6 +87,24 @@ bool Crazyradio::sendCrtpPacket(
         case 1: datarate = libradio::crazyradio::Crazyradio::Datarate_1MPS; break;
         default: datarate = libradio::crazyradio::Crazyradio::Datarate_250KPS; break;
     }
+
+    SafeLinkState * safeLink = nullptr;
+    if (!link->isBroadcast) {
+        auto& state = m_safeLinkStates[safeLinkKey(link)];
+        if (!state.initialized) {
+            state.enabled = enableSafeLink(link, datarate);
+            state.initialized = true;
+            state.up = 0;
+            state.down = 0;
+        }
+        safeLink = &state;
+    }
+
+    data[0] = packet->port << 4 | (packet->channel & 0x03);
+    if (safeLink && safeLink->enabled) {
+        data[0] |= (safeLink->up << 3) | (safeLink->down << 2);
+    }
+    memcpy(&data[1], &packet->data, packet->dataLength);
 
     sendPacketInline(
         data,
@@ -104,7 +119,13 @@ bool Crazyradio::sendCrtpPacket(
     if (link->isBroadcast) return true;    
     if (!ack.ack) {
         return false;
-    } else if (ack.total_length < 2) // If acked, there must be at least a nullpacket beeing sent back (channel/port set)
+    }
+
+    if (safeLink && safeLink->enabled) {
+        safeLink->up ^= 1;
+    }
+
+    if (ack.total_length < 2) // If acked, there must be at least a nullpacket beeing sent back (channel/port set)
     {
         /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
             *  The message however gets succesfully received by the crazyflie.
@@ -115,8 +136,60 @@ bool Crazyradio::sendCrtpPacket(
         return true;
     } 
     
+    if (safeLink && safeLink->enabled) {
+        if (ack.total_length > 2) {
+            const uint8_t receivedDown = (ack.data[0] >> 2) & 0x01;
+            if (receivedDown != safeLink->down) {
+                memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
+                std::cerr << "SafeLink: Down bit mismatch, expected " << (int)safeLink->down << " but got " << (int)receivedDown << std::endl;
+                return true;
+            }
+
+            safeLink->down ^= 1;
+            ack.data[0] &= 0xF3;
+        }
+    }
+
     ackToCrtpPacket(&ack, responsePacket);
     return true;
+}
+
+Crazyradio::SafeLinkKey Crazyradio::safeLinkKey(
+    const libcrtp::CrtpLinkIdentifier * link) const
+{
+    return {link->channel, link->address, link->datarate};
+}
+
+bool Crazyradio::enableSafeLink(
+    const libcrtp::CrtpLinkIdentifier * link,
+    Datarate datarate)
+{
+    const uint8_t request[] = {0xFF, 0x05, 0x01};
+
+    for (int attempt = 0; attempt < 10; ++attempt) {
+        Ack ack;
+        sendPacketInline(
+            request,
+            sizeof(request),
+            datarate,
+            link->channel,
+            link->address,
+            true,
+            ack);
+
+        if (ack.ack && ack.total_length == 5 &&
+            ack.data[0] == 0xFF && ack.data[1] == 0x05 && ack.data[2] == 0x01) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void Crazyradio::resetLink(const libcrtp::CrtpLinkIdentifier * link)
+{
+    std::cerr << "Link Reset for CF 0x" << std::hex << (int)(uint8_t)(link->address & 0xFF) << std::dec << std::endl;
+    m_safeLinkStates.erase(safeLinkKey(link));
 }
 
 void Crazyradio::sendPacketInline(

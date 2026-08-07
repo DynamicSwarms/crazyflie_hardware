@@ -24,6 +24,8 @@ public:
         const libcrtp::CrtpPacket * packet,
         libcrtp::CrtpPacket * responsePacket) override;
 
+    void resetLink(const libcrtp::CrtpLinkIdentifier *) override {}
+
 private:
     void handshake();
     

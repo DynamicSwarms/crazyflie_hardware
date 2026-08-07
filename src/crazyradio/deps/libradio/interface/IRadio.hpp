@@ -14,7 +14,8 @@ public:
         const libcrtp::CrtpPacket* packet,
         libcrtp::CrtpPacket* responsePacket
     ) = 0;
+
+    virtual void resetLink(const libcrtp::CrtpLinkIdentifier* link) = 0;
 };
 
 } // namespace libradio
-

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stdint.h>
+#include <map>
+#include <tuple>
 #include "USBDevice.hpp"
 #include "interface/IRadio.hpp"
 
@@ -55,8 +57,23 @@ public:
         const libcrtp::CrtpLinkIdentifier * link,
         const libcrtp::CrtpPacket * packet,
         libcrtp::CrtpPacket * responsePacket) override;
+
+    void resetLink(const libcrtp::CrtpLinkIdentifier * link) override;
         
 private:
+    struct SafeLinkState
+    {
+        bool initialized = false;
+        bool enabled = false;
+        uint8_t up = 0;
+        uint8_t down = 0;
+    };
+
+    using SafeLinkKey = std::tuple<uint8_t, uint64_t, uint8_t>;
+
+    SafeLinkKey safeLinkKey(const libcrtp::CrtpLinkIdentifier * link) const;
+    bool enableSafeLink(const libcrtp::CrtpLinkIdentifier * link, Datarate datarate);
+
     void sendPacketInline(
         const uint8_t* data,
         uint32_t length, 
@@ -87,6 +104,8 @@ private:
     void setInlineMode(bool enable);
 
     void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
+
+    std::map<SafeLinkKey, SafeLinkState> m_safeLinkStates;
 };
 
 
