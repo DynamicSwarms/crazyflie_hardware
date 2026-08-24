@@ -14,7 +14,7 @@ public:
      * @brief Constructor for ConsoleLogic.
      * @param crtp_link A pointer to the CrtpLink object.
      */
-    ConsoleLogic(CrtpLink *crtp_link);
+    ConsoleLogic(std::shared_ptr<CrtpLink>crtp_link);
 
     /**
      * @brief Sends a console packet.

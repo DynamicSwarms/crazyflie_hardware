@@ -17,7 +17,7 @@ public:
      * @brief Constructor for LocalizationLogic.
      * @param crtp_link A pointer to the CrtpLink object.
      */
-    LocalizationLogic(CrtpLink* crtp_link);
+    LocalizationLogic(std::shared_ptr<CrtpLink> crtp_link);
 
     /**
      * @brief Send the current Crazyflie X, Y, Z position. This is going to be

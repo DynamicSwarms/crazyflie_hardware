@@ -18,8 +18,8 @@ public:
         std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
         std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> node_parameters_interface,
         std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
-        CrtpLink *link);
-    void initialize_parameters();
+        std::shared_ptr<CrtpLink>link);
+    bool initialize_parameters();
 
 private:
     void m_download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg);

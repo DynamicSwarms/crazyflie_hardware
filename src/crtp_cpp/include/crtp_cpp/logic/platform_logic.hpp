@@ -8,7 +8,7 @@
 
 class PlatformLogic : public Logic {
 public:
-    PlatformLogic(CrtpLink* crtp_link);
+    PlatformLogic(std::shared_ptr<CrtpLink> crtp_link);
 
     bool set_cont_wave();
 

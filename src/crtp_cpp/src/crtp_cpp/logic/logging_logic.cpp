@@ -5,7 +5,7 @@
 #define PORT_LOGGING 5
 
 LoggingLogic::LoggingLogic(
-    CrtpLink * crtp_link,
+    std::shared_ptr<CrtpLink> crtp_link,
     const std::string& path
 ) : TocLogic<LogTocEntry>(crtp_link, path, PORT_LOGGING),
     packer(LoggingPacker()) 
@@ -13,16 +13,16 @@ LoggingLogic::LoggingLogic(
     link->add_callback(PORT_LOGGING, std::bind(&LoggingLogic::crtp_response_callback, this, std::placeholders::_1));
 }
 
-void LoggingLogic::start_block(int id, int period_ms_d10) {
-    link->send_packet(packer.start_block(id, period_ms_d10));
+bool LoggingLogic::start_block(int id, int period_ms_d10) {
+    return link->send_packet(packer.start_block(id, period_ms_d10)).has_value();
 }
 
-void LoggingLogic::stop_block(int id) {
-    link->send_packet(packer.stop_block(id));
+bool LoggingLogic::stop_block(int id) {
+    return link->send_packet(packer.stop_block(id)).has_value();
 }
 
-void LoggingLogic::reset() {
-    link->send_packet(packer.reset());
+bool LoggingLogic::reset() {
+    return link->send_packet(packer.reset()).has_value();
 }
 
 bool
@@ -52,7 +52,7 @@ LoggingLogic::add_block(int id, const std::vector<std::string>& variables) {
         }
     }    
     
-    link->send_packet(packer.create_block(id, vars));
+    if (!link->send_packet(packer.create_block(id, vars))) return false;
     blocks[id] = block_entries;
     return true;
 }

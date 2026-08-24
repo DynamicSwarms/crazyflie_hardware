@@ -8,7 +8,7 @@ HighLevelCommander::HighLevelCommander(
     std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface, 
     std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
-    CrtpLink * link)
+    std::shared_ptr<CrtpLink> link)
     : HighLevelCommanderLogic(link)
     , m_logger(node_logging_interface->get_logger().get_child("HighLevelCommander"))
     , m_callback_group(node_base_interface->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive))

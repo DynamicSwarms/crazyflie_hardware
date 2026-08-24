@@ -3,24 +3,41 @@
 #include <chrono>
 using std::placeholders::_1;
 
-RosLink::RosLink(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate)
+RosLink::RosLink(
+    std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeGraphInterface> node_graph_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
+    std::function<void()> shutdown_callback,
+    int channel,
+    std::array<uint8_t, 5> address,
+    int datarate)
     : CrtpLink(channel, address, datarate)
-    , node(node)
-    , logger_name(node->get_name())
+    , node_base_interface(node_base_interface)
+    , node_graph_interface(node_graph_interface)
+    , node_services_interface(node_services_interface)
+    , node_topics_interface(node_topics_interface)
+    , shutdown_callback(std::move(shutdown_callback))
+    , logger_name(node_logging_interface->get_logger().get_name())
 {
-    callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    callback_group = node_base_interface->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto qos = rclcpp::ServicesQoS().keep_all().reliable().durability_volatile();
 
-    send_crtp_packet_client = node->create_client<crtp_interfaces::srv::CrtpPacketSend>(
+    send_crtp_packet_client = rclcpp::create_client<crtp_interfaces::srv::CrtpPacketSend>(
+        node_base_interface,
+        node_graph_interface,
+        node_services_interface,
         "crazyradio/send_crtp_packet" + std::to_string(channel),
         qos,
         callback_group);
 
-    initialized = try_initialize(node);
+    try_initialize();
 }
 
-bool RosLink::try_initialize(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node)
+bool RosLink::try_initialize()
 {
+    state.store(LinkState::Connecting);
     send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500));
     int timeout = 0;
     while (!send_crtp_packet_client->wait_for_service(std::chrono::milliseconds(500)))
@@ -28,6 +45,8 @@ bool RosLink::try_initialize(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> no
         if (timeout++ > 4 || !rclcpp::ok())
         {
             RCLCPP_ERROR(rclcpp::get_logger(logger_name), "Interrupted while waiting for the service. Exiting.");
+            initialized = false;
+            state.store(LinkState::Disconnected);
             return false;
         }
         RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Crazyradio not available, waiting again...");
@@ -35,13 +54,15 @@ bool RosLink::try_initialize(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> no
     auto sub_opt = rclcpp::SubscriptionOptions();
     sub_opt.callback_group = callback_group;
 
-    link_end_sub = node->create_subscription<crtp_interfaces::msg::CrtpLink>(
+    link_end_sub = rclcpp::create_subscription<crtp_interfaces::msg::CrtpLink>(
+        node_topics_interface,
         "/crazyradio/crtp_link_end",
         10,
         std::bind(&RosLink::crtp_link_end_callback, this, _1),
         sub_opt);
 
-    crtp_response_sub = node->create_subscription<crtp_interfaces::msg::CrtpResponse>(
+    crtp_response_sub = rclcpp::create_subscription<crtp_interfaces::msg::CrtpResponse>(
+        node_topics_interface,
         "crazyradio/crtp_response",
         10,
         std::bind(&RosLink::crtp_response_callback, this, _1),
@@ -49,12 +70,19 @@ bool RosLink::try_initialize(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> no
 
     auto pub_opt = rclcpp::PublisherOptions();
     pub_opt.callback_group = callback_group;
-    link_close_pub = node->create_publisher<crtp_interfaces::msg::CrtpLink>(
+    link_close_pub = rclcpp::create_publisher<crtp_interfaces::msg::CrtpLink>(
+        node_topics_interface,
         "/crazyradio/close_crtp_link",
         10,
         pub_opt);
     
-    return true;    
+    auto expected = LinkState::Connecting;
+    if (!state.compare_exchange_strong(expected, LinkState::Connected)) {
+        initialized.store(false);
+        return false;
+    }
+    initialized.store(true);
+    return true;
 }
 
 void RosLink::fill_crtp_request(std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Request> req, const CrtpRequest &request)
@@ -103,11 +131,17 @@ CrtpPacket RosLink::ros_packet_to_packet(const crtp_interfaces::msg::CrtpPacket 
 
 void RosLink::close_link()
 {
+    auto previous_state = state.exchange(LinkState::Disconnecting);
+    if (previous_state == LinkState::Disconnecting || previous_state == LinkState::Disconnected) {
+        return;
+    }
     auto msg = crtp_interfaces::msg::CrtpLink();
     msg.channel = channel;
     msg.address = address;
     msg.datarate = datarate;
     link_close_pub->publish(msg);
+    initialized.store(false);
+    state.store(LinkState::Disconnected);
 }
 
 void RosLink::add_callback(uint8_t port, const CrtpCallbackType &callback)
@@ -119,10 +153,11 @@ void RosLink::crtp_link_end_callback(const crtp_interfaces::msg::CrtpLink::Share
 {
     if (msg->address == address)
     {
+        state.store(LinkState::Disconnecting);
+        initialized.store(false);
         RCLCPP_WARN(rclcpp::get_logger(logger_name), "Connection lost, trying to shut down!");
-        if (auto node_shared = node.lock()) {
-            node_shared->shutdown(); // This works only if we are configured.
-        }
+        shutdown_callback();
+        state.store(LinkState::Disconnected);
     }
 }
 
@@ -144,6 +179,10 @@ void RosLink::crtp_response_callback(const crtp_interfaces::msg::CrtpResponse::S
 
 void RosLink::send_packet_no_response(CrtpRequest request)
 {
+    if (state.load() != LinkState::Connected) {
+        return;
+    }
+
     auto req = std::make_shared<crtp_interfaces::srv::CrtpPacketSend::Request>();
     fill_crtp_request(req, request);
     send_crtp_packet_client->async_send_request(req);
@@ -153,11 +192,14 @@ void RosLink::send_packet_no_response(CrtpRequest request)
 
 std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
 {
-    static bool first_call = true; // The first call might take more time because buffer needs to be cleared
+    std::lock_guard<std::mutex> lock(send_packet_mutex);
+    if (state.load() != LinkState::Connected) {
+        return std::nullopt;
+    }
  
     using namespace std::chrono_literals;
-    std::chrono::seconds timeout = (first_call) ? 5s : 1s; // More time to clear buffer
-    first_call = false;
+    std::chrono::seconds timeout = first_request ? 5s : 1s; // More time to clear buffer
+    first_request = false;
 
     // RCLCPP_WARN(rclcpp::get_logger(logger_name), "Sending with response! p: %d, ch: %d, dl: %d, d1: %d er;%d, mb:%d", request.packet.port, request.packet.channel, request.packet.data_length, request.packet.data[0], request.expects_response, request.matching_bytes);
 
@@ -186,11 +228,17 @@ std::optional<CrtpPacket> RosLink::send_packet(CrtpRequest request)
     }
     ss << "?" << request.expects_response << ", "
     << (int)request.matching_bytes;
-    throw std::runtime_error(ss.str());
+    RCLCPP_WARN(rclcpp::get_logger(logger_name), "%s", ss.str().c_str());
+    return std::nullopt;
 }
 
 std::vector<CrtpPacket> RosLink::send_batch_request(const std::vector<CrtpRequest> requests)
 {
+    std::lock_guard<std::mutex> lock(send_packet_mutex);
+    if (state.load() != LinkState::Connected) {
+        return {};
+    }
+
     RCLCPP_WARN(rclcpp::get_logger(logger_name), "Sending batch! %ld", requests.size());
     std::vector<rclcpp::Client<crtp_interfaces::srv::CrtpPacketSend>::SharedFuture> results;
 

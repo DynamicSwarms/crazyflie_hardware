@@ -8,7 +8,7 @@ Parameters::Parameters(
     std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> node_parameters_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
-    CrtpLink *link)
+    std::shared_ptr<CrtpLink>link)
     : ParametersLogic(link, std::string("mein_pfad"))
     , m_parameters_interface(node_parameters_interface)
     , m_logger(node_logging_interface->get_logger().get_child("Parameters"))
@@ -84,9 +84,9 @@ void Parameters::m_get_firmware_parameters_callback(
     }
 }
 
-void Parameters::initialize_parameters()
+bool Parameters::initialize_parameters()
 {
-    this->initialize_toc(); // Load toc from cf or from file
+    if (!this->initialize_toc()) return false; // Load toc from cf or from file
 
     for (const auto &entry : ParametersLogic::toc_entries)
     {
@@ -105,7 +105,7 @@ void Parameters::initialize_parameters()
     }
     
     m_param_callback_handle = m_parameters_interface->add_on_set_parameters_callback(std::bind(&Parameters::m_set_parameter_callback, this, std::placeholders::_1));    
-    
+    return true;
 }
 
 rcl_interfaces::msg::SetParametersResult Parameters::m_set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters)

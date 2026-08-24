@@ -1,6 +1,6 @@
 #include "crtp_cpp/logic/platform_logic.hpp"
 
-PlatformLogic::PlatformLogic(CrtpLink* crtp_link)
+PlatformLogic::PlatformLogic(std::shared_ptr<CrtpLink> crtp_link)
     : Logic(crtp_link),
       packer(PlatformPacker()) {}
 

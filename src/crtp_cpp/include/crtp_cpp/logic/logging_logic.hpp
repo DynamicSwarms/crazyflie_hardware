@@ -14,13 +14,13 @@
 
 class LoggingLogic : public TocLogic<LogTocEntry> {
 public:
-    LoggingLogic(CrtpLink * crtp_link, const std::string& path);
+    LoggingLogic(std::shared_ptr<CrtpLink> crtp_link, const std::string& path);
 
 
-    void start_block(int id, int period_ms_d10);
-    void stop_block(int id);
+    bool start_block(int id, int period_ms_d10);
+    bool stop_block(int id);
     bool add_block(int id, const std::vector<std::string>& variables);
-    void reset();
+    bool reset();
 
     std::vector<float> unpack_block(int block_id, const std::vector<uint8_t>& data);
 private:

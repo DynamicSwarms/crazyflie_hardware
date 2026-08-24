@@ -1,6 +1,6 @@
 #include "crtp_cpp/logic/basic_commander_logic.hpp"
 
-BasicCommanderLogic::BasicCommanderLogic(CrtpLink* crtp_link)
+BasicCommanderLogic::BasicCommanderLogic(std::shared_ptr<CrtpLink> crtp_link)
     : Logic(crtp_link),
       packer(BasicCommanderPacker()) {
     x_mode = false; // Initialize x-mode to false by default

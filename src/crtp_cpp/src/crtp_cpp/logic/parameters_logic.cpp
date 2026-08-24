@@ -55,7 +55,7 @@ bool ParamTocEntry::isDouble() const
 }
 
 
-ParametersLogic::ParametersLogic(CrtpLink* crtp_link, const std::string& path)
+ParametersLogic::ParametersLogic(std::shared_ptr<CrtpLink> crtp_link, const std::string& path)
     : TocLogic<ParamTocEntry>(crtp_link, path, PORT_PARAMETER),
       packer(ParametersPacker()) {}
 

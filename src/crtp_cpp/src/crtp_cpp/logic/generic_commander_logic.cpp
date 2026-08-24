@@ -1,6 +1,6 @@
 #include "crtp_cpp/logic/generic_commander_logic.hpp"
 
-GenericCommanderLogic::GenericCommanderLogic(CrtpLink* crtp_link)
+GenericCommanderLogic::GenericCommanderLogic(std::shared_ptr<CrtpLink> crtp_link)
     : Logic(crtp_link),
       packer(GenericCommanderPacker()) {}
 

@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-LocalizationLogic::LocalizationLogic(CrtpLink* crtp_link)
+LocalizationLogic::LocalizationLogic(std::shared_ptr<CrtpLink> crtp_link)
     : Logic(crtp_link),
       packer(LocalizationPacker()) {}
 

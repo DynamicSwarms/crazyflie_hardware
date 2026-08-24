@@ -21,7 +21,7 @@ public:
      * @brief Constructor for HighLevelCommanderLogic.
      * @param crtp_link A pointer to the CrtpLink object.
      */
-    HighLevelCommanderLogic(CrtpLink* crtp_link);
+    HighLevelCommanderLogic(std::shared_ptr<CrtpLink> crtp_link);
 
     /**
      * @brief Set the group mask that the Crazyflie belongs to.

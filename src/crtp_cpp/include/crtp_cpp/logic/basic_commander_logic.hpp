@@ -6,7 +6,7 @@
 
 class BasicCommanderLogic : public Logic {
 public: 
-    BasicCommanderLogic(CrtpLink * crtp_link);
+    BasicCommanderLogic(std::shared_ptr<CrtpLink> crtp_link);
     
     void set_client_xmode(bool enable);
 

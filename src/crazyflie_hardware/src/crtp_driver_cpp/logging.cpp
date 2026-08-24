@@ -17,7 +17,7 @@ Logging::Logging(
     std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeTimersInterface> node_timers_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeClockInterface> node_clock_interface,
-    CrtpLink *link)
+    std::shared_ptr<CrtpLink>link)
     : LoggingLogic(link, std::string("mein_pfad"))
     , m_node(node)
     , m_base_interface(node_base_interface)
@@ -68,12 +68,12 @@ Logging::Logging(
     RCLCPP_DEBUG(m_logger, "Logging  initialized");
 }
 
-void Logging::start_logging_pose()
+bool Logging::start_logging_pose()
 {
     RCLCPP_WARN(m_logger, "Starting Pose logging.");
     std::vector<std::string> variables = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimate.roll", "stateEstimate.pitch", "stateEstimate.yaw"};
-    LoggingLogic::add_block(POSE_BLOCK_ID, variables);
-    LoggingLogic::start_block(POSE_BLOCK_ID, 5); // 20 Hz
+    if (!LoggingLogic::add_block(POSE_BLOCK_ID, variables)) return false;
+    if (!LoggingLogic::start_block(POSE_BLOCK_ID, 5)) return false; // 20 Hz
 
     auto publisher_options = rclcpp::PublisherOptions();
     publisher_options.callback_group = m_callback_group;
@@ -84,19 +84,20 @@ void Logging::start_logging_pose()
         publisher_options
     );
     log_pose = true;
+    return true;
 }
 
-void Logging::start_logging_pm()
+bool Logging::start_logging_pm()
 {
     RCLCPP_DEBUG(m_logger, "Starting State logging.");
     std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled"};
     if (!LoggingLogic::add_block(STATE_BLOCK_ID, variables))
     {
         RCLCPP_ERROR(m_logger, "Failed to create state log block. Variable not found in TOC.");
-        return;
+        return false;
     }
 
-    LoggingLogic::start_block(STATE_BLOCK_ID, 50); // 2 Hz
+    if (!LoggingLogic::start_block(STATE_BLOCK_ID, 50)) return false; // 2 Hz
 
     auto publisher_options = rclcpp::PublisherOptions();
     publisher_options.callback_group = m_callback_group;
@@ -107,6 +108,7 @@ void Logging::start_logging_pm()
         publisher_options
     );
     log_state = true;
+    return true;
 }
 
 void 
@@ -120,8 +122,8 @@ Logging::m_add_log_block_service(
     {
         int period_ms_d10 = 1000 / request->frequency;
         period_ms_d10 /= 10; // convert ms to d10ms
-        LoggingLogic::start_block(next_log_block_id - 1, period_ms_d10);
-        response->success = true;
+        response->success = LoggingLogic::start_block(next_log_block_id - 1, period_ms_d10);
+        if (!response->success) return;
         RCLCPP_INFO(m_logger, "Successfully created log block: %s", request->topic_name.c_str());
     }
     else
@@ -139,7 +141,21 @@ Logging::m_remove_log_block_service(
 {
     RCLCPP_INFO(m_logger, "Received request to remove log block: %s", request->topic_name.c_str());
     if (m_log_block_ids.count(request->topic_name)) {
-        LoggingLogic::stop_block(m_log_block_ids[request->topic_name]);
+        bool stopped = false;
+        try {
+            stopped = LoggingLogic::stop_block(m_log_block_ids[request->topic_name]);
+        } catch (const std::exception &exception) {
+            // Link teardown can race this service callback. Convert the CRTP
+            // failure into a normal service failure instead of letting an
+            // exception escape the executor and terminate the process.
+            RCLCPP_WARN(
+                m_logger, "Failed to stop log block '%s': %s",
+                request->topic_name.c_str(), exception.what());
+        }
+        if (!stopped) {
+            response->success = false;
+            return;
+        }
         m_log_blocks.erase(m_log_block_ids[request->topic_name]);
         m_log_block_ids.erase(request->topic_name);
         response->success = true;
@@ -263,10 +279,9 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
     // RCLCPP_WARN(rclcpp::get_logger(logger_name), "Logging received a packet with channel %X", packet.channel);
 }
 
-void Logging::initialize_logging()
+bool Logging::initialize_logging()
 {
-    LoggingLogic::reset();
-    initialize_toc(); // Load toc from cf or from file
+    return LoggingLogic::reset() && initialize_toc(); // Load toc from cf or from file
 }
 
 void Logging::download_toc_callback(const std_msgs::msg::Empty::SharedPtr msg)

@@ -14,7 +14,7 @@ public:
      * @brief Constructor for LinkLayerLogic.
      * @param crtp_link A pointer to the CrtpLink object.
      */
-    LinkLayerLogic(CrtpLink* crtp_link);
+    LinkLayerLogic(std::shared_ptr<CrtpLink> crtp_link);
 
     /**
      * @brief Sends a null packet.

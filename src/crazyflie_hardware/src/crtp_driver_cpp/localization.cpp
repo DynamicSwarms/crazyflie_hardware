@@ -7,7 +7,7 @@ Localization::Localization(
     std::shared_ptr<rclcpp::node_interfaces::NodeGraphInterface> node_graph_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
-    CrtpLink *link, 
+    std::shared_ptr<CrtpLink> link,
     std::string tf_name)
     : LocalizationLogic(link)
     , m_base_interface(node_base_interface)

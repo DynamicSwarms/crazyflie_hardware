@@ -28,14 +28,14 @@ public:
      * @param crtp_link A pointer to the CrtpLink object.
      * @param path Path to the TOC cache file.
      */
-    TocLogic(CrtpLink* crtp_link, const std::string& path, uint8_t port);
+    TocLogic(std::shared_ptr<CrtpLink> crtp_link, const std::string& path, uint8_t port);
 
     bool load_from_file(uint32_t crc);
     void write_to_file();
     /**
      * @brief Initializes the TOC by fetching or downloading items.
      */
-    void initialize_toc();
+    bool initialize_toc();
 
     /**
      * @brief Sends a request to get TOC information.
@@ -46,7 +46,7 @@ public:
     /**
      * @brief Sends requests to download all TOC items.
      */
-    void send_download_toc_items();
+    bool send_download_toc_items();
 
 protected:
     TocPacker packer;

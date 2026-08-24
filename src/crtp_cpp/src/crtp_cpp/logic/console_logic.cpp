@@ -1,6 +1,6 @@
 #include "crtp_cpp/logic/console_logic.hpp"
 
-ConsoleLogic::ConsoleLogic(CrtpLink *crtp_link)
+ConsoleLogic::ConsoleLogic(std::shared_ptr<CrtpLink>crtp_link)
     : Logic(crtp_link),
       packer(ConsolePacker())
 {

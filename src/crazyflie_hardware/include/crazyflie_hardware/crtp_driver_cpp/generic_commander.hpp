@@ -16,7 +16,7 @@ public:
         std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface, 
         std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> node_parameters_interface,
         std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
-        CrtpLink * link);
+        std::shared_ptr<CrtpLink> link);
 private: 
 
     void cmd_position_callback(const crazyflie_interfaces::msg::Position::SharedPtr msg);

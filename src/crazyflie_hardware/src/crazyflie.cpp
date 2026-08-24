@@ -31,13 +31,25 @@ public:
   Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate)
       : node(node)
       , tf_name(get_tf_name(address))
-      , link(std::make_unique<RosLink>(node, channel, address, datarate))
+      , link(std::make_shared<RosLink>(
+          node->get_node_base_interface(),
+          node->get_node_graph_interface(),
+          node->get_node_services_interface(),
+          node->get_node_topics_interface(),
+          node->get_node_logging_interface(),
+          [weak_node = std::weak_ptr<rclcpp_lifecycle::LifecycleNode>(node)] {
+            if (auto node_shared = weak_node.lock()) node_shared->shutdown();
+          },
+          channel,
+          address,
+          datarate))
       , configured(false)
   {
     try
     {
       if (!link->initialized) {
-        throw std::runtime_error("Link initialization failed!");
+        RCLCPP_ERROR(node->get_logger(), "Link initialization failed!");
+        return;
       }
       
       // Create submodules
@@ -45,27 +57,27 @@ public:
         node->get_node_base_interface(),
         node->get_node_topics_interface(),
         node->get_node_logging_interface(),
-        link.get());
+        link);
       hl_commander = std::make_unique<HighLevelCommander>(
         node->get_node_base_interface(),
         node->get_node_topics_interface(),
         node->get_node_services_interface(),
         node->get_node_logging_interface(),
-        link.get());
+        link);
       generic_commander = std::make_unique<GenericCommander>(
         node->get_node_base_interface(),
         node->get_node_topics_interface(),
         node->get_node_services_interface(),   
         node->get_node_parameters_interface(),    
         node->get_node_logging_interface(),
-        link.get());
+        link);
       parameters = std::make_unique<Parameters>(
         node->get_node_base_interface(),
         node->get_node_topics_interface(),
         node->get_node_services_interface(),
         node->get_node_parameters_interface(),
         node->get_node_logging_interface(),
-        link.get());
+        link);
       logging = std::make_unique<Logging>(
         node,
         node->get_node_base_interface(),
@@ -74,27 +86,33 @@ public:
         node->get_node_logging_interface(),
         node->get_node_timers_interface(),
         node->get_node_clock_interface(),
-        link.get());
+        link);
       localization = std::make_unique<Localization>(
         node->get_node_base_interface(),
         node->get_node_graph_interface(),
         node->get_node_services_interface(),
         node->get_node_logging_interface(),
-        link.get(), 
+        link,
         tf_name);
       platform = std::make_unique<Platform>(
         node->get_node_base_interface(),
         node->get_node_logging_interface(),
-        link.get());
+        link);
       link_layer = std::make_unique<LinkLayer>(
         node->get_node_base_interface(),
         node->get_node_logging_interface(),
-        link.get());
+        link);
 
 
       // The initalization might fail because of the connection.
-      parameters->initialize_parameters();
-      logging->initialize_logging();
+      if (!parameters->initialize_parameters()) {
+        RCLCPP_ERROR(node->get_logger(), "Parameter initialization failed!");
+        return;
+      }
+      if (!logging->initialize_logging()) {
+        RCLCPP_ERROR(node->get_logger(), "Logging initialization failed!");
+        return;
+      }
 
       RCLCPP_DEBUG(node->get_logger(), "Setting default Parameters");
 
@@ -116,8 +134,10 @@ public:
       {
         RCLCPP_DEBUG(node->get_logger(), "Setting up tracking services.");
         bool external_tracking_success = localization->start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
-        if (!external_tracking_success)
-          throw std::runtime_error("Adding to tracking failed!");
+        if (!external_tracking_success) {
+          RCLCPP_ERROR(node->get_logger(), "Adding to tracking failed!");
+          return;
+        }
 
 
         rclcpp::Parameter kalman_reset_param("kalman.resetEstimation", 1);
@@ -126,9 +146,15 @@ public:
       }
       else
       {
-        logging->start_logging_pose();
+        if (!logging->start_logging_pose()) {
+          RCLCPP_ERROR(node->get_logger(), "Pose logging initialization failed!");
+          return;
+        }
       }
-      logging->start_logging_pm();
+      if (!logging->start_logging_pm()) {
+        RCLCPP_ERROR(node->get_logger(), "State logging initialization failed!");
+        return;
+      }
       configured = true;
     }
     catch (const std::exception &exc)
@@ -147,7 +173,6 @@ public:
   {
     if (link->initialized)
       link->close_link();
-    link.reset();
   }
 
 private:
@@ -174,7 +199,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr localization_lost_sub;
   std::string tf_name;
 
-  std::unique_ptr<RosLink> link;
+  std::shared_ptr<RosLink> link;
   std::unique_ptr<Console> console;
   std::unique_ptr<HighLevelCommander> hl_commander;
   std::unique_ptr<GenericCommander> generic_commander;

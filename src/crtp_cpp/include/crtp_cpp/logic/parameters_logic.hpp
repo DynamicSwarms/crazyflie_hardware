@@ -40,7 +40,7 @@ public:
      * @param crtp_link A pointer to the CrtpLink object.
      * @param path Path to the parameter TOC file.
      */
-    ParametersLogic(CrtpLink* crtp_link, const std::string& path);
+    ParametersLogic(std::shared_ptr<CrtpLink> crtp_link, const std::string& path);
     
     
 

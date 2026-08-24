@@ -24,12 +24,12 @@ public:
         std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
         std::shared_ptr<rclcpp::node_interfaces::NodeTimersInterface> node_timers_interface,
         std::shared_ptr<rclcpp::node_interfaces::NodeClockInterface> node_clock_interface,
-        CrtpLink * link);
+        std::shared_ptr<CrtpLink> link);
 
-    void initialize_logging();
+    bool initialize_logging();
 
-    void start_logging_pm();
-    void start_logging_pose();
+    bool start_logging_pm();
+    bool start_logging_pose();
 
 private: 
 
@@ -87,4 +87,4 @@ private:
     uint8_t next_log_block_id = 2;
     std::map<int, std::shared_ptr<LogBlock>> m_log_blocks;
     std::map<std::string, int> m_log_block_ids;
-};  
+};

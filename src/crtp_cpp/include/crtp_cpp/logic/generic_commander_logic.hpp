@@ -18,7 +18,7 @@ public:
      * @brief Constructor for GenericCommanderLogic.
      * @param crtp_link A pointer to the CrtpLink object.
      */
-    GenericCommanderLogic(CrtpLink* crtp_link);
+    GenericCommanderLogic(std::shared_ptr<CrtpLink> crtp_link);
 
     /**
      * @brief Sends a packet so that the priority of the current setpoint to the lowest non-disabled value,

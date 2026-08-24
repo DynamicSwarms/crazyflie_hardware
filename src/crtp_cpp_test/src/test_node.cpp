@@ -53,8 +53,8 @@ int main(int argc, char ** argv)
   (void) argc;
   (void) argv;
 
-  Link link(10, {1, 2,3, 4, 5}, 250);
-  HighLevelCommanderLogic logic(&link);
+  auto link = std::make_shared<Link>(10, std::array<uint8_t, 5>{1, 2, 3, 4, 5}, 250);
+  HighLevelCommanderLogic logic(link);
   logic.send_stop(5);
 
   printf("hello world crtp_cpp_test package\n");

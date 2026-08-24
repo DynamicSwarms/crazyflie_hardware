@@ -169,12 +169,23 @@ private:
             auto it = m_links.find(channel_datarate);
             if (it != m_links.end()) 
             { // Already in list.  
-                if (!it->second->initialized) it->second->try_initialize(this->shared_from_this());
+                if (!it->second->initialized) it->second->try_initialize();
             } else {
                 lock.unlock();
                 std::array<uint8_t, 5> address = {0xFF, 0xE7, 0xE7, 0xE7, 0xE7}; // Fixed for Broadcasts
                 // The link creation might take up time because it is waited for the radio.
-                auto link = std::make_shared<RosLink>(this->shared_from_this(), request->channel, address, request->data_rate);
+                auto link = std::make_shared<RosLink>(
+                    get_node_base_interface(),
+                    get_node_graph_interface(),
+                    get_node_services_interface(),
+                    get_node_topics_interface(),
+                    get_node_logging_interface(),
+                    [weak_node = std::weak_ptr<rclcpp_lifecycle::LifecycleNode>(shared_from_this())] {
+                        if (auto node_shared = weak_node.lock()) node_shared->shutdown();
+                    },
+                    request->channel,
+                    address,
+                    request->data_rate);
                 lock.lock();
                 m_links[channel_datarate] = link;
             } // lock is locked after this !!

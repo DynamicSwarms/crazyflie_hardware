@@ -7,7 +7,7 @@
 #include "crtp_cpp/logic/logging_logic.hpp"
 
 template <class T>
-TocLogic<T>::TocLogic(CrtpLink *crtp_link, const std::string &path, uint8_t port)
+TocLogic<T>::TocLogic(std::shared_ptr<CrtpLink>crtp_link, const std::string &path, uint8_t port)
     : Logic(crtp_link)
     , packer(TocPacker(port))
     , toc_cache_path(path) {}
@@ -34,7 +34,7 @@ void TocLogic<T>::write_to_file()
 {
     if (!nbr_of_items.has_value() || !crc.has_value())
     {
-        send_download_toc_items();
+        if (!send_download_toc_items()) return;
     }
 
     std::string fileName = std::to_string(crc.value()) + ".csv";
@@ -49,15 +49,17 @@ void TocLogic<T>::write_to_file()
 }
 
 template <class T>
-void TocLogic<T>::initialize_toc()
+bool TocLogic<T>::initialize_toc()
 {
     auto [nbr_of_items, crc] = send_get_toc_info();
+    if (!this->nbr_of_items || !this->crc) return false;
     bool cached = load_from_file(crc);
     if (!cached)
     {
-        send_download_toc_items();
+        if (!send_download_toc_items()) return false;
         write_to_file();
     }
+    return true;
 }
 
 template <class T>
@@ -70,9 +72,9 @@ std::pair<uint16_t, uint32_t> TocLogic<T>::send_get_toc_info()
     uint32_t crc;
     if (!response || response.value().data_length < 7)
     {
-        nbr_of_items = 0;
-        crc = 0;
-        // throw std::runtime_error("Invalid TOC info response");
+        this->nbr_of_items.reset();
+        this->crc.reset();
+        return {0, 0};
     }
     else
     {
@@ -86,11 +88,12 @@ std::pair<uint16_t, uint32_t> TocLogic<T>::send_get_toc_info()
 }
 
 template <class T>
-void TocLogic<T>::send_download_toc_items()
+bool TocLogic<T>::send_download_toc_items()
 {
     if (!nbr_of_items.has_value() || !crc.has_value())
     {
         send_get_toc_info();
+        if (!nbr_of_items.has_value() || !crc.has_value()) return false;
     }
 
     std::vector<CrtpRequest> requests;
@@ -101,11 +104,13 @@ void TocLogic<T>::send_download_toc_items()
 
     toc_entries.clear();
     auto responses = link->send_batch_request(requests);
+    if (responses.size() != requests.size()) return false;
     for (const auto &packet : responses)
     {
         std::vector<uint8_t> data(packet.data, packet.data + packet.data_length);
         toc_entries.push_back(T(data));
     }
+    return true;
 }
 
 template class TocLogic<ParamTocEntry>;

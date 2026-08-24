@@ -1,7 +1,7 @@
 #include "crtp_cpp/logic/hl_commander_logic.hpp"
 
 HighLevelCommanderLogic::HighLevelCommanderLogic(
-        CrtpLink * crtp_link
+        std::shared_ptr<CrtpLink> crtp_link
 ) : Logic(crtp_link),
     packer(HighLevelCommanderPacker())
 {}

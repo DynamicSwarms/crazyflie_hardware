@@ -1,6 +1,6 @@
 #include "crtp_cpp/logic/link_layer_logic.hpp"
 
-LinkLayerLogic::LinkLayerLogic(CrtpLink* crtp_link)
+LinkLayerLogic::LinkLayerLogic(std::shared_ptr<CrtpLink> crtp_link)
     : Logic(crtp_link),
       packer(LinkLayerPacker()) {}
 
