@@ -4,7 +4,9 @@
 #include "crtp_cpp/logic/toc_logic.hpp"
 #include "crtp_cpp/packer/crtp_packer.hpp"
 #include "crtp_cpp/packer/parameters_packer.hpp"
+#include <optional>
 #include <string>
+#include <variant>
 
 struct ParamTocEntry : public TocEntry{
     uint16_t id;
@@ -49,6 +51,9 @@ public:
      * @param value The parameter value.
      */
     bool send_set_parameter(const std::string& group, const std::string& name, std::variant<int, double> value);
+
+    std::optional<std::variant<int64_t, double>> send_get_parameter(
+        const std::string& group, const std::string& name);
 
 private:
     ParametersPacker packer;

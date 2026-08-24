@@ -62,6 +62,7 @@ public:
       parameters = std::make_unique<Parameters>(
         node->get_node_base_interface(),
         node->get_node_topics_interface(),
+        node->get_node_services_interface(),
         node->get_node_parameters_interface(),
         node->get_node_logging_interface(),
         link.get());

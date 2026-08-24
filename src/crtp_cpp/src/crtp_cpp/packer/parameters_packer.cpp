@@ -12,6 +12,16 @@
 ParametersPacker::ParametersPacker()
     : TocPacker(PORT_PARAMETER) {}
 
+CrtpRequest ParametersPacker::get_parameter(uint16_t id) {
+    CrtpRequest request;
+    std::vector<uint8_t> data(2);
+    std::memcpy(data.data(), &id, sizeof(id));
+    request.packet = prepare_packet(data, READ_CHANNEL);
+    request.expects_response = true;
+    request.matching_bytes = 2;
+    return request;
+}
+
 CrtpPacket ParametersPacker::prepare_packet(const std::vector<uint8_t>& data, uint8_t channel) {
     return CrtpPacker::prepare_packet(channel, data);
 }

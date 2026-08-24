@@ -16,6 +16,7 @@
   <depend>crtp_interfaces</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
+  <depend>rcl_interfaces</depend>
 
 
 

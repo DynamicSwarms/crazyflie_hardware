@@ -1,9 +1,11 @@
 #include "crazyflie_hardware/crtp_driver_cpp/parameters.hpp"
 using std::placeholders::_1;
+using std::placeholders::_2;
 
 Parameters::Parameters(
     std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface,
+    std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> node_parameters_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
     CrtpLink *link)
@@ -29,7 +31,57 @@ Parameters::Parameters(
         std::bind(&Parameters::m_get_toc_info_callback, this, _1),
         sub_opt);
 
+    m_get_firmware_parameters_service = rclcpp::create_service<rcl_interfaces::srv::GetParameters>(
+        node_base_interface,
+        node_services_interface,
+        "~/get_firmware_parameters",
+        std::bind(&Parameters::m_get_firmware_parameters_callback, this, _1, _2),
+        rmw_qos_profile_services_default,
+        m_callback_group);
+
     RCLCPP_DEBUG(m_logger, "Parameters  initialized");
+}
+
+void Parameters::m_get_firmware_parameters_callback(
+    const rcl_interfaces::srv::GetParameters::Request::SharedPtr request,
+    rcl_interfaces::srv::GetParameters::Response::SharedPtr response)
+{
+    response->values.reserve(request->names.size());
+    for (const auto &full_name : request->names)
+    {
+        rcl_interfaces::msg::ParameterValue value;
+        const size_t dot = full_name.find('.');
+        if (dot == std::string::npos)
+        {
+            response->values.push_back(value);
+            continue;
+        }
+
+        try
+        {
+            auto firmware_value = ParametersLogic::send_get_parameter(
+                full_name.substr(0, dot), full_name.substr(dot + 1));
+            if (firmware_value)
+            {
+                if (std::holds_alternative<int64_t>(*firmware_value))
+                {
+                    value.type = rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER;
+                    value.integer_value = std::get<int64_t>(*firmware_value);
+                }
+                else
+                {
+                    value.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+                    value.double_value = std::get<double>(*firmware_value);
+                }
+            }
+        }
+        catch (const std::exception &exception)
+        {
+            RCLCPP_WARN(m_logger, "Could not read firmware parameter '%s': %s",
+                full_name.c_str(), exception.what());
+        }
+        response->values.push_back(value);
+    }
 }
 
 void Parameters::initialize_parameters()

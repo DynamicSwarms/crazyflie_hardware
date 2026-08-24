@@ -1,4 +1,6 @@
 #include "crtp_cpp/logic/parameters_logic.hpp"
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <sstream>
 #include <cstring>
@@ -68,4 +70,101 @@ bool ParametersLogic::send_set_parameter(const std::string& group, const std::st
         }
     }
     return false;
+}
+
+std::optional<std::variant<int64_t, double>> ParametersLogic::send_get_parameter(
+    const std::string& group, const std::string& name) {
+    for (const auto& entry : ParametersLogic::toc_entries) {
+        if (entry.group != group || entry.name != name) {
+            continue;
+        }
+
+        auto response = link->send_packet(packer.get_parameter(entry.id));
+        // Protocol v2 read response: [ID_L, ID_H, STATUS, VALUE...].
+        if (!response || response->data_length < 3 || response->data[2] != 0) {
+            return std::nullopt;
+        }
+
+        const auto *data = response->data + 3;
+        const auto value_size = static_cast<size_t>(response->data_length - 3);
+
+        switch (entry.type) {
+            case ParamTypeUint8:
+                if (value_size < sizeof(uint8_t)) return std::nullopt;
+                return static_cast<int64_t>(*data);
+            case ParamTypeInt8: {
+                if (value_size < sizeof(int8_t)) return std::nullopt;
+                int8_t value;
+                std::memcpy(&value, data, sizeof(value));
+                return static_cast<int64_t>(value);
+            }
+            case ParamTypeUint16: {
+                if (value_size < sizeof(uint16_t)) return std::nullopt;
+                uint16_t value;
+                std::memcpy(&value, data, sizeof(value));
+                return static_cast<int64_t>(value);
+            }
+            case ParamTypeInt16: {
+                if (value_size < sizeof(int16_t)) return std::nullopt;
+                int16_t value;
+                std::memcpy(&value, data, sizeof(value));
+                return static_cast<int64_t>(value);
+            }
+            case ParamTypeUint32: {
+                if (value_size < sizeof(uint32_t)) return std::nullopt;
+                uint32_t value;
+                std::memcpy(&value, data, sizeof(value));
+                return static_cast<int64_t>(value);
+            }
+            case ParamTypeInt32: {
+                if (value_size < sizeof(int32_t)) return std::nullopt;
+                int32_t value;
+                std::memcpy(&value, data, sizeof(value));
+                return static_cast<int64_t>(value);
+            }
+            case ParamTypeUint64: {
+                if (value_size < sizeof(uint64_t)) return std::nullopt;
+                uint64_t value;
+                std::memcpy(&value, data, sizeof(value));
+                return static_cast<int64_t>(value);
+            }
+            case ParamTypeInt64: {
+                if (value_size < sizeof(int64_t)) return std::nullopt;
+                int64_t value;
+                std::memcpy(&value, data, sizeof(value));
+                return value;
+            }
+            case ParamTypeFP16: {
+                if (value_size < sizeof(uint16_t)) return std::nullopt;
+                uint16_t bits;
+                std::memcpy(&bits, data, sizeof(bits));
+                const int sign = (bits & 0x8000) ? -1 : 1;
+                const int exponent = (bits >> 10) & 0x1f;
+                const int mantissa = bits & 0x3ff;
+                double value;
+                if (exponent == 0) {
+                    value = std::ldexp(static_cast<double>(mantissa), -24);
+                } else if (exponent == 31) {
+                    value = mantissa ? std::numeric_limits<double>::quiet_NaN()
+                                     : std::numeric_limits<double>::infinity();
+                } else {
+                    value = std::ldexp(static_cast<double>(mantissa + 1024), exponent - 25);
+                }
+                return sign * value;
+            }
+            case ParamTypeFloat: {
+                if (value_size < sizeof(float)) return std::nullopt;
+                float value;
+                std::memcpy(&value, data, sizeof(value));
+                return static_cast<double>(value);
+            }
+            case ParamTypeDouble: {
+                if (value_size < sizeof(double)) return std::nullopt;
+                double value;
+                std::memcpy(&value, data, sizeof(value));
+                return value;
+            }
+        }
+    }
+    return std::nullopt;
 }

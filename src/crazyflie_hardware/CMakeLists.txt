@@ -20,6 +20,7 @@ find_package(crazyflie_interfaces REQUIRED)
 find_package(object_tracker_interfaces REQUIRED)
 find_package(broadcaster_interfaces REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 
 add_executable(crazyflie src/crazyflie.cpp)

@@ -5,6 +5,7 @@
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
+#include "rcl_interfaces/srv/get_parameters.hpp"
 
 #include "std_msgs/msg/empty.hpp"
 
@@ -14,6 +15,7 @@ public:
     Parameters(
         std::shared_ptr<rclcpp::node_interfaces::NodeBaseInterface> node_base_interface,
         std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> node_topics_interface,
+        std::shared_ptr<rclcpp::node_interfaces::NodeServicesInterface> node_services_interface,
         std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> node_parameters_interface,
         std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
         CrtpLink *link);
@@ -24,6 +26,9 @@ private:
     void m_get_toc_info_callback(const std_msgs::msg::Empty::SharedPtr msg);
 
     rcl_interfaces::msg::SetParametersResult m_set_parameter_callback(const std::vector<rclcpp::Parameter> &parameters);
+    void m_get_firmware_parameters_callback(
+        const rcl_interfaces::srv::GetParameters::Request::SharedPtr request,
+        rcl_interfaces::srv::GetParameters::Response::SharedPtr response);
 
 private:
     std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> m_parameters_interface;
@@ -33,5 +38,6 @@ private:
 
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr m_downdload_toc_sub;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr m_get_toc_info_sub;
+    rclcpp::Service<rcl_interfaces::srv::GetParameters>::SharedPtr m_get_firmware_parameters_service;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr m_param_callback_handle;
 };
