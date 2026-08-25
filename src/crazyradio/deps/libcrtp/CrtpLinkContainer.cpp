@@ -4,6 +4,7 @@ namespace libcrtp {
 
 CrtpLinkContainer::CrtpLinkContainer() 
     : m_links()
+    , m_randomGenerator(std::random_device{}())
 {
 }
 
@@ -78,30 +79,33 @@ bool CrtpLinkContainer::getLinkIdentifier(CrtpLinkIdentifier * link, uint8_t cha
 bool CrtpLinkContainer::getHighestPriorityLink(CrtpLinkIdentifier * link, CrtpPort * port) const
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
-    libcrtp::CrtpPort highestPriorityPort = libcrtp::CrtpPort::NO_PORT;
-    std::pair<uint8_t, uint64_t> bestKey = {0,0};
+    libcrtp::CrtpPort highestBroadcastPriority = libcrtp::CrtpPort::NO_PORT;
+    libcrtp::CrtpPort highestPriority = libcrtp::CrtpPort::NO_PORT;
+    std::vector<const CrtpLink*> broadcastCandidates;
+    std::vector<const CrtpLink*> candidates;
+
     for (const auto& [key, link_] : m_links) 
     {       
-        libcrtp::CrtpPort port = link_.getPriorityPort();
-        if (link_.isBroadcast() && port != libcrtp::CrtpPort::NO_PORT) {
-            // If there is a broadcast Packet. Send immediately.
-            highestPriorityPort = port;
-            bestKey = key;
-            break;
+        const libcrtp::CrtpPort candidatePort = link_.getPriorityPort();
+        if (candidatePort == libcrtp::CrtpPort::NO_PORT) continue;
+
+        auto& candidatePriority = link_.isBroadcast() ? highestBroadcastPriority : highestPriority;
+        auto& candidateLinks = link_.isBroadcast() ? broadcastCandidates : candidates;
+        
+        if (candidatePort < candidatePriority) {
+            candidatePriority = candidatePort;
+            candidateLinks.clear();
         }
-        if (port < highestPriorityPort) {
-            highestPriorityPort = port;
-            bestKey = key;
-        } 
+        if (candidatePort == candidatePriority) candidateLinks.push_back(&link_);
     }
-    auto link_ = m_links.find(bestKey);
-    if (highestPriorityPort != libcrtp::CrtpPort::NO_PORT && link_ != m_links.end()) 
-    {   
-        linkToIdentifier(&link_->second , link);
-        *port = highestPriorityPort;
-        return true;
-    }
-    return false;
+
+    const auto& selectedCandidates = broadcastCandidates.empty() ? candidates : broadcastCandidates;
+    if (selectedCandidates.empty()) return false;
+
+    const CrtpLink* selected = selectedCandidates[randomIndex(selectedCandidates.size())];
+    linkToIdentifier(selected, link);
+    *port = broadcastCandidates.empty() ? highestPriority : highestBroadcastPriority;
+    return true;
 }
 
 bool CrtpLinkContainer::getRandomRelaxedNonBroadcastLink(CrtpLinkIdentifier * link) const
@@ -114,7 +118,6 @@ bool CrtpLinkContainer::getRandomRelaxedNonBroadcastLink(CrtpLinkIdentifier * li
     // Iterate over the original map
     for (const auto& entry : m_links) {
         if (entry.second.isRelaxed() &&
-            !entry.second.isWaitingForPortRetry() &&
             !entry.second.isBroadcast()) {
             linkToIdentifier(&entry.second, &link_id);
             relaxed_links.push_back(link_id);
@@ -123,9 +126,7 @@ bool CrtpLinkContainer::getRandomRelaxedNonBroadcastLink(CrtpLinkIdentifier * li
 
     if (relaxed_links.size())
     {
-        auto it = relaxed_links.begin();
-        std::advance(it, rand() % relaxed_links.size());
-        copyLinkIdentifier(&(*it), link);
+        copyLinkIdentifier(&relaxed_links[randomIndex(relaxed_links.size())], link);
         return true;
     }
     return false;
@@ -236,6 +237,12 @@ bool CrtpLinkContainer::linkNotifyFailedPortMessage(CrtpLinkIdentifier * link_id
         return link->notifyFailedPortMessage();
     }
     return false;
+}
+
+size_t CrtpLinkContainer::randomIndex(size_t size) const
+{
+    std::uniform_int_distribution<size_t> distribution(0, size - 1);
+    return distribution(m_randomGenerator);
 }
 
 } // namespace libcrtp

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <map>
 #include <mutex>
+#include <random>
 
 #include "libcrtp/CrtpPacket.hpp"
 #include "libcrtp/CrtpLink.hpp"
@@ -35,6 +36,8 @@ class CrtpLinkContainer
         /**
          * Returns true if a link with the highest priority port is found.
          * The link identifier is copied to the link parameter and the port is set to the highest priority port of the link.
+         * Links with equal CRTP port priority are selected randomly to avoid capture
+         * caused by deterministic map iteration order.
          */
         bool getHighestPriorityLink(CrtpLinkIdentifier * link, CrtpPort * port) const;
 
@@ -67,9 +70,11 @@ class CrtpLinkContainer
         void copyLinkIdentifier(CrtpLinkIdentifier * from_link, CrtpLinkIdentifier * to_link) const;
         void linkToIdentifier(const CrtpLink * link, CrtpLinkIdentifier * link_id) const;
         bool linkFromIdentifier(CrtpLink ** link, CrtpLinkIdentifier * link_id);
+        size_t randomIndex(size_t size) const;
         std::map<std::pair<uint8_t, uint64_t>, libcrtp::CrtpLink> m_links;
 
         mutable std::mutex m_linksMutex;
+        mutable std::mt19937 m_randomGenerator;
 };
 
 } // namespace libcrtp

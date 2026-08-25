@@ -2,11 +2,29 @@
 #include <stdint.h>
 #include <map>
 #include <optional>
+#include <random>
 
 #include "libcrtp/CrtpPacketQueue.hpp"
 #include "libcrtp/CrtpPacket.hpp"
+#include "libcrtp/TickTimer.hpp"
 
 namespace libcrtp {
+
+/**
+ * Failed transmissions use bounded randomized exponential backoff inspired
+ * by Ethernet binary exponential backoff. It is adapted to this centrally
+ * scheduled radio by using a non-zero 10 ms minimum; the random retry window
+ * grows exponentially to a maximum of 200 ms.
+ *
+ * Background:
+ * Goodman et al., "Stability of Binary Exponential Backoff"
+ * https://doi.org/10.1145/44483.44488
+ *
+ * This Ethernet-inspired policy is intentionally simple. If dynamic fleet
+ * scaling or retry load becomes limiting, Re-Backoff may be worth evaluating:
+ * Bender et al., "How to Scale Exponential Backoff"
+ * https://arxiv.org/abs/1402.5207
+ */
 
 struct CrtpLinkIdentifier
 {
@@ -81,9 +99,6 @@ class CrtpLink
         // Check if the link is relaxed and nullpacket can be sent
         bool isRelaxed() const;
 
-        // Check if a failed port packet is waiting for its retry backoff.
-        bool isWaitingForPortRetry() const;
-
         /**
          * Give time in ms to the link, so it can update its internal state.
          */
@@ -104,6 +119,7 @@ class CrtpLink
     private: 
         void onSuccessfullMessage();
         bool onFailedMessage();
+        void resetBackoffTimer();
         
     private:
         std::map<CrtpPort, CrtpPacketQueue> m_crtpPortQueues;
@@ -118,16 +134,16 @@ class CrtpLink
         uint8_t m_failedMessagesMaximum;
         uint32_t m_nullpacketRelaxationMs;
         uint32_t m_lastSuccessfullMessageTimeoutMs;
-        uint32_t m_failedMessageRetryTimeoutMs;
+        uint32_t m_minimumBackoffMs;
+        uint32_t m_maximumBackoffMs;
     
     // Internal state
     private: 
         uint8_t m_failedMessagesCount;
-        uint32_t m_timeSinceLastSuccessfullMessageMs;
-
-        uint8_t m_failedPortMessagesCount;
-        uint32_t m_timeSinceLastReceivedNullpacketMs;
-        uint32_t m_timeSinceLastFailedPortMessageMs;
+        TickTimer m_backoffTimer;
+        TickTimer m_relaxationTimer;
+        TickTimer m_livenessTimer;
+        std::mt19937 m_randomGenerator;
         uint64_t m_linkQuality; // 64 bits of failed and successful messages (bits)
 
         struct CurrentOutbound
