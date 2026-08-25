@@ -5,7 +5,6 @@ project(crazyradio)
 
 add_subdirectory(deps/libradio)
 
-
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -36,7 +35,10 @@ endif()
 
 
 add_executable(crazyradio_node 
-  src/crazyradio_node.cpp)
+  src/crazyradio_node.cpp
+  src/crtp_logger.cpp)
+
+target_include_directories(crazyradio_node PRIVATE include)
 
 #dependencies for node from ros packages
 target_link_libraries(crazyradio_node

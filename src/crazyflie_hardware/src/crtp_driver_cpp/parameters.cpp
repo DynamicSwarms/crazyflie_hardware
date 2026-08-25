@@ -1,4 +1,6 @@
 #include "crazyflie_hardware/crtp_driver_cpp/parameters.hpp"
+#include "crazyflie_hardware/ros_paths.hpp"
+
 using std::placeholders::_1;
 using std::placeholders::_2;
 
@@ -9,7 +11,7 @@ Parameters::Parameters(
     std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> node_parameters_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeLoggingInterface> node_logging_interface,
     std::shared_ptr<CrtpLink>link)
-    : ParametersLogic(link, std::string("mein_pfad"))
+    : ParametersLogic(link, crazyflie_hardware::toc_cache_path("parameters").string())
     , m_parameters_interface(node_parameters_interface)
     , m_logger(node_logging_interface->get_logger().get_child("Parameters"))
     , m_callback_group(node_base_interface->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive))

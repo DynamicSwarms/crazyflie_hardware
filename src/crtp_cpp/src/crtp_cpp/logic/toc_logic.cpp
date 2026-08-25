@@ -1,6 +1,7 @@
 #include "crtp_cpp/logic/toc_logic.hpp"
 #include <stdexcept>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 
 #include "crtp_cpp/logic/parameters_logic.hpp"
@@ -15,8 +16,9 @@ TocLogic<T>::TocLogic(std::shared_ptr<CrtpLink>crtp_link, const std::string &pat
 template <class T>
 bool TocLogic<T>::load_from_file(uint32_t crc)
 {
-    std::string fileName = std::to_string(crc) + ".csv";
-    std::ifstream infile(fileName);
+    const std::filesystem::path file_name =
+        std::filesystem::path(toc_cache_path) / (std::to_string(crc) + ".csv");
+    std::ifstream infile(file_name);
     if (!infile.good())
         return false;
 
@@ -37,15 +39,24 @@ void TocLogic<T>::write_to_file()
         if (!send_download_toc_items()) return;
     }
 
-    std::string fileName = std::to_string(crc.value()) + ".csv";
-    std::string fileNameTemp = fileName + ".tmp";
-    std::ofstream output(fileNameTemp);
+    const std::filesystem::path cache_directory(toc_cache_path);
+    std::error_code error;
+    std::filesystem::create_directories(cache_directory, error);
+    if (error) return;
+
+    const std::filesystem::path file_name =
+        cache_directory / (std::to_string(crc.value()) + ".csv");
+    const std::filesystem::path temporary_file_name = file_name.string() + ".tmp";
+    std::ofstream output(temporary_file_name);
+    if (!output.good()) return;
     for (const auto &entry : toc_entries)
     {
         output << entry.toString() << std::endl;
     }
-    // change the filename
-    rename(fileNameTemp.c_str(), fileName.c_str());
+    output.close();
+    if (!output.good()) return;
+
+    std::filesystem::rename(temporary_file_name, file_name, error);
 }
 
 template <class T>

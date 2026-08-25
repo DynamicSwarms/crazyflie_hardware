@@ -4,16 +4,16 @@
 #include "libcrtp/CrtpLink.hpp"
 
 #include <fstream>
-#include <string.h>
+#include <cstdint>
 #include <chrono>
 #include <sstream>
 
-namespace libcrtp {
+namespace crazyradio {
 
 class CrtpLogger
 {
     public:
-        CrtpLogger(bool logEnabled, const std::string& logFileName);
+        CrtpLogger(bool logEnabled, uint8_t channel);
 
         virtual ~CrtpLogger();
 
@@ -30,6 +30,4 @@ class CrtpLogger
         std::stringstream formatCrtpPacket(libcrtp::CrtpPacket *packet);
 };
 
-
-
-} // namespace libcrtp
+} // namespace crazyradio

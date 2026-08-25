@@ -26,7 +26,7 @@ public:
     /**
      * @brief Constructor for TocLogic.
      * @param crtp_link A pointer to the CrtpLink object.
-     * @param path Path to the TOC cache file.
+     * @param path Path to the directory containing TOC cache files.
      */
     TocLogic(std::shared_ptr<CrtpLink> crtp_link, const std::string& path, uint8_t port);
 

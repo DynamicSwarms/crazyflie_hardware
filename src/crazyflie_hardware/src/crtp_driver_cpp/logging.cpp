@@ -1,4 +1,5 @@
 #include "crazyflie_hardware/crtp_driver_cpp/logging.hpp"
+#include "crazyflie_hardware/ros_paths.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 
 #include <cmath>
@@ -18,7 +19,7 @@ Logging::Logging(
     std::shared_ptr<rclcpp::node_interfaces::NodeTimersInterface> node_timers_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeClockInterface> node_clock_interface,
     std::shared_ptr<CrtpLink>link)
-    : LoggingLogic(link, std::string("mein_pfad"))
+    : LoggingLogic(link, crazyflie_hardware::toc_cache_path("logging").string())
     , m_node(node)
     , m_base_interface(node_base_interface)
     , m_topics_interface(node_topics_interface)

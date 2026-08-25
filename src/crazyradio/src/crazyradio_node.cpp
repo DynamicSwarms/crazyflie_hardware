@@ -11,7 +11,7 @@
 #include "udpradio/Udpradio.hpp"
 #include "interface/IRadio.hpp"
 #include "libcrtp/CrtpLinkContainer.hpp"
-#include "libcrtp/CrtpLogger.hpp"
+#include "crazyradio/crtp_logger.hpp"
 
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
 #include "crtp_interfaces/msg/crtp_response.hpp"
@@ -22,7 +22,6 @@
 
 #include <condition_variable>
 #include <mutex>
-#include <fstream>
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -45,11 +44,11 @@ public:
         
         uint8_t channel = this->declare_parameter("channel", rclcpp::ParameterValue(80)).get<uint8_t>();
         
-        bool m_logEnabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
+        bool log_enabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
 
-        m_logger = std::make_unique<libcrtp::CrtpLogger>(
-            m_logEnabled,
-            "crazyradio_log_" + std::to_string(channel) + ".log");
+        m_logger = std::make_unique<crazyradio::CrtpLogger>(
+            log_enabled,
+            channel);
 
 
         auto qos = rclcpp::ServicesQoS().keep_all().reliable().durability_volatile();
@@ -330,7 +329,7 @@ private:
     std::unique_ptr<libradio::IRadio> m_radio;
     libcrtp::CrtpLinkContainer m_links;
     
-    std::unique_ptr<libcrtp::CrtpLogger> m_logger;
+    std::unique_ptr<crazyradio::CrtpLogger> m_logger;
 
     rclcpp::CallbackGroup::SharedPtr crtp_send_callback_group;
     rclcpp::CallbackGroup::SharedPtr radio_callback_group;
@@ -349,10 +348,6 @@ private:
     rclcpp::Subscription<crtp_interfaces::msg::CrtpLink>::SharedPtr link_close_sub;
 
     std::mutex m_radioMutex;
-
-    std::ofstream m_logStream;
-    rclcpp::Time m_logStartTime;
-    bool m_logEnabled = false;
 
 };
 

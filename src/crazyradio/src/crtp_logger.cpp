@@ -1,14 +1,22 @@
-#include "libcrtp/CrtpLogger.hpp"
+#include "crazyradio/crtp_logger.hpp"
 
-namespace libcrtp {
+#include "rclcpp/logger.hpp"
 
+#include <filesystem>
+#include <stdexcept>
+#include <string>
 
-CrtpLogger::CrtpLogger(bool logEnabled, 
-                       const std::string& logFileName)
+namespace crazyradio {
+
+CrtpLogger::CrtpLogger(bool logEnabled, uint8_t channel)
     : m_logEnabled(logEnabled)
 {
     if (m_logEnabled) {
-        m_logStream.open(logFileName);
+        const auto logDirectory = rclcpp::get_log_directory() / "crazyradio";
+        std::filesystem::create_directories(logDirectory);
+        const auto logFile = logDirectory /
+            ("crazyradio_log_" + std::to_string(channel) + ".log");
+        m_logStream.open(logFile);
         if (!m_logStream.is_open()) {
             throw std::runtime_error("Failed to open log file");
         }
@@ -32,8 +40,8 @@ void CrtpLogger::logCommunication(
         if (m_logEnabled)
         {
             std::stringstream ss;
-            auto micros =  std::chrono::duration_cast<std::chrono::microseconds>(logTime).count(); //  in microseconds
-            ss << "[" << (long int)(micros) << "] "; 
+            auto micros = std::chrono::duration_cast<std::chrono::microseconds>(logTime).count();
+            ss << "[" << (long int)(micros) << "] ";
             ss << std::hex << (int)(uint8_t)(link->address & 0xFF);
 
             m_logStream << ss.str() << formatCrtpPacket(packet).str() << std::endl;
@@ -46,8 +54,11 @@ std::stringstream CrtpLogger::formatCrtpPacket(libcrtp::CrtpPacket *packet)
 {
     std::stringstream ss;
     ss << std::dec << " [" << (int)packet->port << ":" << (int)packet->channel << "] ";
-    for (int i = 0; i < packet->dataLength; i++) ss << std::hex << (int)packet->data[i] << " ";
+    for (int i = 0; i < packet->dataLength; i++)
+    {
+        ss << std::hex << (int)packet->data[i] << " ";
+    }
     return ss;
 }
 
-} // namespace libcrtp 
+} // namespace crazyradio
