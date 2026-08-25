@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <map>
+#include <optional>
 
 #include "libcrtp/CrtpPacketQueue.hpp"
 #include "libcrtp/CrtpPacket.hpp"
@@ -32,11 +33,11 @@ class CrtpLink
         void addPacket(CrtpPacket * packet,  CrtpResponseCallback  callback);
 
         /**
-         * Gets a packet from the port, if available.
-         * Returns true if a packet was found, false otherwise.
-         * The packet is not removed from the port, call notifySuccessfullPortMessage to do so.
+         * Returns the current unresolved outbound packet, the highest priority
+         * queued packet, or a null packet. The packet remains current until a
+         * successful-send notification is received.
          */
-        bool getPacket(CrtpPort port, CrtpPacket * packet);
+        void getOutboundPacket(CrtpPacket * packet, bool * isPortPacket);
 
         /**
          * Returns the port with highest priority with a packet to send inside.
@@ -79,6 +80,9 @@ class CrtpLink
 
         // Check if the link is relaxed and nullpacket can be sent
         bool isRelaxed() const;
+
+        // Check if a failed port packet is waiting for its retry backoff.
+        bool isWaitingForPortRetry() const;
 
         /**
          * Give time in ms to the link, so it can update its internal state.
@@ -125,6 +129,13 @@ class CrtpLink
         uint32_t m_timeSinceLastReceivedNullpacketMs;
         uint32_t m_timeSinceLastFailedPortMessageMs;
         uint64_t m_linkQuality; // 64 bits of failed and successful messages (bits)
+
+        struct CurrentOutbound
+        {
+            CrtpPacket packet;
+            bool isPortPacket;
+        };
+        std::optional<CurrentOutbound> m_currentOutbound;
 };
 
 } // namespace libcrtp

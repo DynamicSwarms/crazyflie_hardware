@@ -55,7 +55,7 @@ class CrtpLinkContainer
         void tickLinksMs(uint8_t ms);
         
         void linkAddPacket(CrtpLinkIdentifier * link, CrtpPacket * packet, CrtpResponseCallback callback);
-        bool linkGetHighestPriorityPacket(CrtpLinkIdentifier * link, CrtpPacket * packet);
+        bool linkGetOutboundPacket(CrtpLinkIdentifier * link, CrtpPacket * packet, bool * isPortPacket);
         bool linkReleasePacket(CrtpLinkIdentifier  * link_id, CrtpPacket * responsePacket, CrtpResponseCallback & callback);
 
         void linkNotifySuccessfullNullpacket(CrtpLinkIdentifier * link_id, bool responseIsNullpacket);

@@ -118,17 +118,20 @@ private:
 
     void communicateLink(libcrtp::CrtpLinkIdentifier *link)
     {
-        libcrtp::CrtpPacket packet = libcrtp::nullPacket;
+        libcrtp::CrtpPacket packet;
         libcrtp::CrtpPacket responsePacket;
+        bool isPortPacket;
 
-        bool isPortPacket = m_links.linkGetHighestPriorityPacket(link, &packet);
+        if (!m_links.linkGetOutboundPacket(link, &packet, &isPortPacket)) return;
         if (link->isBroadcast && !isPortPacket) return; // No broadcast packet available, broadcast links do not send null packets.
                 
         bool sendSuccess = m_radio->sendCrtpPacket(link, &packet, &responsePacket);
         if (sendSuccess)
         {
-            if (isPortPacket) m_links.linkNotifySuccessfullPortMessage(link, packet.port, libcrtp::isNullPacket(&responsePacket));
-            else m_links.linkNotifySuccessfullNullpacket(link, libcrtp::isNullPacket(&responsePacket));
+            const bool responseIsNullpacket =
+                link->isBroadcast || libcrtp::isNullPacket(&responsePacket);
+            if (isPortPacket) m_links.linkNotifySuccessfullPortMessage(link, packet.port, responseIsNullpacket);
+            else m_links.linkNotifySuccessfullNullpacket(link, responseIsNullpacket);
             handleReponsePacket(link, &responsePacket);
         } else {
             bool shallDie;

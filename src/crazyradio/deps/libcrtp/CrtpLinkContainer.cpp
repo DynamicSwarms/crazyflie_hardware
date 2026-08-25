@@ -113,7 +113,9 @@ bool CrtpLinkContainer::getRandomRelaxedNonBroadcastLink(CrtpLinkIdentifier * li
     libcrtp::CrtpLinkIdentifier link_id;
     // Iterate over the original map
     for (const auto& entry : m_links) {
-        if (entry.second.isRelaxed() && !entry.second.isBroadcast()) {
+        if (entry.second.isRelaxed() &&
+            !entry.second.isWaitingForPortRetry() &&
+            !entry.second.isBroadcast()) {
             linkToIdentifier(&entry.second, &link_id);
             relaxed_links.push_back(link_id);
         }
@@ -166,14 +168,16 @@ void CrtpLinkContainer::linkAddPacket(CrtpLinkIdentifier * link_id, CrtpPacket *
     }
 }
 
-bool CrtpLinkContainer::linkGetHighestPriorityPacket(CrtpLinkIdentifier * link_id, CrtpPacket * packet)
+bool CrtpLinkContainer::linkGetOutboundPacket(
+    CrtpLinkIdentifier * link_id,
+    CrtpPacket * packet,
+    bool * isPortPacket)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
     CrtpLink * link;
     if (linkFromIdentifier(&link, link_id)) {
-        CrtpPort port = link->getPriorityPort();
-        if (port == CrtpPort::NO_PORT) return false; // No packets available
-        return link->getPacket(port, packet);
+        link->getOutboundPacket(packet, isPortPacket);
+        return true;
     }
     return false;
 }

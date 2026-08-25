@@ -49,7 +49,6 @@ bool CrtpPacketQueue::releasePacket(
 
     // Shuffles through release queue until found, if found returns true and sets callback.
     // If not found returns false, callback not set. 
-    // Because of ordering we can simple append unresponded packets to back
     for (int i = 0; i < m_release_queue.size(); i++) {
         auto pair = m_release_queue.front();
         m_release_queue.pop();
@@ -59,8 +58,8 @@ bool CrtpPacketQueue::releasePacket(
         // If packet matches response Packet 
         if (this->packetsMatch(&packet, responsePacket)) return true;
         else {
-            m_out_queue.push(packet);
             m_release_queue.push(std::make_pair(packet, callback));
+            std::cerr << "CRTP Packet ordering mismatch! Expected: " << (int)packet.port << " but got: " << (int)responsePacket->port << std::endl;
         }
     }
 

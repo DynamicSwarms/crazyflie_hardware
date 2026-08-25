@@ -33,6 +33,7 @@ CrtpLink::CrtpLink(
     , m_timeSinceLastReceivedNullpacketMs(0)
     , m_timeSinceLastFailedPortMessageMs(m_failedMessageRetryTimeoutMs) // Do not wait before sending first message
     , m_linkQuality(~0) // 64 bits of failed and successful messages (bits)
+    , m_currentOutbound(std::nullopt)
 {
 }
 
@@ -49,11 +50,24 @@ void CrtpLink::addPacket(
     m_crtpPortQueues[packet->port].addPacket(packet, callback);
 }
 
-bool CrtpLink::getPacket(
-    CrtpPort port, 
-    CrtpPacket * packet)
-{   
-    return m_crtpPortQueues[port].getPacket(packet);
+void CrtpLink::getOutboundPacket(CrtpPacket * packet, bool * isPortPacket)
+{
+    if (m_currentOutbound.has_value()) {
+        *packet = m_currentOutbound->packet;
+        *isPortPacket = m_currentOutbound->isPortPacket;
+        return;
+    }
+
+    CrtpPort port = getPriorityPort();
+    if (port != CrtpPort::NO_PORT && m_crtpPortQueues[port].getPacket(packet)) {
+        m_currentOutbound = CurrentOutbound{*packet, true};
+        *isPortPacket = true;
+        return;
+    }
+
+    *packet = nullPacket;
+    m_currentOutbound = CurrentOutbound{*packet, false};
+    *isPortPacket = false;
 }
 
 bool CrtpLink::releasePacket(
@@ -88,12 +102,14 @@ CrtpPort CrtpLink::getPriorityPort() const
 
 void CrtpLink::notifySuccessfullNullpacket(bool responseIsNullpacket)
 {
+    m_currentOutbound.reset();
     if (responseIsNullpacket) m_timeSinceLastReceivedNullpacketMs = 0;
     onSuccessfullMessage();
 }
 
 void CrtpLink::notifySuccessfullPortMessage(CrtpPort port, bool responseIsNullpacket)
 {
+    m_currentOutbound.reset();
     if (responseIsNullpacket) m_timeSinceLastReceivedNullpacketMs = 0;
     m_crtpPortQueues[port].sendPacketSuccess();
     onSuccessfullMessage();
@@ -129,6 +145,12 @@ void CrtpLink::tickMs(uint8_t ms)
 bool CrtpLink::isRelaxed() const
 {
     return m_timeSinceLastReceivedNullpacketMs >= m_nullpacketRelaxationMs;
+}
+
+bool CrtpLink::isWaitingForPortRetry() const
+{
+    return m_currentOutbound.has_value() && m_currentOutbound->isPortPacket &&
+        m_timeSinceLastFailedPortMessageMs < m_failedMessageRetryTimeoutMs;
 }
 
 

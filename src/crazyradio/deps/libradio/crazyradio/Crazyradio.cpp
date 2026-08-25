@@ -117,9 +117,7 @@ bool Crazyradio::sendCrtpPacket(
     );
     
     if (link->isBroadcast) return true;    
-    if (!ack.ack) {
-        return false;
-    }
+    if (!ack.ack) return false;
 
     if (safeLink && safeLink->enabled) {
         safeLink->up ^= 1;
