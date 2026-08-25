@@ -14,6 +14,7 @@ endif()
 find_package(rclcpp REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(crtp_interfaces REQUIRED)
+find_package(crazyflie_interfaces REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -40,7 +41,8 @@ add_executable(crazyradio_node
 #dependencies for node from ros packages
 target_link_libraries(crazyradio_node
   rclcpp::rclcpp
-  crtp_interfaces::crtp_interfaces)
+  crtp_interfaces::crtp_interfaces
+  crazyflie_interfaces::crazyflie_interfaces)
 
 #dependencies for node from local libs
 target_link_libraries(crazyradio_node

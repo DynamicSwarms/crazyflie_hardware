@@ -158,7 +158,6 @@ bool CrtpLink::isRelaxed() const
     return m_backoffTimer.isReady() && m_relaxationTimer.isReady();
 }
 
-
 double CrtpLink::getLinkQuality() const
 {
     uint64_t x = m_linkQuality;
@@ -194,7 +193,7 @@ bool CrtpLink::isBroadcast() const
 void CrtpLink::onSuccessfullMessage()
 {
     m_linkQuality = (m_linkQuality << 1) | 1; // shift left, add a 1 to the end of the bitfield
-    
+
     m_failedMessagesCount = 0;
     m_livenessTimer.reset();
 }

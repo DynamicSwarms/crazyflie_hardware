@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <map>
 #include <tuple>
+#include <array>
 #include "USBDevice.hpp"
 #include "interface/IRadio.hpp"
 
@@ -59,6 +60,8 @@ public:
         libcrtp::CrtpPacket * responsePacket) override;
 
     void resetLink(const libcrtp::CrtpLinkIdentifier * link) override;
+
+    double getLinkQuality(const libcrtp::CrtpLinkIdentifier * link) const override;
         
 private:
     struct SafeLinkState
@@ -70,6 +73,14 @@ private:
     };
 
     using SafeLinkKey = std::tuple<uint8_t, uint64_t, uint8_t>;
+
+    struct LinkQuality
+    {
+        std::array<double, 64> samples{};
+        uint8_t next = 0;
+        uint8_t count = 0;
+        double sum = 0.0;
+    };
 
     SafeLinkKey safeLinkKey(const libcrtp::CrtpLinkIdentifier * link) const;
     bool enableSafeLink(const libcrtp::CrtpLinkIdentifier * link, Datarate datarate);
@@ -106,6 +117,7 @@ private:
     void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
 
     std::map<SafeLinkKey, SafeLinkState> m_safeLinkStates;
+    std::map<SafeLinkKey, LinkQuality> m_linkQualities;
 };
 
 

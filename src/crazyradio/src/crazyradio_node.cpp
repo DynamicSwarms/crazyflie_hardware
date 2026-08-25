@@ -16,6 +16,7 @@
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
 #include "crtp_interfaces/msg/crtp_response.hpp"
 #include "crtp_interfaces/msg/crtp_link_quality.hpp"
+#include "crazyflie_interfaces/msg/crazyflie_link_quality_array.hpp"
 #include "crtp_interfaces/msg/crtp_link_qualities.hpp"
 
 
@@ -70,8 +71,10 @@ public:
             "crazyradio/close_crtp_link", 10,
             std::bind(&CrazyradioNode::closeLinkCallback, this, _1));
         
-        link_quality_pub = this->create_publisher<crtp_interfaces::msg::CrtpLinkQualities>(
+        crtp_link_quality_pub = this->create_publisher<crtp_interfaces::msg::CrtpLinkQualities>(
             "crazyradio/crtp_link_qualities", 10);
+        link_quality_pub = this->create_publisher<crazyflie_interfaces::msg::CrazyflieLinkQualityArray>(
+            "crazyradio/link_qualities", 10);
 
 
         radio_callback_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -271,6 +274,8 @@ private:
         std::vector<double> qualities;
         m_links.getConnectionStats(links, qualities);
         for (size_t i = 0; i < links.size(); i++)
+            qualities[i] = m_radio->getLinkQuality(&links[i]);
+        for (size_t i = 0; i < links.size(); i++)
         {
             if (qualities[i] < 0.5)
             {
@@ -278,19 +283,27 @@ private:
             }
         }
 
-        crtp_interfaces::msg::CrtpLinkQualities msg;
+        crtp_interfaces::msg::CrtpLinkQualities crtp_msg;
+        crazyflie_interfaces::msg::CrazyflieLinkQualityArray msg;
         for (size_t i = 0; i < links.size(); i++) {
-            crtp_interfaces::msg::CrtpLinkQuality quality;
-            crtp_interfaces::msg::CrtpLink link_msg;
-            link_msg.channel = links[i].channel;
+            crtp_interfaces::msg::CrtpLinkQuality crtp_quality;
+            crtp_quality.link.channel = links[i].channel;
             for (int j = 0; j < 5; j++)
-                link_msg.address[4 - j] = (links[i].address & ((uint64_t)0xFF << j * 8)) >> j * 8;
-            link_msg.datarate = links[i].datarate;
-            quality.link = link_msg;
+                crtp_quality.link.address[4 - j] =
+                    (links[i].address & ((uint64_t)0xFF << j * 8)) >> j * 8;
+            crtp_quality.link.datarate = links[i].datarate;
+            crtp_quality.link_quality = qualities[i];
+            crtp_msg.link_qualities.push_back(crtp_quality);
+
+            crazyflie_interfaces::msg::CrazyflieLinkQuality quality;
+            quality.id = static_cast<uint8_t>(links[i].address & 0xFF);
             quality.link_quality = qualities[i];
             msg.link_qualities.push_back(quality);
         }   
-        if (links.size()) link_quality_pub->publish(msg);
+        if (links.size()) {
+            crtp_link_quality_pub->publish(crtp_msg);
+            link_quality_pub->publish(msg);
+        }
     }
 private: 
     void responseCallback(
@@ -331,7 +344,8 @@ private:
     rclcpp::Service<crtp_interfaces::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_service;
     rclcpp::Publisher<crtp_interfaces::msg::CrtpResponse>::SharedPtr send_response_pub;
     rclcpp::Publisher<crtp_interfaces::msg::CrtpLink>::SharedPtr link_end_pub;
-    rclcpp::Publisher<crtp_interfaces::msg::CrtpLinkQualities>::SharedPtr link_quality_pub;
+    rclcpp::Publisher<crtp_interfaces::msg::CrtpLinkQualities>::SharedPtr crtp_link_quality_pub;
+    rclcpp::Publisher<crazyflie_interfaces::msg::CrazyflieLinkQualityArray>::SharedPtr link_quality_pub;
     rclcpp::Subscription<crtp_interfaces::msg::CrtpLink>::SharedPtr link_close_sub;
 
     std::mutex m_radioMutex;

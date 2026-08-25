@@ -115,6 +115,20 @@ bool Crazyradio::sendCrtpPacket(
         ! link->isBroadcast,
         ack
     );
+
+    if (!link->isBroadcast) {
+        auto& quality = m_linkQualities[safeLinkKey(link)];
+        // A successful transaction costs one attempt plus the hardware retries.
+        // A transaction without an ACK contributes no delivered value.
+        const double sample = ack.ack ? 1.0 / (static_cast<double>(ack.retry) + 1.0) : 0.0;
+        if (quality.count == quality.samples.size())
+            quality.sum -= quality.samples[quality.next];
+        else
+            quality.count++;
+        quality.samples[quality.next] = sample;
+        quality.sum += sample;
+        quality.next = (quality.next + 1) % 64;
+    }
     
     if (link->isBroadcast) return true;    
     if (!ack.ack) return false;
@@ -188,6 +202,15 @@ void Crazyradio::resetLink(const libcrtp::CrtpLinkIdentifier * link)
 {
     std::cerr << "Link Reset for CF 0x" << std::hex << (int)(uint8_t)(link->address & 0xFF) << std::dec << std::endl;
     m_safeLinkStates.erase(safeLinkKey(link));
+    m_linkQualities.erase(safeLinkKey(link));
+}
+
+double Crazyradio::getLinkQuality(const libcrtp::CrtpLinkIdentifier * link) const
+{
+    if (link->isBroadcast) return 1.0;
+    const auto quality = m_linkQualities.find(safeLinkKey(link));
+    if (quality == m_linkQualities.end() || quality->second.count == 0) return 1.0;
+    return quality->second.sum / quality->second.count;
 }
 
 void Crazyradio::sendPacketInline(

@@ -26,6 +26,11 @@ public:
 
     void resetLink(const libcrtp::CrtpLinkIdentifier *) override {}
 
+    double getLinkQuality(const libcrtp::CrtpLinkIdentifier *) const override
+    {
+        return 1.0;
+    }
+
 private:
     void handshake();
     
