@@ -88,6 +88,8 @@ bool Localization::add_to_tracker(
     request->initial_pose.position.x = initial_position[0];
     request->initial_pose.position.y = initial_position[1];
     request->initial_pose.position.z = initial_position[2];
+    request->initialization_timeout = 2.0; // seconds
+
     auto result = client->async_send_request(request);
 
     auto status = result.wait_for(3s); // not spinning here!

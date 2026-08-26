@@ -5,11 +5,11 @@
         sendExternalPosition: true
         sendExternalPose: false
         maxInitialDeviation: 0.4
-        markerConfigurationIndex: 4
+        markerConfigurationIndex: 1
         dynamicsConfigurationIndex: 0
       default: 
         sendExternalPosition: false
         sendExternalPose: false
         maxInitialDeviation: 0.4
-        markerConfigurationIndex: 4
+        markerConfigurationIndex: 1
         dynamicsConfigurationIndex: 0

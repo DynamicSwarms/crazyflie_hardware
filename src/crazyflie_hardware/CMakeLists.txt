@@ -25,11 +25,13 @@ find_package(lifecycle_msgs REQUIRED)
 
 add_executable(crazyflie src/crazyflie.cpp)
 add_executable(broadcaster src/broadcaster.cpp)
+add_executable(position_converter src/position_converter.cpp)
 target_include_directories(crazyflie PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(crazyflie PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 target_compile_features(broadcaster PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_features(position_converter PUBLIC cxx_std_17)
 
 
 
@@ -86,10 +88,18 @@ target_link_libraries(broadcaster
   crtp_interfaces::crtp_interfaces
   broadcaster_interfaces::broadcaster_interfaces)
 
+target_link_libraries(position_converter
+  rclcpp::rclcpp
+  crazyflie_interfaces::crazyflie_interfaces
+  object_tracker_interfaces::object_tracker_interfaces)
+
 install(TARGETS crazyflie
   DESTINATION lib/${PROJECT_NAME})
 
 install(TARGETS broadcaster
+  DESTINATION lib/${PROJECT_NAME})
+
+install(TARGETS position_converter
   DESTINATION lib/${PROJECT_NAME})
 
 ## Also register crazyflie as component

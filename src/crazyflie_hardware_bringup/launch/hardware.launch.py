@@ -81,6 +81,11 @@ def generate_launch_description():
         executable="broadcaster",
     )
 
+    position_converter = Node(
+        package="crazyflie_hardware",
+        executable="position_converter",
+    )
+
     radiolistener = Node(
         package="crazyflie_hardware_examples", executable="radiolistener"
     )
@@ -92,6 +97,7 @@ def generate_launch_description():
             sitl_udp_radio_launch_argument,
             crazyflie_gateway,
             broadcaster,
+            position_converter,
             radiolistener,
             radios_launch_argument,
             OpaqueFunction(function=generate_radios),
