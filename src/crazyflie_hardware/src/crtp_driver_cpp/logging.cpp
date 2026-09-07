@@ -91,7 +91,7 @@ bool Logging::start_logging_pose()
 bool Logging::start_logging_pm()
 {
     RCLCPP_DEBUG(m_logger, "Starting State logging.");
-    std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled"};
+    std::vector<std::string> variables = {"pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled", "stateEstimate.yaw"};
     if (!LoggingLogic::add_block(STATE_BLOCK_ID, variables))
     {
         RCLCPP_ERROR(m_logger, "Failed to create state log block. Variable not found in TOC.");
@@ -216,13 +216,12 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
 
         std::vector<uint8_t> data_payload(packet.data + 4, packet.data + packet.data_length); // Copy data after the first 4 bytes.
 
-        std::vector<float> values = LoggingLogic::unpack_block(block_id, data_payload);
-        std::vector<double> double_values(values.begin(), values.end());
+        std::vector<double> values = LoggingLogic::unpack_block(block_id, data_payload);
 
-        if (block_id == STATE_BLOCK_ID && log_state && values.size() == 6)
+        // "pm.vbat", "pm.chargeCurrent", "pm.state", "sys.canfly", "sys.isFlying", "sys.isTumbled", "stateEstimate.yaw"
+        if (block_id == STATE_BLOCK_ID && log_state && values.size() == 7)
         {
-            // RCLCPP_WARN(rclcpp::get_logger(logger_name), "%f, %f, %f, %f", values[3], values[4], values[5], values[6]);
-            //  Values 5 is tumbled
+            //  6th value isTumbled
             if ((int)values[5])
             {
                 RCLCPP_WARN(m_logger, "System tumbled. Shutting Down");
@@ -273,7 +272,7 @@ void Logging::crtp_response_callback(const CrtpPacket &packet)
         }
         if (m_log_blocks.count(block_id))
         {
-            m_log_blocks[block_id]->m_publish_log_data(double_values);
+            m_log_blocks[block_id]->m_publish_log_data(values);
         }
         // if (values.size()) RCLCPP_WARN(rclcpp::get_logger(logger_name), "LogBlock ID:%d , %f", block_id, values[0]);
     }

@@ -22,7 +22,7 @@ public:
     bool add_block(int id, const std::vector<std::string>& variables);
     bool reset();
 
-    std::vector<float> unpack_block(int block_id, const std::vector<uint8_t>& data);
+    std::vector<double> unpack_block(int block_id, const std::vector<uint8_t>& data);
 private:
     virtual void crtp_response_callback(const CrtpPacket&  packet) = 0;
 

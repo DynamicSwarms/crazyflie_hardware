@@ -57,39 +57,39 @@ uint8_t LogTocEntry::size() const
   }
 }
 
-float LogTocEntry::to_float(const std::vector<uint8_t>& data) const
+double LogTocEntry::to_double(const std::vector<uint8_t>& data) const
 { 
-  if (data.size() != size()) return 0.0f;
+  if (data.size() != size()) return 0.0;
 
   switch (type) {
       case LogTypeUint8:
-          return static_cast<float>(data[0]); // 1-byte unsigned int
+          return static_cast<double>(data[0]); // 1-byte unsigned int
       case LogTypeInt8:
-          return static_cast<float>(static_cast<int8_t>(data[0])); // 1-byte signed int
+          return static_cast<double>(static_cast<int8_t>(data[0])); // 1-byte signed int
       case LogTypeUint16: {
           uint16_t value;
           std::memcpy(&value, data.data(), sizeof(value));
-          return static_cast<float>(value);
+          return static_cast<double>(value);
       }
       case LogTypeInt16: {
           int16_t value;
           std::memcpy(&value, data.data(), sizeof(value));
-          return static_cast<float>(value);
+          return static_cast<double>(value);
       }
       case LogTypeUint32: {
           uint32_t value;
           std::memcpy(&value, data.data(), sizeof(value));
-          return static_cast<float>(value);
+          return static_cast<double>(value);
       }
       case LogTypeInt32: {
           int32_t value;
           std::memcpy(&value, data.data(), sizeof(value));
-          return static_cast<float>(value);
+          return static_cast<double>(value);
       }
       case LogTypeFloat: {
           float value;
           std::memcpy(&value, data.data(), sizeof(value)); // Direct float conversion
-          return static_cast<float>(value);
+          return static_cast<double>(value);
       }
       case LogTypeFP16: {
           // FP16 to float conversion (requires additional handling)
@@ -99,7 +99,7 @@ float LogTocEntry::to_float(const std::vector<uint8_t>& data) const
           return fp16_to_float(fp16_value); // Convert half-precision float
       }
       default:
-          return 0.0f; // Unknown type
+          return 0.0; // Unknown type
   }
 }
 

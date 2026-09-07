@@ -57,12 +57,12 @@ LoggingLogic::add_block(int id, const std::vector<std::string>& variables) {
     return true;
 }
 
-std::vector<float> LoggingLogic::unpack_block(int block_id, const std::vector<uint8_t>& data) {
+std::vector<double> LoggingLogic::unpack_block(int block_id, const std::vector<uint8_t>& data) {
     if (blocks.find(block_id) == blocks.end()) { // Use find() for map lookup
         return {};
     }
     auto variables = blocks.at(block_id); // Use at() for safe access
-    std::vector<float> unpacked_data;
+    std::vector<double> unpacked_data;
 
     // Unpack data using struct-like functionality
     uint8_t offset = 0;
@@ -72,7 +72,7 @@ std::vector<float> LoggingLogic::unpack_block(int block_id, const std::vector<ui
             return {}; // "Error: Not enough data to unpack block" 
         }
         std::vector<uint8_t> entry_data(data.begin() + offset, data.begin() + offset + entry_size);
-        unpacked_data.push_back(variable.to_float(entry_data));
+        unpacked_data.push_back(variable.to_double(entry_data));
         offset += entry_size;
     }
     return unpacked_data;
