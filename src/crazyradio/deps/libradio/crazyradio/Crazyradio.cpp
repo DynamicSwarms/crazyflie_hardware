@@ -49,7 +49,7 @@ Crazyradio::Crazyradio()
     
     setContCarrier(false);
     setPower(Power_0DBM);
-    setArc(3);
+    setArc(0); // 0 retries, retry is handled by client lib, usb adds neglible overhead
     setArdBytes(32);
     
     const auto version = this->version();

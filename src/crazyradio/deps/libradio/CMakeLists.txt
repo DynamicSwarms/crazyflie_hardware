@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(libradio)
 find_library(USB_LIB usb-1.0)
+find_package(Threads REQUIRED)
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../libcrtp ${CMAKE_CURRENT_BINARY_DIR}/../libcrtp)
 
@@ -23,6 +24,7 @@ target_include_directories(libradio PUBLIC
 
 target_link_libraries(libradio
     libcrtp
+    Threads::Threads
     ${USB_LIB})
 
 target_include_directories(libradio PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../libcrtp/include)

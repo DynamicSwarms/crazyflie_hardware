@@ -27,7 +27,7 @@ CrtpLink::CrtpLink(
     , m_nullpacketRelaxationMs(10) // Wait at least 10 ms if a nullpacket was received (probably CF doesnt want to talk right now)
     , m_lastSuccessfullMessageTimeoutMs(2000) // If 2 seconds no Communication -> Fail refardless of how many messages failed before.
     , m_minimumBackoffMs(10)
-    , m_maximumBackoffMs(200)
+    , m_maximumBackoffMs(100)
     , m_failedMessagesCount(0)
     , m_backoffTimer(m_minimumBackoffMs)
     , m_relaxationTimer(m_nullpacketRelaxationMs)
@@ -129,11 +129,23 @@ bool CrtpLink::notifyFailedPortMessage()
     return onFailedMessage();
 }
 
+/**
+ *     failures   exponent   backoff range
+ *        0          0       [min,      min]
+ *        1          1       [min,  2 * min]
+ *        2          1       [min,  2 * min]
+ *        3          2       [min,  4 * min]
+ *        4          2       [min,  4 * min]
+ *        5          3       [min,  8 * min]
+ *        6          3       [min,  8 * min]
+ *        7+         4       [min, 16 * min]
+ *     
+ *  Always bounded by m_maximumBackoffMs !
+ */
 void CrtpLink::resetBackoffTimer()
 {
-    const uint32_t exponent = std::min<uint32_t>(m_failedMessagesCount + 1, 5);
-    const uint32_t maximumMs =
-        std::min(m_maximumBackoffMs, m_minimumBackoffMs << exponent);
+    const uint32_t exponent = std::min<uint32_t>((m_failedMessagesCount + 1)/2, 4);
+    const uint32_t maximumMs = std::min(m_maximumBackoffMs, m_minimumBackoffMs << exponent);
     std::uniform_int_distribution<uint32_t> distribution(m_minimumBackoffMs, maximumMs);
     m_backoffTimer.reset(distribution(m_randomGenerator));
 }

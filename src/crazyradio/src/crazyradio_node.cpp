@@ -1,8 +1,10 @@
 #define BOOST_BIND_NO_PLACEHOLDERS
 #include <chrono>
+#include <atomic>
 #include <string.h>
 #include <sstream>
 #include <map>
+#include <thread>
 // Ros2
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/qos.hpp"
@@ -77,11 +79,18 @@ public:
 
 
         radio_callback_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-        radio_timer = this->create_wall_timer(
-            std::chrono::microseconds(m_radioPeriodUs),
-            std::bind(&CrazyradioNode::radioCallback, this),
-            radio_callback_group);
-        
+        if (useUDPRadio) {
+            radio_timer = this->create_wall_timer(
+                std::chrono::microseconds(m_radioPeriodUs),
+                [this] { radioCallback(); },
+                radio_callback_group);
+        } else {
+            m_radioRunning = true;
+            m_radioThread = std::thread(
+                &CrazyradioNode::radioLoop,
+                this);
+        }
+
         /**
          * Tick all links periodically.
          * This updates internal link states such as null packet frequency.
@@ -101,13 +110,29 @@ public:
         }
     }
 
+    ~CrazyradioNode() override
+    {
+        m_radioRunning = false;
+        if (m_radioThread.joinable()) m_radioThread.join();
+    }
+
 private:
-    void radioCallback()
+    bool radioCallback()
     {
         libcrtp::CrtpLinkIdentifier link;
-        if (chooseLink(&link))
-            communicateLink(&link);
-    }    
+        if (!chooseLink(&link)) return false;
+        communicateLink(&link);
+        return true;
+    }
+
+    void radioLoop()
+    {
+        while (rclcpp::ok() && m_radioRunning) {
+            if (!radioCallback()) {
+                std::this_thread::yield();
+            }
+        }
+    }
 
     bool chooseLink(libcrtp::CrtpLinkIdentifier *link)
     {
@@ -328,6 +353,8 @@ private:
 private:
     std::unique_ptr<libradio::IRadio> m_radio;
     libcrtp::CrtpLinkContainer m_links;
+    std::thread m_radioThread;
+    std::atomic<bool> m_radioRunning{false};
     
     std::unique_ptr<crazyradio::CrtpLogger> m_logger;
 
