@@ -285,7 +285,7 @@ private:
     add_parameter("datarate", "2");
 
     std::ostringstream pos_stream;
-    pos_stream << std::fixed << std::setprecision(1) << "[" 
+    pos_stream << std::fixed << std::setprecision(3) << "[" 
               << initial_pose.position.x << "," 
               << initial_pose.position.y << "," 
               << initial_pose.position.z << "]";

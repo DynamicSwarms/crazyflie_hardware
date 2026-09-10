@@ -49,7 +49,7 @@ Crazyradio::Crazyradio()
     
     setContCarrier(false);
     setPower(Power_0DBM);
-    setArc(0); // 0 retries, retry is handled by client lib, usb adds neglible overhead
+    setArc(1); // libcrtp handles retries, however most transmission errors are fixed by the first retry -> avoid to many backoffs
     setArdBytes(32);
     
     const auto version = this->version();
