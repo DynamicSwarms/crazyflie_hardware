@@ -54,4 +54,10 @@ install(TARGETS
   crazyradio_node 
   DESTINATION lib/${PROJECT_NAME})
 
+# Install the bundled runtime dependencies alongside the ROS package libraries.
+install(TARGETS libradio libcrtp
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin)
+
 ament_package()
