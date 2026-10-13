@@ -32,6 +32,18 @@ RosLink::RosLink(
         qos,
         callback_group);
 
+    auto no_response_qos = rclcpp::QoS(rclcpp::KeepLast(1000))
+        .reliable()
+        .durability_volatile();
+    auto no_response_options = rclcpp::PublisherOptions();
+    no_response_options.callback_group = callback_group;
+    send_crtp_packet_no_response_pub =
+        rclcpp::create_publisher<crtp_interfaces::msg::CrtpPacketSendNoResponse>(
+            node_topics_interface,
+            "crazyradio/send_crtp_packet_no_response" + std::to_string(channel),
+            no_response_qos,
+            no_response_options);
+
     try_initialize();
 }
 
@@ -50,6 +62,23 @@ bool RosLink::try_initialize()
             return false;
         }
         RCLCPP_DEBUG(rclcpp::get_logger(logger_name), "Crazyradio not available, waiting again...");
+    }
+    timeout = 0;
+    while (send_crtp_packet_no_response_pub->get_subscription_count() == 0)
+    {
+        if (timeout++ > 4 || !rclcpp::ok())
+        {
+            RCLCPP_ERROR(
+                rclcpp::get_logger(logger_name),
+                "Crazyradio no-response topic is not available. Exiting.");
+            initialized = false;
+            state.store(LinkState::Disconnected);
+            return false;
+        }
+        RCLCPP_DEBUG(
+            rclcpp::get_logger(logger_name),
+            "Crazyradio no-response topic not available, waiting again...");
+        rclcpp::sleep_for(std::chrono::milliseconds(500));
     }
     auto sub_opt = rclcpp::SubscriptionOptions();
     sub_opt.callback_group = callback_group;
@@ -182,10 +211,26 @@ void RosLink::send_packet_no_response(CrtpRequest request)
     if (state.load() != LinkState::Connected) {
         return;
     }
+    if (request.packet.data_length > 31) {
+        RCLCPP_ERROR(
+            rclcpp::get_logger(logger_name),
+            "Dropping malformed no-response CRTP packet with data_length %u",
+            static_cast<unsigned>(request.packet.data_length));
+        return;
+    }
 
-    auto req = std::make_shared<crtp_interfaces::srv::CrtpPacketSend::Request>();
-    fill_crtp_request(req, request);
-    send_crtp_packet_client->async_send_request(req);
+    crtp_interfaces::msg::CrtpPacketSendNoResponse msg;
+    msg.link.channel = channel;
+    msg.link.address = address;
+    msg.link.datarate = datarate;
+    msg.packet.port = request.packet.port;
+    msg.packet.channel = request.packet.channel;
+    msg.packet.data_length = request.packet.data_length;
+    for (size_t i = 0; i < request.packet.data_length; ++i) {
+        msg.packet.data[i] = request.packet.data[i];
+    }
+    msg.obeys_ordering = request.obeys_ordering;
+    send_crtp_packet_no_response_pub->publish(msg);
 
     // RCLCPP_WARN(rclcpp::get_logger(logger_name), "Sending no response! %d", request.packet.data_length);
 }

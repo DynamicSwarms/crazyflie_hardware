@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CrtpLinkQuality.msg"
   "msg/CrtpLinkQualities.msg"
   "msg/CrtpPacket.msg"
+  "msg/CrtpPacketSendNoResponse.msg"
   "msg/CrtpResponse.msg"
   "srv/CrtpPacketSend.srv"
   DEPENDENCIES std_msgs 

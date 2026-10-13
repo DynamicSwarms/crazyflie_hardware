@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "crtp_cpp/link/crtp_link.hpp"
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
+#include "crtp_interfaces/msg/crtp_packet_send_no_response.hpp"
 
 #include "crtp_interfaces/msg/crtp_link.hpp"
 #include "crtp_interfaces/msg/crtp_response.hpp"
@@ -65,6 +66,8 @@ private:
     
     rclcpp::CallbackGroup::SharedPtr callback_group; 
     rclcpp::Client<crtp_interfaces::srv::CrtpPacketSend>::SharedPtr send_crtp_packet_client;
+    rclcpp::Publisher<crtp_interfaces::msg::CrtpPacketSendNoResponse>::SharedPtr
+        send_crtp_packet_no_response_pub;
 
     rclcpp::Subscription<crtp_interfaces::msg::CrtpLink>::SharedPtr link_end_sub;
     rclcpp::Subscription<crtp_interfaces::msg::CrtpResponse>::SharedPtr crtp_response_sub;
