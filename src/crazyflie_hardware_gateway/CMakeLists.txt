@@ -8,17 +8,22 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(lifecycle_msgs REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(crazyflie_interfaces REQUIRED)
 
-add_executable(gateway src/gateway.cpp)
+add_executable(gateway
+  src/gateway.cpp
+  src/crazyflie_entry.cpp
+  src/crazyflie_lifecycle_client.cpp)
 target_include_directories(gateway PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(gateway PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 target_link_libraries(gateway
+  lifecycle_msgs::lifecycle_msgs
   rclcpp::rclcpp
   rclcpp_components::component
   ament_index_cpp::ament_index_cpp
@@ -31,7 +36,6 @@ install(TARGETS gateway
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files
   set(ament_cmake_copyright_FOUND TRUE)
   # the following line skips cpplint (only works in a git repo)

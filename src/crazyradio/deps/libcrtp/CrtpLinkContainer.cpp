@@ -45,9 +45,16 @@ bool CrtpLinkContainer::linkFromIdentifier(CrtpLink ** link, CrtpLinkIdentifier 
 void CrtpLinkContainer::addLink(uint8_t channel, uint64_t address, uint8_t datarate)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
+    if (!m_acceptingLinks) return;
     CrtpLink link(channel, address, datarate);
     std::pair<uint8_t, uint64_t> linkKey = {channel,address};
     m_links.insert({linkKey, link}); // If already in m_links this wont duplicate
+}
+
+void CrtpLinkContainer::stopLinkCreation()
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    m_acceptingLinks = false;
 }
 
 bool CrtpLinkContainer::removeLink(CrtpLinkIdentifier * link_id, std::vector<CrtpResponseCallback>& callbacks)
@@ -62,6 +69,20 @@ bool CrtpLinkContainer::removeLink(CrtpLinkIdentifier * link_id, std::vector<Crt
         return true;
     }
     return false;
+}
+
+void CrtpLinkContainer::removeAllLinks(std::vector<CrtpLinkIdentifier>& links,
+                                     std::vector<CrtpResponseCallback>& callbacks)
+{
+    std::unique_lock<std::mutex> mlock(m_linksMutex);
+    for (auto& [key, link] : m_links)
+    {
+        CrtpLinkIdentifier identifier;
+        linkToIdentifier(&link, &identifier);
+        links.push_back(identifier);
+        link.retrieveAllCallbacks(callbacks);
+    }
+    m_links.clear();
 }
 
 bool CrtpLinkContainer::getLinkIdentifier(CrtpLinkIdentifier * link, uint8_t channel, uint64_t address) const
@@ -159,14 +180,16 @@ void CrtpLinkContainer::getConnectionStats(std::vector<CrtpLinkIdentifier>& link
 
 
 
-void CrtpLinkContainer::linkAddPacket(CrtpLinkIdentifier * link_id, CrtpPacket * packet, CrtpResponseCallback callback)
+bool CrtpLinkContainer::linkAddPacket(CrtpLinkIdentifier * link_id, CrtpPacket * packet, CrtpResponseCallback callback)
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
     CrtpLink * link;
     if (linkFromIdentifier(&link, link_id))
     {
         link->addPacket(packet, callback);
+        return true;
     }
+    return false;
 }
 
 bool CrtpLinkContainer::linkGetOutboundPacket(

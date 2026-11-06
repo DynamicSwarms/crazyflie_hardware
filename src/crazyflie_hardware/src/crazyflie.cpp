@@ -1,5 +1,5 @@
 #include <cstdio>
-#include <cstdio>
+#include <atomic>
 #include "rclcpp/rclcpp.hpp"
 #include "lifecycle_msgs/msg/transition_event.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
@@ -28,8 +28,11 @@ class Commander
 {
 public:
 // 
-  Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel, std::array<uint8_t, 5> address, int datarate)
+  Commander(std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node, int channel,
+    std::array<uint8_t, 5> address, int datarate,
+    std::shared_ptr<std::atomic_bool> shutdown_requested)
       : node(node)
+      , shutdown_requested(shutdown_requested)
       , tf_name(get_tf_name(address))
       , link(std::make_shared<RosLink>(
           node->get_node_base_interface(),
@@ -37,9 +40,7 @@ public:
           node->get_node_services_interface(),
           node->get_node_topics_interface(),
           node->get_node_logging_interface(),
-          [weak_node = std::weak_ptr<rclcpp_lifecycle::LifecycleNode>(node)] {
-            if (auto node_shared = weak_node.lock()) node_shared->shutdown();
-          },
+          [shutdown_requested] { shutdown_requested->store(true); },
           channel,
           address,
           datarate))
@@ -135,7 +136,7 @@ public:
         RCLCPP_DEBUG(node->get_logger(), "Setting up tracking services.");
         bool external_tracking_success = localization->start_external_tracking(marker_configuration_index, dynamics_configuration_index, max_initial_deviation, initial_position, channel, datarate);
         if (!external_tracking_success) {
-          RCLCPP_ERROR(node->get_logger(), "Adding to tracking failed!");
+          RCLCPP_ERROR(node->get_logger(), "External positioning setup failed (tracker or broadcaster); see Localization warning.");
           return;
         }
 
@@ -166,7 +167,7 @@ public:
 
   bool stop_external_tracking()
   {
-    return localization->stop_external_tracking();
+    return !localization || localization->stop_external_tracking();
   }
 
   ~Commander() 
@@ -181,9 +182,7 @@ private:
     if (msg->data == this->tf_name) {
       RCLCPP_INFO(rclcpp::get_logger(tf_name), "Tracking lost. Shutting down.");
       hl_commander->send_stop(0);
-      if (auto node_shared = node.lock()) {
-        node_shared->shutdown();
-      }
+      shutdown_requested->store(true);
     }
   }
 
@@ -195,6 +194,7 @@ private:
   }
 
   std::weak_ptr<rclcpp_lifecycle::LifecycleNode> node;
+  std::shared_ptr<std::atomic_bool> shutdown_requested;
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr localization_lost_sub;
   std::string tf_name;
@@ -270,6 +270,15 @@ public:
     }
 
     address = {0xE7, 0xE7, 0xE7, 0xE7, id};
+    // The default mutually exclusive group also owns lifecycle services.
+    // Radio callbacks only record intent; they must keep processing replies
+    // while configure and shutdown wait for them.
+    shutdown_timer = create_wall_timer(std::chrono::milliseconds(20), [this] {
+      if (shutdown_requested->exchange(false) &&
+        get_current_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_FINALIZED) {
+        shutdown();
+      }
+    });
   }
 
   ~CrazyflieNode()
@@ -280,7 +289,8 @@ public:
   bool init()
   {
     //!!! Makeshared not in constructor
-    commander = std::make_unique<Commander>(this->shared_from_this(), channel, address, datarate);
+    commander = std::make_unique<Commander>(
+      this->shared_from_this(), channel, address, datarate, shutdown_requested);
     commander_initialized = true;
     return commander->configured;
   }
@@ -291,7 +301,7 @@ public:
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_configure(const rclcpp_lifecycle::State &)
   {
-    if (this->init())
+    if (this->init() && !shutdown_requested->load())
     {
       RCLCPP_INFO(get_logger(), "Successfully configured!");
       return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
@@ -345,6 +355,8 @@ public:
   }
 
 private:
+  std::shared_ptr<std::atomic_bool> shutdown_requested = std::make_shared<std::atomic_bool>(false);
+  rclcpp::TimerBase::SharedPtr shutdown_timer;
   std::unique_ptr<Commander> commander;
   bool commander_initialized; // True if the commander ptr is valid
 

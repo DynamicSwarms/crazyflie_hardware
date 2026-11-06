@@ -2,6 +2,7 @@
 
 
 #include <sstream>
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
@@ -77,6 +78,7 @@ bool Crazyradio::sendCrtpPacket(
         const libcrtp::CrtpPacket * packet,
         libcrtp::CrtpPacket * responsePacket)
 {   
+    std::lock_guard<std::mutex> lock(m_stateMutex);
     libradio::crazyradio::Crazyradio::Ack ack;
 
     uint8_t data[32];
@@ -200,6 +202,7 @@ bool Crazyradio::enableSafeLink(
 
 void Crazyradio::resetLink(const libcrtp::CrtpLinkIdentifier * link)
 {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
     std::cerr << "Link Reset for CF 0x" << std::hex << (int)(uint8_t)(link->address & 0xFF) << std::dec << std::endl;
     m_safeLinkStates.erase(safeLinkKey(link));
     m_linkQualities.erase(safeLinkKey(link));
@@ -207,6 +210,7 @@ void Crazyradio::resetLink(const libcrtp::CrtpLinkIdentifier * link)
 
 double Crazyradio::getLinkQuality(const libcrtp::CrtpLinkIdentifier * link) const
 {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
     if (link->isBroadcast) return 1.0;
     const auto quality = m_linkQualities.find(safeLinkKey(link));
     if (quality == m_linkQualities.end() || quality->second.count == 0) return 1.0;
@@ -247,6 +251,7 @@ void Crazyradio::sendPacket(
     result.ack = false;
 
     int status, transferred;
+    const auto started = std::chrono::steady_clock::now();
 
     if (!m_handle) throw std::runtime_error("No valid device handle!");
 
@@ -267,6 +272,7 @@ void Crazyradio::sendPacket(
     }
 
     // Read result; in inline mode also ackDisabled packets will send a response.
+    transferred = 0;
     status = libusb_bulk_transfer(
         m_handle,
         /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),

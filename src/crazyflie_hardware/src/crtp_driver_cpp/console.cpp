@@ -22,21 +22,20 @@ Console::Console(
 
 void Console::crtp_response_callback(const CrtpPacket &packet)
 {
-    static std::string message("");
     // A message can be from multiple messages.
     // A \n ends one message.
     if (packet.channel == CHANNEL_CONSOLE)
     {
         std::string string((char *)packet.data, packet.data_length);
 
-        message.append(string);
+        m_message.append(string);
 
-        if (message.back() == '\n' || message.back() == '\r')
+        if (!m_message.empty() && (m_message.back() == '\n' || m_message.back() == '\r'))
         {
-            message.pop_back(); // Do not print newline twice.
-            RCLCPP_WARN(m_logger, "%s", message.c_str());
-            this->console_message(message);
-            message.clear();
+            m_message.pop_back(); // Do not print newline twice.
+            RCLCPP_WARN(m_logger, "%s", m_message.c_str());
+            this->console_message(m_message);
+            m_message.clear();
         }
     }
 }

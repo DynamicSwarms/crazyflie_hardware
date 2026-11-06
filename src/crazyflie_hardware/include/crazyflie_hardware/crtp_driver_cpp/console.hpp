@@ -20,6 +20,7 @@ private:
     void crtp_response_callback(const CrtpPacket &packet) override;
 
 private:
+    std::string m_message;
     rclcpp::Logger m_logger;
 
     rclcpp::CallbackGroup::SharedPtr callback_group;

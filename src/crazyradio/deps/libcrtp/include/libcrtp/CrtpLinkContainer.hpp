@@ -20,12 +20,19 @@ class CrtpLinkContainer
          */
         void addLink(uint8_t channel, uint64_t address, uint8_t datarate);
 
+        /** Stop creating new links. Existing links can still be used and drained. */
+        void stopLinkCreation();
+
         /**
          * Removes a link from the container.
          * Returns true if the link was removed, false if it was not found.
          * The callbacks are returned to the caller, they should probably be called with a nullpacket.
          */
         bool removeLink(CrtpLinkIdentifier * link, std::vector<CrtpResponseCallback>& callbacks);
+
+        /** Removes all links atomically and returns their identifiers and pending callbacks. */
+        void removeAllLinks(std::vector<CrtpLinkIdentifier>& links,
+                            std::vector<CrtpResponseCallback>& callbacks);
 
         /**
          * Returns true if the link was found and copied to the link identifier.
@@ -57,7 +64,8 @@ class CrtpLinkContainer
         */
         void tickLinksMs(uint8_t ms);
         
-        void linkAddPacket(CrtpLinkIdentifier * link, CrtpPacket * packet, CrtpResponseCallback callback);
+        /** Returns false if the link no longer exists. */
+        bool linkAddPacket(CrtpLinkIdentifier * link, CrtpPacket * packet, CrtpResponseCallback callback);
         bool linkGetOutboundPacket(CrtpLinkIdentifier * link, CrtpPacket * packet, bool * isPortPacket);
         bool linkReleasePacket(CrtpLinkIdentifier  * link_id, CrtpPacket * responsePacket, CrtpResponseCallback & callback);
 
@@ -72,6 +80,7 @@ class CrtpLinkContainer
         bool linkFromIdentifier(CrtpLink ** link, CrtpLinkIdentifier * link_id);
         size_t randomIndex(size_t size) const;
         std::map<std::pair<uint8_t, uint64_t>, libcrtp::CrtpLink> m_links;
+        bool m_acceptingLinks{true};
 
         mutable std::mutex m_linksMutex;
         mutable std::mt19937 m_randomGenerator;

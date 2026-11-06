@@ -4,6 +4,7 @@
 #include <map>
 #include <tuple>
 #include <array>
+#include <mutex>
 #include "USBDevice.hpp"
 #include "interface/IRadio.hpp"
 
@@ -116,6 +117,7 @@ private:
 
     void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
 
+    mutable std::mutex m_stateMutex;
     std::map<SafeLinkKey, SafeLinkState> m_safeLinkStates;
     std::map<SafeLinkKey, LinkQuality> m_linkQualities;
 };
