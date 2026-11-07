@@ -1,6 +1,6 @@
 #include "crtp_cpp/logic/logging_logic.hpp"
 #include <tuple>
-#include <iostream> // For debugging
+#include <utility>
 
 #define PORT_LOGGING 5
 
@@ -21,12 +21,24 @@ bool LoggingLogic::stop_block(int id) {
     return link->send_packet(packer.stop_block(id)).has_value();
 }
 
+bool LoggingLogic::remove_block(int id) {
+    if (!stop_block(id)) return false;
+    
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_blocks.erase(id);
+    return true;
+}
+
 bool LoggingLogic::reset() {
-    return link->send_packet(packer.reset()).has_value();
+    if (!link->send_packet(packer.reset())) return false;
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_blocks.clear();
+    return true;
 }
 
 bool
-LoggingLogic::add_block(int id, const std::vector<std::string>& variables) {
+LoggingLogic::add_block(int id, const std::vector<std::string>& variables, DataCallback callback) {
     std::vector<std::pair<uint8_t, uint16_t>> vars;
     auto block_entries = std::vector<LogTocEntry>();
 
@@ -53,15 +65,25 @@ LoggingLogic::add_block(int id, const std::vector<std::string>& variables) {
     }    
     
     if (!link->send_packet(packer.create_block(id, vars))) return false;
-    blocks[id] = block_entries;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_blocks[id] = Block{std::move(block_entries), std::move(callback)};
     return true;
 }
 
 std::vector<double> LoggingLogic::unpack_block(int block_id, const std::vector<uint8_t>& data) {
-    if (blocks.find(block_id) == blocks.end()) { // Use find() for map lookup
-        return {};
+    std::vector<LogTocEntry> variables;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        auto block = m_blocks.find(block_id);
+        if (block == m_blocks.end()) return {};
+        variables = block->second.variables;
     }
-    auto variables = blocks.at(block_id); // Use at() for safe access
+    return unpack(variables, data);
+}
+
+std::vector<double> LoggingLogic::unpack(const std::vector<LogTocEntry> &variables,
+    const std::vector<uint8_t> &data)
+{
     std::vector<double> unpacked_data;
 
     // Unpack data using struct-like functionality
@@ -76,4 +98,25 @@ std::vector<double> LoggingLogic::unpack_block(int block_id, const std::vector<u
         offset += entry_size;
     }
     return unpacked_data;
+}
+
+void LoggingLogic::crtp_response_callback(const CrtpPacket &packet)
+{
+    if (packet.channel != LOGDATA_CHANNEL || packet.data_length < 4 ||
+        packet.data_length > sizeof(packet.data)) return;
+        
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    auto it = m_blocks.find(packet.data[0]);
+    if (it == m_blocks.end()) return;
+    
+    const auto &block = it->second;
+    if (!block.callback) return;
+    
+    const uint32_t timestamp = static_cast<uint32_t>(packet.data[1]) |
+        (static_cast<uint32_t>(packet.data[2]) << 8) |
+        (static_cast<uint32_t>(packet.data[3]) << 16);
+    const std::vector<uint8_t> payload(packet.data + 4, packet.data + packet.data_length);
+    auto values = unpack(block.variables, payload);
+    if (values.size() == block.variables.size()) block.callback(values, timestamp);
 }

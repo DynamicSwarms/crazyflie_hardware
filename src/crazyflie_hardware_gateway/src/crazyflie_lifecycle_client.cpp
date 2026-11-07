@@ -1,22 +1,39 @@
 #include "crazyflie_hardware_gateway/crazyflie_lifecycle_client.hpp"
 
 #include <utility>
+#include "rclcpp/create_client.hpp"
+#include "rclcpp/create_subscription.hpp"
 #include "lifecycle_msgs/msg/state.hpp"
 #include "lifecycle_msgs/msg/transition.hpp"
 
 CrazyflieLifecycleClient::CrazyflieLifecycleClient(
-  rclcpp::Node & gateway, const std::string & node_name,
-  rclcpp::CallbackGroup::SharedPtr callback_group)
+  const GatewayNodeInterfaces & gateway,
+  const std::string & node_name,
+  rclcpp::CallbackGroup::SharedPtr callback_group, 
+  rclcpp::Logger logger)
+: m_logger(logger.get_child("lifecycle"))
 {
-  m_change_state = gateway.create_client<ChangeState>(node_name + "/change_state",
-    rclcpp::ServicesQoS(), callback_group);
-  m_get_state = gateway.create_client<GetState>(node_name + "/get_state",
-    rclcpp::ServicesQoS(), callback_group);
+  m_change_state = rclcpp::create_client<ChangeState>(
+    gateway.base, 
+    gateway.graph, 
+    gateway.services, 
+    node_name + "/change_state",
+    rclcpp::ServicesQoS(), 
+    callback_group);
+  rclcpp::SubscriptionOptions options;
+  options.callback_group = callback_group;
+  auto topics = gateway.topics;
+  m_transition_events = rclcpp::create_subscription<lifecycle_msgs::msg::TransitionEvent>(
+    topics, node_name + "/transition_event", rclcpp::QoS(10),
+    [state = m_state](lifecycle_msgs::msg::TransitionEvent::ConstSharedPtr event) {
+      std::lock_guard<std::mutex> lock(state->mutex);
+      state->value = event->goal_state.id;
+    }, options);
 }
 
 bool CrazyflieLifecycleClient::available() const
 {
-  return m_change_state->service_is_ready() && m_get_state->service_is_ready();
+  return m_change_state->service_is_ready();
 }
 
 void CrazyflieLifecycleClient::transition(uint8_t id)
@@ -50,29 +67,27 @@ void CrazyflieLifecycleClient::shutdown(uint8_t current_state)
   }
 }
 
-std::optional<bool> CrazyflieLifecycleClient::transition_result()
+std::optional<bool> 
+CrazyflieLifecycleClient::transition_result()
 {
   if (!m_transition.valid() ||
     m_transition.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return {};
   auto future = std::exchange(m_transition, {});
   try {
-    return future.get()->success;
+    const bool success = future.get()->success;
+    if (!success) {
+      RCLCPP_WARN(m_logger, "Lifecycle transition response reported success=false.");
+    }
+    return success;
   } catch (const std::exception & ex) {
-    RCLCPP_ERROR(rclcpp::get_logger("CrazyflieLifecycleClient"),
-      "Lifecycle response failed: %s", ex.what());
+    RCLCPP_ERROR(m_logger, "Lifecycle response failed: %s", ex.what());
     return false;
   }
 }
 
-std::optional<uint8_t> CrazyflieLifecycleClient::current_state()
+std::optional<uint8_t> 
+CrazyflieLifecycleClient::current_state() const
 {
-  if (!m_state.valid()) {
-    if (m_get_state->service_is_ready()) {
-      m_state = m_get_state->async_send_request(std::make_shared<GetState::Request>()).share();
-    }
-    return {};
-  }
-  if (m_state.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return {};
-  auto future = std::exchange(m_state, {});
-  return future.get()->current_state.id;
+  std::lock_guard<std::mutex> lock(m_state->mutex);
+  return m_state->value;
 }

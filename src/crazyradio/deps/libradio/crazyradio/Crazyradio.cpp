@@ -28,24 +28,15 @@ Crazyradio::Crazyradio()
     : USBDevice(0x1915, 0x7777)
 {
     bool success = false;
-    std::vector<std::string> errors; // Store errors for potential later use.
-
-    for (int deviceId = 0; deviceId < 5; deviceId++) {
-        try {
-            open(deviceId);
-            success = true; // Open succeeded, so break the loop
+    auto devices = enumerate();
+    for (size_t deviceId = 0; deviceId < devices.size(); deviceId++) {
+        if (tryOpenAndClaim(devices[deviceId].get())) {
+            success = true;
             break;
-        } catch (const std::runtime_error& e) {
-            errors.push_back(e.what()); // Store the error message
         }
     }
     if (!success) {
-        //If open did not succeed, throw an error.
-        std::string combinedError = "Failed to open any device: ";
-        for(const auto& error : errors) {
-            combinedError += error + "; ";
-        }
-        throw std::runtime_error(combinedError);
+        throw std::runtime_error("No available Crazyradio device found.");
     }
     
     setContCarrier(false);
@@ -197,6 +188,9 @@ bool Crazyradio::enableSafeLink(
         }
     }
 
+    std::cerr << "SafeLink negotiation failed after 10 attempts for cf" 
+              << std::to_string(link->address & 0xFF) + " on channel " + std::to_string(link->channel)
+              << std::endl;
     return false;
 }
 
@@ -280,12 +274,9 @@ void Crazyradio::sendPacket(
         sizeof(result),
         &transferred,
         /*timeout*/ 10);
-    
-    if (status == LIBUSB_ERROR_TIMEOUT) 
-        std::cerr << "USB readback timeout" << std::endl;
-    
+        
     if (status != LIBUSB_SUCCESS) 
-        std::cerr << "USB readback failed: " << libusb_error_name(status) << std::endl;
+        throw std::runtime_error("USB readback failed: " + std::string(libusb_error_name(status)));
 }
 
 void Crazyradio::setPower(Power power)

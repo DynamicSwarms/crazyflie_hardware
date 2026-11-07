@@ -16,6 +16,7 @@ find_package(crazyflie_interfaces REQUIRED)
 
 add_executable(gateway
   src/gateway.cpp
+  src/dedicated_executor_wrapper.cpp
   src/crazyflie_entry.cpp
   src/crazyflie_lifecycle_client.cpp)
 target_include_directories(gateway PUBLIC

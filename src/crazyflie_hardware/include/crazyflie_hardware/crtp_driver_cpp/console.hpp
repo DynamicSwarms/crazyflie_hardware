@@ -16,11 +16,6 @@ public:
         std::shared_ptr<CrtpLink>link);
 
 private:
-    void console_message(const std::string);
-    void crtp_response_callback(const CrtpPacket &packet) override;
-
-private:
-    std::string m_message;
     rclcpp::Logger m_logger;
 
     rclcpp::CallbackGroup::SharedPtr callback_group;

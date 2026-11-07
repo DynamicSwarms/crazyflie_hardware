@@ -74,6 +74,7 @@ private:
 
     rclcpp::Publisher<crtp_interfaces::msg::CrtpLink>::SharedPtr link_close_pub;
 
+    std::mutex callbacks_mutex;
     std::map<uint8_t, std::vector<CrtpCallbackType>> callbacks;
 
     // Requests originate from several callback groups on a multi-threaded

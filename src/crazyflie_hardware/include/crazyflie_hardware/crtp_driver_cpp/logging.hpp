@@ -50,7 +50,6 @@ private:
         const std::string &block_name,
         const std::vector<std::string> &variables);
 
-    void crtp_response_callback(const CrtpPacket&  packet) override; 
 
     void m_start_logging_block(int block_id, int period_ms_d10)
     {
@@ -79,12 +78,6 @@ private:
     std::shared_ptr<rclcpp::Service<crazyflie_interfaces::srv::AddLogging>> m_add_log_block_server;
     std::shared_ptr<rclcpp::Service<crazyflie_interfaces::srv::RemoveLogging>> m_remove_log_block_server;
 
-    bool log_state;
-    bool log_pose;
-    rclcpp::Publisher<crazyflie_interfaces::msg::LogDataGeneric>::SharedPtr log_state_pub;
-    rclcpp::Publisher<crazyflie_interfaces::msg::PoseNamedArray>::SharedPtr log_pose_pub;
-
     uint8_t next_log_block_id = 2;
-    std::map<int, std::shared_ptr<LogBlock>> m_log_blocks;
     std::map<std::string, int> m_log_block_ids;
 };

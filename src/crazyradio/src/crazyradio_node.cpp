@@ -48,14 +48,15 @@ public:
         , m_links()
         , m_radioPeriodUs(500) // 2000 Hz polling, realistic rate is ~ 1100Hz.
     {
+        uint8_t channel = this->declare_parameter("channel", rclcpp::ParameterValue(80)).get<uint8_t>();
+
         bool useUDPRadio = this->declare_parameter("use_udpradio", rclcpp::ParameterValue(false)).get<bool>();
         if (!useUDPRadio) m_radio = std::make_unique<libradio::crazyradio::Crazyradio>();
         else {
             m_radio = std::make_unique<libradio::udpradio::UDPRadio>();
             m_radioPeriodUs = 100; // 10_000 Hz
         }
-        
-        uint8_t channel = this->declare_parameter("channel", rclcpp::ParameterValue(80)).get<uint8_t>();
+
         
         m_radioPriority =
             this->declare_parameter("radio_priority", rclcpp::ParameterValue(20)).get<int>();
@@ -346,17 +347,19 @@ private:
         const std::shared_ptr<crtp_interfaces::srv::CrtpPacketSend::Request> request)
     {
         (void)service_handle;
-        // Create Packet
-        libcrtp::CrtpPacket packet = {
-            (libcrtp::CrtpPort)request->packet.port,
-            request->packet.channel,
-            {/*data*/},
-            request->packet.data_length,
+
+        if (!validateCrtpRequest(request->packet, request->link)) {
+            auto failed_packet = libcrtp::nullPacket;
+            responseCallback(&failed_packet, false, header);
+            return;
+        }
+
+        libcrtp::CrtpPacket packet = makeCrtpPacket(
+            request->packet,
             request->expects_response,
             request->matching_bytes,
-            request->obeys_ordering};
-        for (int i = 0; i < request->packet.data_length; i++)
-            packet.data[i] = request->packet.data[i];
+            request->obeys_ordering
+        );
 
         auto response_callback = std::bind(
                 &CrazyradioNode::responseCallback,
@@ -364,6 +367,7 @@ private:
                 std::placeholders::_1,      // libcrtp::CrtpPacket* pkt
                 std::placeholders::_2,      // bool success
                 std::make_shared<rmw_request_id_t>(*header)); // shared_ptr<rmw_request_id_t> header
+        
         libcrtp::CrtpLinkIdentifier link;
         if (!ensureLink(request->link, link) || !m_links.linkAddPacket(&link, &packet, response_callback)) {
             auto failed_packet = libcrtp::nullPacket;
@@ -377,44 +381,66 @@ private:
     void sendCrtpPacketNoResponseCallback(
         const crtp_interfaces::msg::CrtpPacketSendNoResponse::SharedPtr request)
     {
-        if (request->packet.data_length > request->packet.data.size()) {
-            RCLCPP_ERROR(
-                this->get_logger(),
-                "Dropping malformed no-response CRTP packet: data_length %u exceeds %zu",
-                static_cast<unsigned>(request->packet.data_length),
-                request->packet.data.size());
-            return;
-        }
-        if (request->packet.port > 15 || request->packet.channel > 3 ||
-            request->link.channel > 125 || request->link.datarate > 2) {
-            RCLCPP_ERROR(
-                this->get_logger(),
-                "Dropping malformed no-response CRTP packet (port=%u, channel=%u, "
-                "radio_channel=%u, datarate=%u)",
-                static_cast<unsigned>(request->packet.port),
-                static_cast<unsigned>(request->packet.channel),
-                static_cast<unsigned>(request->link.channel),
-                static_cast<unsigned>(request->link.datarate));
+        if (!validateCrtpRequest(request->packet, request->link)) {
+            RCLCPP_ERROR(this->get_logger(), "Dropping malformed no-response CRTP packet.");
             return;
         }
 
-        libcrtp::CrtpPacket packet = {
-            static_cast<libcrtp::CrtpPort>(request->packet.port),
-            request->packet.channel,
-            {/*data*/},
-            request->packet.data_length,
-            false,
-            0,
-            request->obeys_ordering};
-        for (size_t i = 0; i < request->packet.data_length; ++i) {
-            packet.data[i] = request->packet.data[i];
-        }
+        libcrtp::CrtpPacket packet = makeCrtpPacket(request->packet, false, 0, false);
 
         libcrtp::CrtpLinkIdentifier link;
         if (!ensureLink(request->link, link) || !m_links.linkAddPacket(&link, &packet, nullptr)) {
             RCLCPP_DEBUG(this->get_logger(), "No-response CRTP packet rejected: link unavailable or radio stopping.");
         }
     }
+    
+    bool validateCrtpRequest(
+        const crtp_interfaces::msg::CrtpPacket &packet,
+        const crtp_interfaces::msg::CrtpLink &link)
+    {
+        if (packet.data_length > packet.data.size()) {
+            RCLCPP_ERROR(
+                this->get_logger(),
+                "Malformed CRTP packet: data_length %u exceeds %zu",
+                static_cast<unsigned>(packet.data_length),
+                packet.data.size());
+            return false;
+        }
+        if (packet.port > 15 || packet.channel > 15 ||
+            link.channel > 125 || link.datarate > 2) {
+            RCLCPP_ERROR(
+                this->get_logger(),
+                "Malformed CRTP packet (port=%u, channel=%u, "
+                "radio_channel=%u, datarate=%u)",
+                static_cast<unsigned>(packet.port),
+                static_cast<unsigned>(packet.channel),
+                static_cast<unsigned>(link.channel),
+                static_cast<unsigned>(link.datarate));
+            return false;
+        }
+        return true;
+    }
+
+    libcrtp::CrtpPacket makeCrtpPacket(
+        const crtp_interfaces::msg::CrtpPacket &msg,
+        bool expectsResponse,
+        uint8_t matchingBytes,
+        bool obeysOrdering)
+    {
+        libcrtp::CrtpPacket packet = {
+            static_cast<libcrtp::CrtpPort>(msg.port),
+            msg.channel,
+            {/*data*/},
+            msg.data_length,
+            expectsResponse,
+            matchingBytes,
+            obeysOrdering
+        };
+
+        std::copy_n(msg.data.begin(), msg.data_length, packet.data);
+        return packet;
+    }
+
 
     // Callback for sending out link quality information regularly
     void logLinkQualityCallback()
