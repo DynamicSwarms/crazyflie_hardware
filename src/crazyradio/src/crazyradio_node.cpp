@@ -59,8 +59,7 @@ public:
         }
 
         
-        m_radioPriority =
-            this->declare_parameter("radio_priority", rclcpp::ParameterValue(20)).get<int>();
+        m_radioPriority = this->declare_parameter("radio_priority", rclcpp::ParameterValue(20)).get<int>();
         bool log_enabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
 
         m_logger = std::make_unique<crazyradio::CrtpLogger>(
@@ -207,9 +206,9 @@ private:
                 RCLCPP_WARN(this->get_logger(),
                     "Failed to set radio thread priority to %d: %s",
                     m_radioPriority, strerror(error));
+                m_diagnostics->reportError(std::string("Failed to set radio thread priority to ") + std::to_string(m_radioPriority) + std::string(": ") + strerror(error));
             } else {
-                RCLCPP_INFO(this->get_logger(),
-                    "Radio thread using SCHED_RR priority %d", m_radioPriority);
+                RCLCPP_INFO(this->get_logger(), "Radio thread using SCHED_RR priority %d", m_radioPriority);
             }
         }
         while (rclcpp::ok() && !m_shutdownRequested.load()) {

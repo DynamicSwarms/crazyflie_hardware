@@ -81,6 +81,7 @@ void RadioDiagnostics::publish(
     add("Unicast links", container.unicastLinks);
     add("Broadcast links", container.broadcastLinks);
 
+    double worstLinkQuality = 1.0;
     if (linkQualities.link_qualities.empty()) {
         add("Average link quality (%)", "N/A");
         add("Worst link quality (%)", "N/A");
@@ -94,6 +95,7 @@ void RadioDiagnostics::publish(
             worst = std::min(worst, static_cast<double>(quality.link_quality));
             best = std::max(best, static_cast<double>(quality.link_quality));
         }
+        worstLinkQuality = worst;
         add("Average link quality (%)", 100.0 * total / linkQualities.link_qualities.size());
         add("Worst link quality (%)", 100.0 * worst);
         add("Best link quality (%)", 100.0 * best);
@@ -126,13 +128,29 @@ void RadioDiagnostics::publish(
     add("Measurement interval (s)", seconds);
 
     const bool idle = container.unicastLinks == 0 && container.broadcastLinks == 0;
-    const bool delayed = m_deliveryWarnMs > 0.0 &&
-        std::max(oldestOutgoingAgeMs, maxCompletedDeliveryDelayMs) > m_deliveryWarnMs;
+    const bool delayed = m_deliveryWarnMs > 0.0 && std::max(oldestOutgoingAgeMs, maxCompletedDeliveryDelayMs) > m_deliveryWarnMs;
+    const bool lowLinkQuality = worstLinkQuality < 0.5;
+
+    std::string message = "";
+    uint8_t level;
+    if (!m_error.empty()) {
+        level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+        message = m_error;
+    } else if (delayed || lowLinkQuality) {
+        level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+        if (delayed) message += "Outgoing delivery delayed; ";
+        if (lowLinkQuality) message += "Low link quality; ";
+    } else if (idle) {
+        level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+        message = "Running; no links";
+    } else {
+        level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+        message = "Running";
+    }
+ 
+    
     publishRadioStatus(
-        !m_error.empty() ? diagnostic_msgs::msg::DiagnosticStatus::ERROR :
-        (delayed ? diagnostic_msgs::msg::DiagnosticStatus::WARN : diagnostic_msgs::msg::DiagnosticStatus::OK),
-        !m_error.empty() ? m_error :
-        (delayed ? "Outgoing delivery delayed" : (idle ? "Running; no links" : "Running")),
+        level, message,
         std::move(values));
     m_previousEnqueuedPackets = container.enqueuedPackets;
     m_previousStatistics = current;
