@@ -99,7 +99,6 @@ private:
     void sendPacket(
         const uint8_t* data,
         uint32_t length, 
-        bool ackEnabled,
         Ack& result
     );
 

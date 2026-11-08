@@ -232,20 +232,18 @@ void Crazyradio::sendPacketInline(
     inlineData[7] = (address >> 0) & 0xFF;
     memcpy(&inlineData[8], data, length);
 
-    sendPacket(inlineData, 8 + length, ackEnabled,result);
+    sendPacket(inlineData, 8 + length, result);
 }
 
 void Crazyradio::sendPacket(
     const uint8_t * data,
     uint32_t length,
-    bool ackEnabled,
     Ack& result
 )
 {
     result.ack = false;
 
     int status, transferred;
-    const auto started = std::chrono::steady_clock::now();
 
     if (!m_handle) throw std::runtime_error("No valid device handle!");
 
