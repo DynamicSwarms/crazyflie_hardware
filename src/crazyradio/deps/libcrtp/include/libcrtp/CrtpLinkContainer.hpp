@@ -6,8 +6,10 @@
 
 #include "libcrtp/CrtpPacket.hpp"
 #include "libcrtp/CrtpLink.hpp"
+#include "libcrtp/CrtpContainerStats.hpp"
 
 namespace libcrtp {
+
 
 class CrtpLinkContainer
 {
@@ -54,9 +56,10 @@ class CrtpLinkContainer
          */
         bool getRandomRelaxedNonBroadcastLink(CrtpLinkIdentifier * link) const;
 
-        /**
-         * Get connection statistics for all links.
-         */
+        /** Return an aggregate statistics snapshot under the container lock. */
+        CrtpContainerStats getStats();
+
+        /** Get connection statistics for all links. */
         void getConnectionStats(std::vector<CrtpLinkIdentifier>& links, std::vector<double>& quality) const;
 
         /**
@@ -81,6 +84,7 @@ class CrtpLinkContainer
         size_t randomIndex(size_t size) const;
         std::map<std::pair<uint8_t, uint64_t>, libcrtp::CrtpLink> m_links;
         bool m_acceptingLinks{true};
+        uint64_t m_enqueuedPackets{0}; // Protected by m_linksMutex; never reset on link removal.
 
         mutable std::mutex m_linksMutex;
         mutable std::mt19937 m_randomGenerator;

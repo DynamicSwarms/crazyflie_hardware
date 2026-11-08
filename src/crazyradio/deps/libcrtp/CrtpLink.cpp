@@ -50,6 +50,8 @@ void CrtpLink::addPacket(
     //if (packet->expectsResponse) 
     //    std::cerr << "Add: " << (int)packet->port << std::endl;
     m_crtpPortQueues[packet->port].addPacket(packet, callback);
+    ++m_outgoingPackets;
+    m_pendingResponses += packet->expectsResponse;
 }
 
 void CrtpLink::getOutboundPacket(CrtpPacket * packet, bool * isPortPacket)
@@ -85,6 +87,7 @@ bool CrtpLink::releasePacket(
     if (packet->port == CrtpPort::DATA_LOGGING && packet->channel == 2) return false;
     
     bool released = m_crtpPortQueues[packet->port].releasePacket(packet, callback);
+    if (released) --m_pendingResponses;
     //if (released)
     //    std::cerr << "Released?: " << (int)packet->port << (released ? "yes" : "no") << std::endl;
     return released;
@@ -114,6 +117,7 @@ void CrtpLink::notifySuccessfullPortMessage(CrtpPort port, bool responseIsNullpa
     m_currentOutbound.reset();
     if (responseIsNullpacket) m_relaxationTimer.reset();
     m_crtpPortQueues[port].sendPacketSuccess();
+    --m_outgoingPackets;
     onSuccessfullMessage();
 }
 
@@ -154,8 +158,10 @@ void CrtpLink::retrieveAllCallbacks(std::vector<CrtpResponseCallback>& callbacks
 {
     for (auto& [port, queue] : m_crtpPortQueues) 
     {
-        queue.retrieveAllCallbacks(callbacks); 
+        queue.retrieveAllCallbacks(callbacks);
     }
+    m_outgoingPackets = 0;
+    m_pendingResponses = 0;
 }
 
 void CrtpLink::tickMs(uint8_t ms)
@@ -168,6 +174,23 @@ void CrtpLink::tickMs(uint8_t ms)
 bool CrtpLink::isRelaxed() const
 {
     return m_backoffTimer.isReady() && m_relaxationTimer.isReady();
+}
+
+CrtpLinkStats CrtpLink::getStats()
+{
+    CrtpLinkStats stats;
+    stats.outgoingPackets = m_outgoingPackets;
+    stats.pendingResponses = m_pendingResponses;
+    stats.inBackoff = !m_backoffTimer.isReady();
+    for (auto& [port, queue] : m_crtpPortQueues) {
+        CrtpPacket packet;
+        if (queue.getPacket(&packet)) {
+            if (!stats.oldestOutgoingCreatedAt || packet.createdAt < *stats.oldestOutgoingCreatedAt) {
+                stats.oldestOutgoingCreatedAt = packet.createdAt;
+            }
+        }
+    }
+    return stats;
 }
 
 double CrtpLink::getLinkQuality() const

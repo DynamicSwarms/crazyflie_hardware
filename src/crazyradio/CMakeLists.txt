@@ -13,6 +13,7 @@ add_subdirectory(deps/libradio)
 find_package(rclcpp REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(crtp_interfaces REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(crazyflie_interfaces REQUIRED)
 
 if(BUILD_TESTING)
@@ -36,13 +37,15 @@ endif()
 
 add_executable(crazyradio_node 
   src/crazyradio_node.cpp
-  src/crtp_logger.cpp)
+  src/crtp_logger.cpp
+  src/radio_diagnostics.cpp)
 
 target_include_directories(crazyradio_node PRIVATE include)
 
 #dependencies for node from ros packages
 target_link_libraries(crazyradio_node
   rclcpp::rclcpp
+  diagnostic_msgs::diagnostic_msgs
   crtp_interfaces::crtp_interfaces
   crazyflie_interfaces::crazyflie_interfaces)
 

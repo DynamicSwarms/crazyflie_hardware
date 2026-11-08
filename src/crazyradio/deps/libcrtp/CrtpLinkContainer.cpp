@@ -1,5 +1,6 @@
 #include "libcrtp/CrtpLinkContainer.hpp"
 #include <cstdlib>
+#include <algorithm>
 namespace libcrtp {
 
 CrtpLinkContainer::CrtpLinkContainer() 
@@ -164,6 +165,26 @@ void CrtpLinkContainer::tickLinksMs(uint8_t ms)
     }
 }
 
+CrtpContainerStats CrtpLinkContainer::getStats()
+{
+    std::lock_guard<std::mutex> lock(m_linksMutex);
+    CrtpContainerStats stats;
+    stats.enqueuedPackets = m_enqueuedPackets;
+    for (auto& [key, link] : m_links) {
+        if (link.isBroadcast()) ++stats.broadcastLinks;
+        else ++stats.unicastLinks;
+        const auto linkStats = link.getStats();
+        stats.outgoingPackets += linkStats.outgoingPackets;
+        stats.pendingResponses += linkStats.pendingResponses;
+        stats.linksInBackoff += linkStats.inBackoff;
+        if (linkStats.oldestOutgoingCreatedAt &&
+            (!stats.oldestOutgoingCreatedAt || *linkStats.oldestOutgoingCreatedAt < *stats.oldestOutgoingCreatedAt)) {
+            stats.oldestOutgoingCreatedAt = linkStats.oldestOutgoingCreatedAt;
+        }
+    }
+    return stats;
+}
+
 void CrtpLinkContainer::getConnectionStats(std::vector<CrtpLinkIdentifier>& links, std::vector<double>& quality) const
 {
     std::unique_lock<std::mutex> mlock(m_linksMutex);
@@ -187,6 +208,7 @@ bool CrtpLinkContainer::linkAddPacket(CrtpLinkIdentifier * link_id, CrtpPacket *
     if (linkFromIdentifier(&link, link_id))
     {
         link->addPacket(packet, callback);
+        ++m_enqueuedPackets;
         return true;
     }
     return false;

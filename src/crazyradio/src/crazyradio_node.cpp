@@ -22,6 +22,7 @@
 #include "crtp_interfaces/msg/crtp_packet_send_no_response.hpp"
 #include "crtp_interfaces/msg/crtp_response.hpp"
 #include "crazyflie_interfaces/msg/crazyflie_link_quality_array.hpp"
+#include "crazyradio/radio_diagnostics.hpp"
 
 
 #include <condition_variable>
@@ -98,8 +99,11 @@ public:
             "crazyradio/close_crtp_link", 10,
             std::bind(&CrazyradioNode::closeLinkCallback, this, _1));
         
-        link_quality_pub = this->create_publisher<crazyflie_interfaces::msg::CrazyflieLinkQualityArray>(
-            "crazyradio/link_qualities", 10);
+        m_diagnostics = std::make_unique<crazyradio::RadioDiagnostics>(
+            crazyradio::DiagnosticsNodeInterfaces{
+                get_node_base_interface(), get_node_clock_interface(),
+                get_node_parameters_interface(), get_node_topics_interface()},
+            channel, useUDPRadio);
 
 
         radio_callback_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -125,9 +129,9 @@ public:
             std::chrono::milliseconds(1),
             [this] {m_links.tickLinksMs(1); });
 
-        m_link_quality_timer = this->create_wall_timer(
+        m_diagnostics_timer = this->create_wall_timer(
             std::chrono::milliseconds(1000),
-            std::bind(&CrazyradioNode::logLinkQualityCallback, this));
+            std::bind(&CrazyradioNode::diagnosticsCallback, this));
 
         if (useUDPRadio) {
             RCLCPP_WARN(this->get_logger(), "Started Crazyradio Node in SITL mode on Channel %d", channel);
@@ -158,7 +162,7 @@ public:
 
         if (radio_timer) radio_timer->cancel();
         m_tick_timer->cancel();
-        m_link_quality_timer->cancel();
+        m_diagnostics_timer->cancel();
         if (m_radioThread.joinable()) m_radioThread.join();
 
         std::vector<libcrtp::CrtpLinkIdentifier> links;
@@ -186,6 +190,7 @@ private:
             return true;
         } catch (const std::exception &ex) {
             RCLCPP_ERROR(get_logger(), "Radio communication failed: %s", ex.what());
+            m_diagnostics->reportError(std::string("Radio communication failed: ") + ex.what());
             m_shutdownRequested = true;
             return false;
         }
@@ -250,6 +255,7 @@ private:
             }
         }
 
+        m_diagnostics->recordCommunication(packet, sendSuccess, isPortPacket, link->isBroadcast);
         m_logger->logCommunication(link, &packet, &responsePacket, sendSuccess && !link->isBroadcast,
              std::chrono::nanoseconds(get_clock()->now().nanoseconds()));
     }
@@ -434,7 +440,8 @@ private:
             msg.data_length,
             expectsResponse,
             matchingBytes,
-            obeysOrdering
+            obeysOrdering,
+            std::chrono::steady_clock::now()
         };
 
         std::copy_n(msg.data.begin(), msg.data_length, packet.data);
@@ -443,7 +450,7 @@ private:
 
 
     // Callback for sending out link quality information regularly
-    void logLinkQualityCallback()
+    void diagnosticsCallback()
     {
         std::vector<libcrtp::CrtpLinkIdentifier> links;
         std::vector<double> qualities;
@@ -467,7 +474,7 @@ private:
             }
         }   
 
-        link_quality_pub->publish(msg);
+        m_diagnostics->publish(m_links.getStats(), msg);
     }
 private: 
     void responseCallback(
@@ -500,7 +507,9 @@ private:
     rclcpp::CallbackGroup::SharedPtr crtp_send_callback_group;
     rclcpp::CallbackGroup::SharedPtr radio_callback_group;
 
-    rclcpp::TimerBase::SharedPtr m_link_quality_timer;
+    rclcpp::TimerBase::SharedPtr m_diagnostics_timer;
+
+    std::unique_ptr<crazyradio::RadioDiagnostics> m_diagnostics;
 
     int m_radioPriority;
     rclcpp::TimerBase::SharedPtr radio_timer;
@@ -512,7 +521,6 @@ private:
         send_crtp_packet_no_response_sub;
     rclcpp::Publisher<crtp_interfaces::msg::CrtpResponse>::SharedPtr send_response_pub;
     rclcpp::Publisher<crtp_interfaces::msg::CrtpLink>::SharedPtr link_end_pub;
-    rclcpp::Publisher<crazyflie_interfaces::msg::CrazyflieLinkQualityArray>::SharedPtr link_quality_pub;
     rclcpp::Subscription<crtp_interfaces::msg::CrtpLink>::SharedPtr link_close_sub;
 
     std::atomic<bool> m_stopping{false};
