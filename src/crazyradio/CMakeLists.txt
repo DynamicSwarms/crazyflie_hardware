@@ -17,6 +17,15 @@ find_package(diagnostic_msgs REQUIRED)
 find_package(crazyflie_interfaces REQUIRED)
 
 if(BUILD_TESTING)
+  enable_testing()
+  add_executable(test_inline_ack test/test_inline_ack.cpp)
+  target_include_directories(test_inline_ack PRIVATE deps/libradio/crazyradio/include)
+  add_test(NAME inline_mode_2_ack COMMAND test_inline_ack)
+  add_executable(test_crtp_logger test/test_crtp_logger.cpp src/crtp_logger.cpp)
+  target_include_directories(test_crtp_logger PRIVATE include)
+  target_link_libraries(test_crtp_logger rclcpp::rclcpp libradio)
+  add_test(NAME radio_statistics_csv COMMAND test_crtp_logger)
+
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files

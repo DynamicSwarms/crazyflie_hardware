@@ -5,6 +5,9 @@
 #include <tuple>
 #include <array>
 #include <mutex>
+#include <functional>
+#include <utility>
+#include "InlineAck.hpp"
 #include "USBDevice.hpp"
 #include "interface/IRadio.hpp"
 
@@ -15,20 +18,15 @@ namespace libradio::crazyradio {
 class Crazyradio : public libradio::IRadio, public USBDevice
 {
 public:
-    struct Ack
-    {
-        Ack()
-        : ack(0)
-        {}
+    using Ack = InlineAck;
+    using TransactionCallback = std::function<void(
+        uint8_t, uint64_t, uint8_t, bool, const uint8_t*, uint32_t, const Ack&)>;
 
-        uint8_t total_length; // total length including the header
-        uint8_t ack:1;
-        uint8_t rssi:1;
-        uint8_t invalid_settings:1;
-        uint8_t reserved:1;
-        uint8_t retry:4;
-        uint8_t data[32];
-    }__attribute__((packed));
+    // Set before starting the radio thread; called synchronously for each transfer.
+    void setTransactionCallback(TransactionCallback callback)
+    {
+        m_transactionCallback = std::move(callback);
+    }
 
     enum Datarate
     {
@@ -112,13 +110,14 @@ private:
 
     void setContCarrier(bool active);
 
-    void setInlineMode(bool enable);
+    void setInlineMode(uint8_t mode);
 
     void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
 
     mutable std::mutex m_stateMutex;
     std::map<SafeLinkKey, SafeLinkState> m_safeLinkStates;
     std::map<SafeLinkKey, LinkQuality> m_linkQualities;
+    TransactionCallback m_transactionCallback;
 };
 
 

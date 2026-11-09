@@ -66,6 +66,18 @@ public:
             log_enabled,
             channel);
 
+        if (!useUDPRadio && log_enabled) {
+            auto* radio = static_cast<libradio::crazyradio::Crazyradio*>(m_radio.get());
+            radio->setTransactionCallback(
+                [this](uint8_t radioChannel, uint64_t address, uint8_t datarate,
+                       bool ackEnabled, const uint8_t* data, uint32_t length,
+                       const libradio::crazyradio::Crazyradio::Ack& ack) {
+                    m_logger->logRadioTransaction(radioChannel, address, datarate,
+                        ackEnabled, data, length, ack,
+                        std::chrono::nanoseconds(get_clock()->now().nanoseconds()));
+                });
+        }
+
 
         auto qos = rclcpp::ServicesQoS().keep_all().reliable().durability_volatile();
 

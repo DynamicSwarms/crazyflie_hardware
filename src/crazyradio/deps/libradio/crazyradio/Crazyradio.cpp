@@ -45,16 +45,17 @@ Crazyradio::Crazyradio()
     setArdBytes(32);
     
     const auto version = this->version();
-    const bool is_supported_crazyradio2 = (version.first >= 5 && version.second >= 1) && // Crazyradio 2.0 with first working firmware
-                                          (version.first != 0x99); // but not a Crazyradio PA
+    const bool is_supported_crazyradio2 =
+        (version.first > 5 || (version.first == 5 && version.second >= 3)) &&
+        version.first != 0x99; // Exclude Crazyradio PA.
     if (!is_supported_crazyradio2) {
         throw std::runtime_error("Unsupported Crazyradio version: " + std::to_string(version.first) + "." + std::to_string(version.second) 
-        + "Please use a Crazyradio 2.0 with up to date firmware.");
+        + "Inline mode with RSSI requires Crazyradio 2.0 firmware >= 5.3.");
     }
 
-    setInlineMode(true); 
+    setInlineMode(2);
 
-    std::cerr << "Crazyradio USB initialized with Inline Mode enabled." << std::endl;
+    std::cerr << "Crazyradio USB initialized with RSSI Inline Mode 2 enabled." << std::endl;
 }
 
 Crazyradio::~Crazyradio()
@@ -71,6 +72,9 @@ bool Crazyradio::sendCrtpPacket(
 {   
     std::lock_guard<std::mutex> lock(m_stateMutex);
     libradio::crazyradio::Crazyradio::Ack ack;
+
+    if (packet->dataLength > sizeof(packet->data))
+        throw std::runtime_error("CRTP payload exceeds 31 bytes");
 
     uint8_t data[32];
     Datarate datarate;
@@ -113,7 +117,8 @@ bool Crazyradio::sendCrtpPacket(
         auto& quality = m_linkQualities[safeLinkKey(link)];
         // A successful transaction costs one attempt plus the hardware retries.
         // A transaction without an ACK contributes no delivered value.
-        const double sample = ack.ack ? 1.0 / (static_cast<double>(ack.retry) + 1.0) : 0.0;
+        const double sample = ack.ack && !ack.malformed && !ack.invalid_settings
+            ? 1.0 / (static_cast<double>(ack.retry) + 1.0) : 0.0;
         if (quality.count == quality.samples.size())
             quality.sum -= quality.samples[quality.next];
         else
@@ -123,14 +128,15 @@ bool Crazyradio::sendCrtpPacket(
         quality.next = (quality.next + 1) % 64;
     }
     
-    if (link->isBroadcast) return true;    
+    if (ack.malformed || ack.invalid_settings) return false;
+    if (link->isBroadcast) return true;
     if (!ack.ack) return false;
 
     if (safeLink && safeLink->enabled) {
         safeLink->up ^= 1;
     }
 
-    if (ack.total_length < 2) // If acked, there must be at least a nullpacket beeing sent back (channel/port set)
+    if (ack.data_length == 0) // An empty ACK has no CRTP header; never subtract into uint8_t.
     {
         /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
             *  The message however gets succesfully received by the crazyflie.
@@ -142,7 +148,7 @@ bool Crazyradio::sendCrtpPacket(
     } 
     
     if (safeLink && safeLink->enabled) {
-        if (ack.total_length > 2) {
+        if (ack.data_length > 0) {
             const uint8_t receivedDown = (ack.data[0] >> 2) & 0x01;
             if (receivedDown != safeLink->down) {
                 memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
@@ -182,7 +188,7 @@ bool Crazyradio::enableSafeLink(
             true,
             ack);
 
-        if (ack.ack && ack.total_length == 5 &&
+        if (ack.ack && !ack.malformed && !ack.invalid_settings && ack.data_length == 3 &&
             ack.data[0] == 0xFF && ack.data[1] == 0x05 && ack.data[2] == 0x01) {
             return true;
         }
@@ -221,6 +227,7 @@ void Crazyradio::sendPacketInline(
     Ack& result
 )
 {
+    if (length > 32) throw std::runtime_error("Radio payload exceeds 32 bytes");
     uint8_t inlineData[40];
     inlineData[0] = 8 + length;
     inlineData[1] = datarate | (ackEnabled << 4);
@@ -233,6 +240,8 @@ void Crazyradio::sendPacketInline(
     memcpy(&inlineData[8], data, length);
 
     sendPacket(inlineData, 8 + length, result);
+    if (m_transactionCallback)
+        m_transactionCallback(channel, address, datarate, ackEnabled, data, length, result);
 }
 
 void Crazyradio::sendPacket(
@@ -241,7 +250,8 @@ void Crazyradio::sendPacket(
     Ack& result
 )
 {
-    result.ack = false;
+    result = Ack{};
+    const auto started = std::chrono::steady_clock::now();
 
     int status, transferred;
 
@@ -265,16 +275,20 @@ void Crazyradio::sendPacket(
 
     // Read result; in inline mode also ackDisabled packets will send a response.
     transferred = 0;
+    uint8_t reply[64]{};
     status = libusb_bulk_transfer(
         m_handle,
         /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),
-        (unsigned char*)&result,
-        sizeof(result),
+        reply,
+        sizeof(reply),
         &transferred,
         /*timeout*/ 10);
         
     if (status != LIBUSB_SUCCESS) 
         throw std::runtime_error("USB readback failed: " + std::string(libusb_error_name(status)));
+    result = decodeInlineAck(reply, static_cast<std::size_t>(transferred));
+    result.transfer_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - started).count();
 }
 
 void Crazyradio::setPower(Power power)
@@ -317,18 +331,20 @@ void Crazyradio::setContCarrier(bool active)
     sendVendorSetup(SET_CONT_CARRIER, active, 0, NULL, 0);
 }
 
-void Crazyradio::setInlineMode(bool enable)
+void Crazyradio::setInlineMode(uint8_t mode)
 {
-    sendVendorSetup(SET_INLINE_MODE, enable, 0, NULL, 0);
+    sendVendorSetup(SET_INLINE_MODE, mode, 0, NULL, 0);
 }
 
 void Crazyradio::ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet)
 {
     packet->port = (libcrtp::CrtpPort)((ack->data[0] >> 4) & 0xF);
     packet->channel = ack->data[0] & 0b11;
-    for (int i = 0; i < ack->total_length - 3; i++) // total_length includes the header (2bytes) and channel/port byte
+    if (ack->malformed || ack->data_length == 0 || ack->data_length > 32)
+        throw std::runtime_error("Invalid ACK payload length");
+    for (int i = 0; i < ack->data_length - 1; i++)
         packet->data[i] = ack->data[i + 1];
-    packet->dataLength = ack->total_length - 3;
+    packet->dataLength = ack->data_length - 1;
 }
 
 
