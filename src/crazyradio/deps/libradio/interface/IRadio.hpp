@@ -1,5 +1,6 @@
 #pragma once
 
+#include "interface/crtp_logger.hpp"
 #include "libcrtp/CrtpLink.hpp"
 #include "libcrtp/CrtpPacket.hpp"
 
@@ -21,6 +22,12 @@ public:
     virtual double getLinkQuality(
         const libcrtp::CrtpLinkIdentifier* link
     ) const = 0;
+protected:
+    IRadio(bool logToFile, bool logToSocket, uint8_t channel,
+        const std::filesystem::path & logRoot, const std::string & transport)
+    : m_logger(logToFile, logToSocket, channel, transport, logRoot) {}
+    CrtpLogger m_logger;
+
 };
 
 } // namespace libradio

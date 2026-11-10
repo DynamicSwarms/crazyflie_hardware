@@ -15,7 +15,8 @@ class UDPRadio : public libradio::IRadio
 public:
    
 public:
-    UDPRadio();
+    UDPRadio(bool logToFile, bool logToSocket, uint8_t channel,
+        const std::filesystem::path & logRoot);
     
     virtual ~UDPRadio();
 

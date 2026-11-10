@@ -16,7 +16,6 @@
 #include "udpradio/Udpradio.hpp"
 #include "interface/IRadio.hpp"
 #include "libcrtp/CrtpLinkContainer.hpp"
-#include "crazyradio/crtp_logger.hpp"
 
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
 #include "crtp_interfaces/msg/crtp_packet_send_no_response.hpp"
@@ -52,20 +51,19 @@ public:
         uint8_t channel = this->declare_parameter("channel", rclcpp::ParameterValue(80)).get<uint8_t>();
 
         bool useUDPRadio = this->declare_parameter("use_udpradio", rclcpp::ParameterValue(false)).get<bool>();
-        if (!useUDPRadio) m_radio = std::make_unique<libradio::crazyradio::Crazyradio>();
+        bool log_enabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
+        bool log_to_socket = this->declare_parameter("log_to_socket", false);
+
+        if (!useUDPRadio) m_radio = std::make_unique<libradio::crazyradio::Crazyradio>(
+            log_enabled, log_to_socket, channel, rclcpp::get_log_directory());
         else {
-            m_radio = std::make_unique<libradio::udpradio::UDPRadio>();
+            m_radio = std::make_unique<libradio::udpradio::UDPRadio>(
+                log_enabled, log_to_socket, channel, rclcpp::get_log_directory());
             m_radioPeriodUs = 100; // 10_000 Hz
         }
 
         
         m_radioPriority = this->declare_parameter("radio_priority", rclcpp::ParameterValue(20)).get<int>();
-        bool log_enabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
-
-        m_logger = std::make_unique<crazyradio::CrtpLogger>(
-            log_enabled,
-            channel);
-
 
         auto qos = rclcpp::ServicesQoS().keep_all().reliable().durability_volatile();
 
@@ -255,8 +253,6 @@ private:
         }
 
         m_diagnostics->recordCommunication(packet, sendSuccess, isPortPacket, link->isBroadcast);
-        m_logger->logCommunication(link, &packet, &responsePacket, sendSuccess && !link->isBroadcast,
-             std::chrono::nanoseconds(get_clock()->now().nanoseconds()));
     }
 
     void handleReponsePacket(libcrtp::CrtpLinkIdentifier *link, libcrtp::CrtpPacket *responsePacket)
@@ -500,8 +496,6 @@ private:
     std::unique_ptr<libradio::IRadio> m_radio;
     libcrtp::CrtpLinkContainer m_links;
     std::thread m_radioThread;
-    
-    std::unique_ptr<crazyradio::CrtpLogger> m_logger;
 
     rclcpp::CallbackGroup::SharedPtr crtp_send_callback_group;
     rclcpp::CallbackGroup::SharedPtr radio_callback_group;

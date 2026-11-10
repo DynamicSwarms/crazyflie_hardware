@@ -8,6 +8,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
@@ -16,6 +17,7 @@ find_package(crazyflie_interfaces REQUIRED)
 
 add_executable(gateway
   src/gateway.cpp
+  src/gateway_diagnostics.cpp
   src/dedicated_executor_wrapper.cpp
   src/crazyflie_entry.cpp
   src/crazyflie_lifecycle_client.cpp)
@@ -25,6 +27,7 @@ target_include_directories(gateway PUBLIC
 target_compile_features(gateway PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 target_link_libraries(gateway
   lifecycle_msgs::lifecycle_msgs
+  diagnostic_msgs::diagnostic_msgs
   rclcpp::rclcpp
   rclcpp_components::component
   ament_index_cpp::ament_index_cpp

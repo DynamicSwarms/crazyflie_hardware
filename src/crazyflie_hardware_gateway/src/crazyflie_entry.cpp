@@ -1,6 +1,7 @@
 #include "crazyflie_hardware_gateway/crazyflie_entry.hpp"
 
 #include <utility>
+#include <algorithm>
 #include "lifecycle_msgs/msg/state.hpp"
 
 CrazyflieEntry::CrazyflieEntry(int id, Respond respond_to_add, rclcpp::Logger logger)
@@ -40,7 +41,10 @@ void CrazyflieEntry::request_removal(Respond respond)
     return;
   }
   m_remove_requested = true;
-  if (respond) m_respond_to_remove.push_back(std::move(respond));
+  if (respond) {
+    if (m_respond_to_remove.empty()) m_remove_started = std::chrono::steady_clock::now();
+    m_respond_to_remove.push_back(std::move(respond));
+  }
 }
 
 bool CrazyflieEntry::poll()
@@ -152,4 +156,27 @@ void CrazyflieEntry::complete_removal()
   m_phase = Phase::Removed;
   if (add) add(false, m_failure.empty() ? "Removed during initialization." : m_failure);
   for (auto & respond : removes) respond(true, "Crazyflie removed.");
+}
+
+void CrazyflieEntry::append_diagnostics(
+  crazyflie_hardware_gateway::GatewaySnapshot & snapshot,
+  std::chrono::steady_clock::time_point now) const
+{
+  if (m_remove_requested || (m_phase != Phase::Configuring && m_phase != Phase::Ready)) {
+    ++snapshot.removing;
+  } else if (m_phase == Phase::Ready) {
+    ++snapshot.ready;
+  } else {
+    ++snapshot.configuring;
+  }
+  if (m_respond_to_add) {
+    ++snapshot.pending_adds;
+    snapshot.oldest_pending_add_seconds = std::max(snapshot.oldest_pending_add_seconds,
+      std::chrono::duration<double>(now - m_add_started).count());
+  }
+  if (!m_respond_to_remove.empty()) {
+    snapshot.pending_removes += m_respond_to_remove.size();
+    snapshot.oldest_pending_remove_seconds = std::max(snapshot.oldest_pending_remove_seconds,
+      std::chrono::duration<double>(now - m_remove_started).count());
+  }
 }

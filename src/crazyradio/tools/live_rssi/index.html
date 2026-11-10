@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live RSSI</title>
+<style>
+*{box-sizing:border-box}body{font:16px system-ui,sans-serif;background:#f5f7fa;color:#17243a;margin:0;padding:14px;max-width:600px;margin-inline:auto}
+header{display:flex;align-items:center;justify-content:space-between}h1{font-size:20px;margin:0}#status{font-size:13px;color:#627086}
+.worst{background:white;border:1px solid #d9e0e9;border-radius:12px;padding:12px 16px;margin:12px 0;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.worst span{font-size:14px;color:#627086}.worst strong{font-size:29px;white-space:nowrap}#missing{font-size:13px;color:#9b2b2b;min-height:18px;margin-bottom:5px;overflow-wrap:anywhere}
+svg{display:block;width:100%;height:auto;background:white;border-radius:12px;border:1px solid #d9e0e9}text{text-anchor:middle;fill:#111827;pointer-events:none}.id{font:17px system-ui;font-weight:600}.rssi{font:21px system-ui;font-weight:700}
+.key{margin:12px 0;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px}.gradient{height:9px;flex:1;border-radius:5px;background:linear-gradient(90deg,#ef7777,#f2d878,#82ce98)}
+footer{font-size:12px;text-align:center;color:#627086;margin:8px 0}
+</style>
+<header><h1>Live RSSI</h1><span id="status">Waiting for data</span></header>
+<div class="worst"><span>Worst RSSI</span><strong id="worst">—</strong></div>
+<div id="missing"></div>
+<svg viewBox="0 0 580 __HEIGHT__" role="img" aria-label="Crazyflie positions colored by current RSSI">__CELLS__</svg>
+<div class="key"><span>−75 weak</span><span class="gradient"></span><span>−35 strong</span></div>
+<footer>dBm · median of last 3 seconds · refresh every second · grey = no recent reply</footer>
+<script>
+function color(value){
+  if(value===null)return '#cbd5e1';
+  const t=Math.max(0,Math.min(1,(value+75)/40));
+  const a=t<0.5?[239,119,119]:[242,216,120],b=t<0.5?[242,216,120]:[130,206,152];
+  const u=t<0.5?t*2:(t-0.5)*2;
+  return 'rgb('+a.map((v,i)=>Math.round(v+(b[i]-v)*u)).join(',')+')';
+}
+let updating=false;
+let refreshTimer;
+async function update(){
+  if(updating)return;
+  updating=true;
+  clearTimeout(refreshTimer);
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),3000);
+  try{
+    const response=await fetch('/api/rssi',{cache:'no-store',signal:controller.signal});
+    if(!response.ok)throw Error('HTTP '+response.status);
+    const data=await response.json();
+    for(const drone of data.drones){
+      const cell=document.getElementById('d'+drone.id);
+      if(!cell)continue;
+      cell.querySelector('rect').setAttribute('fill',color(drone.rssi));
+      cell.querySelector('.rssi').textContent=drone.rssi===null?'—':Math.round(drone.rssi);
+    }
+    document.getElementById('worst').textContent=data.worst?
+      'cf'+data.worst.id+'  '+Math.round(data.worst.rssi)+' dBm':'—';
+    document.getElementById('status').textContent=data.worst?
+      'Live · '+new Date().toLocaleTimeString():'Waiting for live data';
+    document.getElementById('missing').textContent=data.missing.length?
+      'No recent reply: '+data.missing.join(', '):'';
+  }catch(error){
+    document.getElementById('status').textContent='Connection lost';
+    document.getElementById('worst').textContent='—';
+    for(const cell of document.querySelectorAll('svg g')){
+      cell.querySelector('rect').setAttribute('fill',color(null));
+      cell.querySelector('.rssi').textContent='—';
+    }
+  }finally{
+    clearTimeout(timeout);
+    updating=false;
+    refreshTimer=setTimeout(update,1000);
+  }
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)update();});
+window.addEventListener('pageshow',update);
+update();
+</script>
+</html>
