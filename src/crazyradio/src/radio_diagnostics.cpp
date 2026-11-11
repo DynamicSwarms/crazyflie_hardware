@@ -47,10 +47,12 @@ void RadioDiagnostics::recordCommunication(
 
 void RadioDiagnostics::publish(
     const libcrtp::CrtpContainerStats& container,
-    const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& linkQualities)
+    const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& crtpQualities,
+    const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& radioQualities,
+    const std::vector<std::optional<double>>& radioRssi)
 {
     std::lock_guard<std::mutex> publishLock(m_publishMutex);
-    m_linkQualityPub->publish(linkQualities);
+    m_linkQualityPub->publish(radioQualities);
 
     CommunicationStats current;
     double maxCompletedDeliveryDelayMs;
@@ -81,24 +83,50 @@ void RadioDiagnostics::publish(
     add("Unicast links", container.unicastLinks);
     add("Broadcast links", container.broadcastLinks);
 
-    double worstLinkQuality = 1.0;
-    if (linkQualities.link_qualities.empty()) {
-        add("Average link quality (%)", "N/A");
-        add("Worst link quality (%)", "N/A");
-        add("Best link quality (%)", "N/A");
-    } else {
+    const auto addQualities = [&add](const std::string& name,
+        const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& qualities) {
+        if (qualities.link_qualities.empty()) {
+            add("Average " + name + " (%)", "N/A");
+            add("Worst " + name + " (%)", "N/A");
+            add("Best " + name + " (%)", "N/A");
+            return 1.0;
+        }
+
         double total = 0.0;
-        double worst = linkQualities.link_qualities.front().link_quality;
-        double best = worst;
-        for (const auto& quality : linkQualities.link_qualities) {
+        double worst = 1.0;
+        double best = 0.0;
+        for (const auto& quality : qualities.link_qualities) {
             total += quality.link_quality;
             worst = std::min(worst, static_cast<double>(quality.link_quality));
             best = std::max(best, static_cast<double>(quality.link_quality));
         }
-        worstLinkQuality = worst;
-        add("Average link quality (%)", 100.0 * total / linkQualities.link_qualities.size());
-        add("Worst link quality (%)", 100.0 * worst);
-        add("Best link quality (%)", 100.0 * best);
+        add("Average " + name + " (%)", 100.0 * total / qualities.link_qualities.size());
+        add("Worst " + name + " (%)", 100.0 * worst);
+        add("Best " + name + " (%)", 100.0 * best);
+        return worst;
+    };
+    addQualities("crtp_quality", crtpQualities);
+    const double worstLinkQuality = addQualities("radio_quality", radioQualities);
+
+    double totalRssi = 0.0;
+    std::optional<double> worstRssi;
+    std::optional<double> bestRssi;
+    size_t rssiCount = 0;
+    for (const auto& rssi : radioRssi) {
+        if (!rssi) continue;
+        totalRssi += *rssi;
+        ++rssiCount;
+        worstRssi = worstRssi ? std::min(*worstRssi, *rssi) : *rssi;
+        bestRssi = bestRssi ? std::max(*bestRssi, *rssi) : *rssi;
+    }
+    if (rssiCount > 0) {
+        add("Average RSSI (dBm)", totalRssi / rssiCount);
+        add("Worst RSSI (dBm)", *worstRssi);
+        add("Best RSSI (dBm)", *bestRssi);
+    } else {
+        add("Average RSSI (dBm)", "N/A");
+        add("Worst RSSI (dBm)", "N/A");
+        add("Best RSSI (dBm)", "N/A");
     }
 
     // Delay and backlog: the most useful indicators when diagnosing congestion.

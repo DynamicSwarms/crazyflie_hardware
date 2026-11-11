@@ -4,7 +4,12 @@
 #include <map>
 #include <tuple>
 #include <array>
+#include <optional>
 #include <mutex>
+#include <functional>
+#include <utility>
+#include "InlineAck.hpp"
+#include "radio_logger.hpp"
 #include "USBDevice.hpp"
 #include "interface/IRadio.hpp"
 
@@ -15,21 +20,6 @@ namespace libradio::crazyradio {
 class Crazyradio : public libradio::IRadio, public USBDevice
 {
 public:
-    struct Ack
-    {
-        Ack()
-        : ack(0)
-        {}
-
-        uint8_t total_length; // total length including the header
-        uint8_t ack:1;
-        uint8_t rssi:1;
-        uint8_t invalid_settings:1;
-        uint8_t reserved:1;
-        uint8_t retry:4;
-        uint8_t data[32];
-    }__attribute__((packed));
-
     enum Datarate
     {
         Datarate_250KPS = 0,
@@ -46,7 +36,8 @@ public:
     };
 
 public:
-    Crazyradio();
+    Crazyradio(bool logToFile, bool logToSocket, uint8_t channel,
+        const std::filesystem::path & logRoot);
     
     virtual ~Crazyradio();
 
@@ -63,6 +54,8 @@ public:
     void resetLink(const libcrtp::CrtpLinkIdentifier * link) override;
 
     double getLinkQuality(const libcrtp::CrtpLinkIdentifier * link) const override;
+    // Average valid RSSI in the current quality window; unavailable without samples.
+    std::optional<double> getLinkRssi(const libcrtp::CrtpLinkIdentifier * link) const override;
         
 private:
     struct SafeLinkState
@@ -77,14 +70,22 @@ private:
 
     struct LinkQuality
     {
+        void addSample(double delivery, std::optional<int> rssi);
+
         std::array<double, 64> samples{};
         uint8_t next = 0;
         uint8_t count = 0;
         double sum = 0.0;
+        std::array<std::optional<int>, 64> rssiSamples{};
+        int rssiSum = 0;
+        uint8_t rssiCount = 0;
     };
 
     SafeLinkKey safeLinkKey(const libcrtp::CrtpLinkIdentifier * link) const;
-    bool enableSafeLink(const libcrtp::CrtpLinkIdentifier * link, Datarate datarate);
+    bool enableSafeLink(const libcrtp::CrtpLinkIdentifier * link);
+
+    void recordCommunication(const libcrtp::CrtpLinkIdentifier * link,
+        const libcrtp::CrtpPacket * packet, const InlineAck & ack);
 
     void sendPacketInline(
         const uint8_t* data,
@@ -93,13 +94,13 @@ private:
         uint8_t channel,
         uint64_t address,
         bool ackEnabled,
-        Ack& result
+        InlineAck& result
     );
 
     void sendPacket(
         const uint8_t* data,
         uint32_t length, 
-        Ack& result
+        InlineAck& result
     );
 
     void setPower(Power power);
@@ -112,10 +113,12 @@ private:
 
     void setContCarrier(bool active);
 
-    void setInlineMode(bool enable);
+    void setInlineMode(uint8_t mode);
 
-    void ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet);
+    void ackToCrtpPacket(const InlineAck * ack, libcrtp::CrtpPacket * packet);
 
+    RadioLogger m_radioLogger;
+    uint64_t m_transferIndex{0};
     mutable std::mutex m_stateMutex;
     std::map<SafeLinkKey, SafeLinkState> m_safeLinkStates;
     std::map<SafeLinkKey, LinkQuality> m_linkQualities;

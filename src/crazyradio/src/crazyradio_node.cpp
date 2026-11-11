@@ -16,7 +16,6 @@
 #include "udpradio/Udpradio.hpp"
 #include "interface/IRadio.hpp"
 #include "libcrtp/CrtpLinkContainer.hpp"
-#include "crazyradio/crtp_logger.hpp"
 
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
 #include "crtp_interfaces/msg/crtp_packet_send_no_response.hpp"
@@ -52,20 +51,19 @@ public:
         uint8_t channel = this->declare_parameter("channel", rclcpp::ParameterValue(80)).get<uint8_t>();
 
         bool useUDPRadio = this->declare_parameter("use_udpradio", rclcpp::ParameterValue(false)).get<bool>();
-        if (!useUDPRadio) m_radio = std::make_unique<libradio::crazyradio::Crazyradio>();
+        bool log_enabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
+        bool log_to_socket = this->declare_parameter("log_to_socket", false);
+
+        if (!useUDPRadio) m_radio = std::make_unique<libradio::crazyradio::Crazyradio>(
+            log_enabled, log_to_socket, channel, rclcpp::get_log_directory());
         else {
-            m_radio = std::make_unique<libradio::udpradio::UDPRadio>();
+            m_radio = std::make_unique<libradio::udpradio::UDPRadio>(
+                log_enabled, log_to_socket, channel, rclcpp::get_log_directory());
             m_radioPeriodUs = 100; // 10_000 Hz
         }
 
         
         m_radioPriority = this->declare_parameter("radio_priority", rclcpp::ParameterValue(20)).get<int>();
-        bool log_enabled = this->declare_parameter("log_enabled", rclcpp::ParameterValue(true)).get<bool>();
-
-        m_logger = std::make_unique<crazyradio::CrtpLogger>(
-            log_enabled,
-            channel);
-
 
         auto qos = rclcpp::ServicesQoS().keep_all().reliable().durability_volatile();
 
@@ -255,8 +253,6 @@ private:
         }
 
         m_diagnostics->recordCommunication(packet, sendSuccess, isPortPacket, link->isBroadcast);
-        m_logger->logCommunication(link, &packet, &responsePacket, sendSuccess && !link->isBroadcast,
-             std::chrono::nanoseconds(get_clock()->now().nanoseconds()));
     }
 
     void handleReponsePacket(libcrtp::CrtpLinkIdentifier *link, libcrtp::CrtpPacket *responsePacket)
@@ -452,28 +448,32 @@ private:
     void diagnosticsCallback()
     {
         std::vector<libcrtp::CrtpLinkIdentifier> links;
-        std::vector<double> qualities;
-        m_links.getConnectionStats(links, qualities);
-        for (size_t i = 0; i < links.size(); i++) qualities[i] = m_radio->getLinkQuality(&links[i]);
-        for (size_t i = 0; i < links.size(); i++)
-        {
-            if (qualities[i] < 0.5)
-            {
-                RCLCPP_DEBUG(this->get_logger(), "Link Quality for CF 0x%X low! (%d %%)", (int)(uint8_t)(links[i].address & 0xFF), (int)(qualities[i] * 100));
+        std::vector<double> crtp_quality;
+        m_links.getConnectionStats(links, crtp_quality);
+
+        crazyflie_interfaces::msg::CrazyflieLinkQualityArray crtpQualities;
+        crazyflie_interfaces::msg::CrazyflieLinkQualityArray radioQualities;
+        std::vector<std::optional<double>> radioRssi;
+        for (size_t i = 0; i < links.size(); ++i) {
+            if (links[i].isBroadcast) continue;
+
+            const double radio_quality = m_radio->getLinkQuality(&links[i]);
+            if (radio_quality < 0.5) {
+                RCLCPP_DEBUG(this->get_logger(), "Radio quality for CF 0x%X low! (%d %%)",
+                    static_cast<unsigned>(links[i].address & 0xFF),
+                    static_cast<int>(radio_quality * 100));
             }
+
+            crazyflie_interfaces::msg::CrazyflieLinkQuality quality;
+            quality.id = static_cast<uint8_t>(links[i].address & 0xFF);
+            quality.link_quality = crtp_quality[i];
+            crtpQualities.link_qualities.push_back(quality);
+            quality.link_quality = radio_quality;
+            radioQualities.link_qualities.push_back(quality);
+            radioRssi.push_back(m_radio->getLinkRssi(&links[i]));
         }
 
-        crazyflie_interfaces::msg::CrazyflieLinkQualityArray msg;
-        for (size_t i = 0; i < links.size(); i++) {
-            if (!links[i].isBroadcast) {
-                crazyflie_interfaces::msg::CrazyflieLinkQuality quality;
-                quality.id = static_cast<uint8_t>(links[i].address & 0xFF);
-                quality.link_quality = qualities[i];
-                msg.link_qualities.push_back(quality);
-            }
-        }   
-
-        m_diagnostics->publish(m_links.getStats(), msg);
+        m_diagnostics->publish(m_links.getStats(), crtpQualities, radioQualities, radioRssi);
     }
 private: 
     void responseCallback(
@@ -500,8 +500,6 @@ private:
     std::unique_ptr<libradio::IRadio> m_radio;
     libcrtp::CrtpLinkContainer m_links;
     std::thread m_radioThread;
-    
-    std::unique_ptr<crazyradio::CrtpLogger> m_logger;
 
     rclcpp::CallbackGroup::SharedPtr crtp_send_callback_group;
     rclcpp::CallbackGroup::SharedPtr radio_callback_group;

@@ -19,7 +19,9 @@
 
 namespace libradio::udpradio {
 
-UDPRadio::UDPRadio() 
+UDPRadio::UDPRadio(bool logToFile, bool logToSocket, uint8_t channel,
+    const std::filesystem::path & logRoot)
+: IRadio(logToFile, logToSocket, channel, logRoot, "UDP")
 {
 }
 
@@ -38,10 +40,14 @@ UDPRadio::sendCrtpPacket(
   {
     for (auto & keyValue : m_links)
     {
-      auto& link = keyValue.second;
-      if (link->is_connected()) 
+      auto& udpLink = keyValue.second;
+      if (udpLink->is_connected())
       {
-          link->send(packet, responsePacket, true);
+          udpLink->send(packet, responsePacket, true);
+          const Transfer transfer{++m_transferIndex, std::chrono::system_clock::now()};
+          const libcrtp::CrtpLinkIdentifier destination{
+              keyValue.first.first, keyValue.first.second, link->datarate, true};
+          m_logger.log(&destination, packet, responsePacket, false, transfer);
       }
     }
   } else {
@@ -54,6 +60,8 @@ UDPRadio::sendCrtpPacket(
     }
 
     m_links[key]->send(packet, responsePacket, false);
+    const Transfer transfer{++m_transferIndex, std::chrono::system_clock::now()};
+    m_logger.log(link, packet, responsePacket, !libcrtp::isNullPacket(responsePacket), transfer);
     if (!m_links[key]->is_connected()) return false; 
   }
   return true;

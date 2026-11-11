@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,7 +34,9 @@ public:
 
     void recordCommunication(const libcrtp::CrtpPacket& packet, bool success, bool isPortPacket, bool isBroadcast);
     void publish(const libcrtp::CrtpContainerStats& container,
-                 const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& linkQualities);
+                 const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& crtpQualities,
+                 const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& radioQualities,
+                 const std::vector<std::optional<double>>& radioRssi);
     void reportError(const std::string& message);
 
 private:

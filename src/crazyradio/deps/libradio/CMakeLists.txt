@@ -10,6 +10,8 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../libcrtp ${CMAKE_CURRENT_BINARY_DIR
 #  crazyradio/include
 #  udpradio/include)
 add_library(libradio
+        interface/crtp_logger.cpp
+        crazyradio/radio_logger.cpp
         crazyradio/Crazyradio.cpp
         crazyradio/USBDevice.cpp
         udpradio/Udpradio.cpp

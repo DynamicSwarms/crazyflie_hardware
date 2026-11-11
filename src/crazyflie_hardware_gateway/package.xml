@@ -11,6 +11,7 @@
 
   <depend>crazyflie_interfaces</depend>
   <depend>rclcpp</depend>
+  <depend>diagnostic_msgs</depend>
   <depend>rclcpp_lifecycle</depend>
   <depend>lifecycle_msgs</depend>
 

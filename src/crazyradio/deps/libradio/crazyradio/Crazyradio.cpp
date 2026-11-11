@@ -9,6 +9,19 @@
 
 #include <libusb-1.0/libusb.h>
 namespace libradio::crazyradio {
+namespace {
+Crazyradio::Datarate toCrazyradioDatarate(uint8_t datarate)
+{
+    switch (datarate) {
+        case 0: return Crazyradio::Datarate_250KPS;
+        case 1: return Crazyradio::Datarate_1MPS;
+        case 2: return Crazyradio::Datarate_2MPS;
+        default:
+            throw std::invalid_argument("Invalid link data rate: " + std::to_string(datarate));
+    }
+}
+} // namespace
+
 enum
 {
     SET_RADIO_CHANNEL   = 0x01,
@@ -24,8 +37,11 @@ enum
     LAUNCH_BOOTLOADER   = 0xFF,
 };
 
-Crazyradio::Crazyradio() 
-    : USBDevice(0x1915, 0x7777)
+Crazyradio::Crazyradio(bool logToFile, bool logToSocket, uint8_t channel,
+    const std::filesystem::path & logRoot)
+    : IRadio(logToFile, logToSocket, channel, logRoot, "USB")
+    , USBDevice(0x1915, 0x7777)
+    , m_radioLogger(logToFile, m_logger.directory(), channel)
 {
     bool success = false;
     auto devices = enumerate();
@@ -45,16 +61,17 @@ Crazyradio::Crazyradio()
     setArdBytes(32);
     
     const auto version = this->version();
-    const bool is_supported_crazyradio2 = (version.first >= 5 && version.second >= 1) && // Crazyradio 2.0 with first working firmware
-                                          (version.first != 0x99); // but not a Crazyradio PA
+    const bool is_supported_crazyradio2 =
+        (version.first > 5 || (version.first == 5 && version.second >= 3)) && // Crazyradio 2.0 with inline mode 2 firmware
+        version.first != 0x99; // but not a Crazyradio PA
     if (!is_supported_crazyradio2) {
         throw std::runtime_error("Unsupported Crazyradio version: " + std::to_string(version.first) + "." + std::to_string(version.second) 
-        + "Please use a Crazyradio 2.0 with up to date firmware.");
+        + "Inline mode with RSSI requires Crazyradio 2.0 firmware >= 5.3.");
     }
 
-    setInlineMode(true); 
+    setInlineMode(2);
 
-    std::cerr << "Crazyradio USB initialized with Inline Mode enabled." << std::endl;
+    std::cerr << "Crazyradio USB initialized with RSSI Inline Mode 2 enabled." << std::endl;
 }
 
 Crazyradio::~Crazyradio()
@@ -70,22 +87,15 @@ bool Crazyradio::sendCrtpPacket(
         libcrtp::CrtpPacket * responsePacket)
 {   
     std::lock_guard<std::mutex> lock(m_stateMutex);
-    libradio::crazyradio::Crazyradio::Ack ack;
 
-    uint8_t data[32];
-    Datarate datarate;
-    switch (link->datarate)
-    {
-        case 2: datarate = libradio::crazyradio::Crazyradio::Datarate_2MPS; break;
-        case 1: datarate = libradio::crazyradio::Crazyradio::Datarate_1MPS; break;
-        default: datarate = libradio::crazyradio::Crazyradio::Datarate_250KPS; break;
-    }
+    if (packet->dataLength > sizeof(packet->data))
+        throw std::runtime_error("CRTP payload exceeds 31 bytes");
 
     SafeLinkState * safeLink = nullptr;
     if (!link->isBroadcast) {
         auto& state = m_safeLinkStates[safeLinkKey(link)];
         if (!state.initialized) {
-            state.enabled = enableSafeLink(link, datarate);
+            state.enabled = enableSafeLink(link);
             state.initialized = true;
             state.up = 0;
             state.down = 0;
@@ -93,71 +103,102 @@ bool Crazyradio::sendCrtpPacket(
         safeLink = &state;
     }
 
+    uint8_t data[32];
     data[0] = packet->port << 4 | (packet->channel & 0x03);
-    if (safeLink && safeLink->enabled) {
-        data[0] |= (safeLink->up << 3) | (safeLink->down << 2);
-    }
+    if (safeLink && safeLink->enabled) data[0] |= (safeLink->up << 3) | (safeLink->down << 2);
     memcpy(&data[1], &packet->data, packet->dataLength);
 
+    InlineAck ack;
     sendPacketInline(
         data,
         1 + packet->dataLength, 
-        datarate,
+        toCrazyradioDatarate(link->datarate),
         link->channel,
         link->address,
         ! link->isBroadcast,
         ack
     );
+    recordCommunication(link, packet, ack);
 
-    if (!link->isBroadcast) {
-        auto& quality = m_linkQualities[safeLinkKey(link)];
-        // A successful transaction costs one attempt plus the hardware retries.
-        // A transaction without an ACK contributes no delivered value.
-        const double sample = ack.ack ? 1.0 / (static_cast<double>(ack.retry) + 1.0) : 0.0;
-        if (quality.count == quality.samples.size())
-            quality.sum -= quality.samples[quality.next];
-        else
-            quality.count++;
-        quality.samples[quality.next] = sample;
-        quality.sum += sample;
-        quality.next = (quality.next + 1) % 64;
-    }
-    
-    if (link->isBroadcast) return true;    
+    if (ack.usb_reply_malformed || ack.invalid_settings) return false;
+    if (link->isBroadcast) return true;
     if (!ack.ack) return false;
 
-    if (safeLink && safeLink->enabled) {
+    if (safeLink && safeLink->enabled) 
         safeLink->up ^= 1;
+
+    if (ack.data_length == 0)
+    {
+        memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
+        std::cerr << "Empty ACK data. Fabricated null packet." << std::endl;
+        return true;
     }
 
-    if (ack.total_length < 2) // If acked, there must be at least a nullpacket beeing sent back (channel/port set)
+    if (safeLink && safeLink->enabled) 
     {
-        /* The Bug in https://github.com/bitcraze/crazyflie-firmware/issues/703 prevents a response from beeing sent back from the crazyflie.
-            *  The message however gets succesfully received by the crazyflie.
-            *  For now we just assume that a nullpacket would have been sent from crazyflie, in order not to break any other code.
-            */
-        std::cerr <<  "Empty response #703" << std::endl;
-        memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
-        return true;
-    } 
-    
-    if (safeLink && safeLink->enabled) {
-        if (ack.total_length > 2) {
-            const uint8_t receivedDown = (ack.data[0] >> 2) & 0x01;
-            if (receivedDown != safeLink->down) {
-                memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
-                std::cerr << "SafeLink: Down bit mismatch, expected " << (int)safeLink->down << " but got " << (int)receivedDown << std::endl;
-                return true;
-            }
-
+        if (((ack.data[0] >> 2) & 0x01) == safeLink->down)
+        {
             safeLink->down ^= 1;
             ack.data[0] &= 0xF3;
+        } else {
+            // If the down counter does not match, this is a reapeted ack and the payload needs to be dropped
+            memcpy(responsePacket, &libcrtp::nullPacket, sizeof(libcrtp::CrtpPacket));
+            std::cerr << "SafeLink: Down bit mismatch. Fabricated null packet." << std::endl;
+            return true;
         }
     }
 
     ackToCrtpPacket(&ack, responsePacket);
     return true;
 }
+
+void Crazyradio::recordCommunication(
+    const libcrtp::CrtpLinkIdentifier * link,
+    const libcrtp::CrtpPacket * packet,
+    const InlineAck & ack)
+{
+    const Transfer transfer{++m_transferIndex, std::chrono::system_clock::now()};
+    libcrtp::CrtpPacket receivedPacket{};
+    const bool acknowledged = ack.ack && !ack.usb_reply_malformed && !ack.invalid_settings;
+    const bool responseValid = !link->isBroadcast && acknowledged && ack.data_length > 0;
+
+    if (responseValid) ackToCrtpPacket(&ack, &receivedPacket);
+    m_logger.log(link, packet, &receivedPacket, responseValid, transfer);
+    m_radioLogger.log(transfer, ack, !link->isBroadcast);
+
+    if (link->isBroadcast) return;
+
+    const double delivery = acknowledged ? 1.0 / (ack.retry + 1.0) : 0.0;
+    const std::optional<int> rssi = acknowledged && ack.rssi_valid ? std::optional<int>(ack.rssi_dbm) : std::nullopt;
+
+    m_linkQualities[safeLinkKey(link)].addSample(delivery, rssi);
+}
+
+void Crazyradio::LinkQuality::addSample(
+    double delivery,
+    std::optional<int> rssi)
+{
+    // Replace the delivery sample. Unused slots contain zero.
+    sum -= samples[next];
+    samples[next] = delivery;
+    sum += delivery;
+    if (count < samples.size()) ++count;
+
+    // Replace the RSSI sample, if present.
+    if (rssiSamples[next]) {
+        rssiSum -= *rssiSamples[next];
+        --rssiCount;
+    }
+
+    rssiSamples[next] = rssi;
+    if (rssi) {
+        rssiSum += *rssi;
+        ++rssiCount;
+    }
+
+    next = (next + 1) % samples.size();
+}
+
 
 Crazyradio::SafeLinkKey Crazyradio::safeLinkKey(
     const libcrtp::CrtpLinkIdentifier * link) const
@@ -166,23 +207,29 @@ Crazyradio::SafeLinkKey Crazyradio::safeLinkKey(
 }
 
 bool Crazyradio::enableSafeLink(
-    const libcrtp::CrtpLinkIdentifier * link,
-    Datarate datarate)
+    const libcrtp::CrtpLinkIdentifier * link)
 {
-    const uint8_t request[] = {0xFF, 0x05, 0x01};
+    const libcrtp::CrtpPacket requestPacket{libcrtp::LINK_LAYER, 0x0F, {0x05, 0x01}, 2, false, 0, false, {}};
+    // Deliberately "wrong" channel, however logs show it
+    // Do not mask channel with 0x03 here: negotiation must send FF 05 01.
+    const uint8_t request[] = {
+        static_cast<uint8_t>(requestPacket.port << 4 | requestPacket.channel),
+        requestPacket.data[0], 
+        requestPacket.data[1]};
 
     for (int attempt = 0; attempt < 10; ++attempt) {
-        Ack ack;
+        InlineAck ack;
         sendPacketInline(
             request,
             sizeof(request),
-            datarate,
+            toCrazyradioDatarate(link->datarate),
             link->channel,
             link->address,
             true,
             ack);
+        recordCommunication(link, &requestPacket, ack);
 
-        if (ack.ack && ack.total_length == 5 &&
+        if (ack.ack && !ack.usb_reply_malformed && !ack.invalid_settings && ack.data_length == 3 &&
             ack.data[0] == 0xFF && ack.data[1] == 0x05 && ack.data[2] == 0x01) {
             return true;
         }
@@ -211,6 +258,15 @@ double Crazyradio::getLinkQuality(const libcrtp::CrtpLinkIdentifier * link) cons
     return quality->second.sum / quality->second.count;
 }
 
+std::optional<double> Crazyradio::getLinkRssi(const libcrtp::CrtpLinkIdentifier * link) const
+{
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    if (link->isBroadcast) return std::nullopt;
+    const auto quality = m_linkQualities.find(safeLinkKey(link));
+    if (quality == m_linkQualities.end() || quality->second.rssiCount == 0) return std::nullopt;
+    return static_cast<double>(quality->second.rssiSum) / quality->second.rssiCount;
+}
+
 void Crazyradio::sendPacketInline(
     const uint8_t* data,
     uint32_t length, 
@@ -218,9 +274,11 @@ void Crazyradio::sendPacketInline(
     uint8_t channel,
     uint64_t address,
     bool ackEnabled,
-    Ack& result
+    InlineAck& result
 )
 {
+    if (length > 32) throw std::runtime_error("Radio payload exceeds 32 bytes");
+
     uint8_t inlineData[40];
     inlineData[0] = 8 + length;
     inlineData[1] = datarate | (ackEnabled << 4);
@@ -238,10 +296,10 @@ void Crazyradio::sendPacketInline(
 void Crazyradio::sendPacket(
     const uint8_t * data,
     uint32_t length,
-    Ack& result
+    InlineAck& result
 )
 {
-    result.ack = false;
+    result = InlineAck{};
 
     int status, transferred;
 
@@ -265,16 +323,18 @@ void Crazyradio::sendPacket(
 
     // Read result; in inline mode also ackDisabled packets will send a response.
     transferred = 0;
+    uint8_t reply[64]{};
     status = libusb_bulk_transfer(
         m_handle,
         /* endpoint*/ (0x81 | LIBUSB_ENDPOINT_IN),
-        (unsigned char*)&result,
-        sizeof(result),
+        reply,
+        sizeof(reply),
         &transferred,
         /*timeout*/ 10);
         
     if (status != LIBUSB_SUCCESS) 
         throw std::runtime_error("USB readback failed: " + std::string(libusb_error_name(status)));
+    result = decodeInlineAck(reply, static_cast<std::size_t>(transferred));
 }
 
 void Crazyradio::setPower(Power power)
@@ -317,18 +377,21 @@ void Crazyradio::setContCarrier(bool active)
     sendVendorSetup(SET_CONT_CARRIER, active, 0, NULL, 0);
 }
 
-void Crazyradio::setInlineMode(bool enable)
+void Crazyradio::setInlineMode(uint8_t mode)
 {
-    sendVendorSetup(SET_INLINE_MODE, enable, 0, NULL, 0);
+    sendVendorSetup(SET_INLINE_MODE, mode, 0, NULL, 0);
 }
 
-void Crazyradio::ackToCrtpPacket(Ack * ack, libcrtp::CrtpPacket * packet)
+void Crazyradio::ackToCrtpPacket(const InlineAck * ack, libcrtp::CrtpPacket * packet)
 {
+    if (ack->usb_reply_malformed || ack->data_length == 0 || ack->data_length > 32)
+        throw std::runtime_error("Invalid ACK payload length");
+
     packet->port = (libcrtp::CrtpPort)((ack->data[0] >> 4) & 0xF);
     packet->channel = ack->data[0] & 0b11;
-    for (int i = 0; i < ack->total_length - 3; i++) // total_length includes the header (2bytes) and channel/port byte
+    for (int i = 0; i < ack->data_length - 1; i++)
         packet->data[i] = ack->data[i + 1];
-    packet->dataLength = ack->total_length - 3;
+    packet->dataLength = ack->data_length - 1;
 }
 
 

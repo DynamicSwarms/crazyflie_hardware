@@ -46,6 +46,11 @@ public:
   , m_crazyflies()
   , m_executor(executor)
   {
+    m_diagnostics = std::make_unique<crazyflie_hardware_gateway::GatewayDiagnostics>(
+      crazyflie_hardware_gateway::DiagnosticsNodeInterfaces{
+        get_node_base_interface(), get_node_clock_interface(),
+        get_node_parameters_interface(), get_node_topics_interface()});
+
     auto service_qos = rclcpp::ServicesQoS().keep_last(100); // This way it is possible to queue up multiple add requestst
 
     m_requests_group = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
@@ -66,8 +71,12 @@ public:
 
     m_processing_timer = this->create_wall_timer(
       std::chrono::milliseconds(100),
-      std::bind(&CrazyflieGateway::process_crazyflies, this), 
+      std::bind(&CrazyflieGateway::process_crazyflies, this),
       m_processing_group);
+
+    m_diagnostics_timer = this->create_wall_timer(
+      std::chrono::seconds(1),
+      std::bind(&CrazyflieGateway::publish_diagnostics, this));
 
     m_factory = create_component_factory("crazyflie_hardware", "CrazyflieNode");
 
@@ -157,7 +166,8 @@ private:
 private:
   void process_crazyflies()
   {
-    std::lock_guard<std::mutex> lock(m_entries_mutex);
+    const auto started = std::chrono::steady_clock::now();
+    std::unique_lock<std::mutex> lock(m_entries_mutex);
     for (auto it = m_crazyflies.begin(); it != m_crazyflies.end();) {
       if (it->second->poll()) {
         auto entry = it->second;
@@ -167,6 +177,22 @@ private:
         ++it;
       }
     }
+    lock.unlock();
+    m_diagnostics->record_processing(started, std::chrono::steady_clock::now());
+  }
+
+  void publish_diagnostics()
+  {
+    crazyflie_hardware_gateway::GatewaySnapshot snapshot;
+    {
+      std::lock_guard<std::mutex> lock(m_entries_mutex);
+      const auto now = std::chrono::steady_clock::now();
+      snapshot.shutting_down = m_shutting_down;
+      for (const auto & [key, entry] : m_crazyflies) {
+        entry->append_diagnostics(snapshot, now);
+      }
+    }
+    m_diagnostics->publish(snapshot);
   }
 
   void handle_add_crazyflie(
@@ -207,12 +233,14 @@ private:
     bool success, 
     const std::string & message)
   {
+    m_diagnostics->record_add_result(success);
     Add::Response response;
     response.success = success;
     response.msg = message;
     try { 
       service->send_response(*header, response); 
     } catch (const std::exception & ex) {
+      m_diagnostics->record_response_failure();
       RCLCPP_WARN(get_logger(), "Could not send add response: %s", ex.what());
     }
   }
@@ -223,12 +251,14 @@ private:
     bool success, 
     const std::string & message)
   {
+    m_diagnostics->record_remove_result(success);
     Remove::Response response;
     response.success = success;
     response.msg = message;
     try { 
       service->send_response(*header, response); 
     } catch (const std::exception & ex) {
+      m_diagnostics->record_response_failure();
       RCLCPP_WARN(get_logger(), "Could not send remove response: %s", ex.what());
     }
   }
@@ -376,6 +406,8 @@ private:
   rclcpp::Service<crazyflie_interfaces::srv::AddCrazyflie>::SharedPtr m_add_service;
   rclcpp::Service<crazyflie_interfaces::srv::RemoveCrazyflie>::SharedPtr m_remove_service;
   rclcpp::TimerBase::SharedPtr m_processing_timer;
+  std::unique_ptr<crazyflie_hardware_gateway::GatewayDiagnostics> m_diagnostics;
+  rclcpp::TimerBase::SharedPtr m_diagnostics_timer;
 
   std::unique_ptr<class_loader::ClassLoader> m_loader;
   std::shared_ptr<rclcpp_components::NodeFactory> m_factory;

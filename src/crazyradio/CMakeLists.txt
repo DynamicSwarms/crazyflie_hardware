@@ -37,7 +37,6 @@ endif()
 
 add_executable(crazyradio_node 
   src/crazyradio_node.cpp
-  src/crtp_logger.cpp
   src/radio_diagnostics.cpp)
 
 target_include_directories(crazyradio_node PRIVATE include)
