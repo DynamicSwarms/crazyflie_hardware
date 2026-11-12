@@ -28,10 +28,7 @@ CrtpLogger::CrtpLogger(bool logToFile, bool logToSocket, uint8_t channel,
 {
     if (logToSocket) throw std::invalid_argument("Packet socket logging is not implemented yet");
     if (m_logEnabled) {
-        const auto stamp = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-        const auto logDirectory = logRoot / "crazyradio" /
-            (std::to_string(stamp) + "-" + std::to_string(getpid()) + "-" + std::to_string(channel));
+        const auto logDirectory = logRoot / "crazyradio" / std::to_string(channel);
         std::filesystem::create_directories(logDirectory);
         const auto logFile = logDirectory / "packets.log";
         m_logStream.open(logFile);
