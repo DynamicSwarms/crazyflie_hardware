@@ -27,6 +27,14 @@ struct DiagnosticsNodeInterfaces
     rclcpp::node_interfaces::NodeTopicsInterface::SharedPtr topics;
 };
 
+struct LinkStatistics
+{
+    uint8_t id;
+    double crtpQuality;
+    double radioQuality;
+    std::optional<double> rssiDbm;
+};
+
 class RadioDiagnostics
 {
 public:
@@ -34,12 +42,11 @@ public:
 
     void recordCommunication(const libcrtp::CrtpPacket& packet, bool success, bool isPortPacket, bool isBroadcast);
     void publish(const libcrtp::CrtpContainerStats& container,
-                 const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& crtpQualities,
-                 const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& radioQualities,
-                 const std::vector<std::optional<double>>& radioRssi);
+                 const std::vector<LinkStatistics>& links);
     void reportError(const std::string& message);
 
 private:
+    void publishLinkQualities(const std::vector<LinkStatistics>& links);
     void publishRadioStatus(uint8_t level, const std::string& message,
                             std::vector<diagnostic_msgs::msg::KeyValue> values);
 

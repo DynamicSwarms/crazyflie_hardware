@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -47,12 +48,10 @@ void RadioDiagnostics::recordCommunication(
 
 void RadioDiagnostics::publish(
     const libcrtp::CrtpContainerStats& container,
-    const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& crtpQualities,
-    const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& radioQualities,
-    const std::vector<std::optional<double>>& radioRssi)
+    const std::vector<LinkStatistics>& links)
 {
     std::lock_guard<std::mutex> publishLock(m_publishMutex);
-    m_linkQualityPub->publish(radioQualities);
+    publishLinkQualities(links);
 
     CommunicationStats current;
     double maxCompletedDeliveryDelayMs;
@@ -83,9 +82,9 @@ void RadioDiagnostics::publish(
     add("Unicast links", container.unicastLinks);
     add("Broadcast links", container.broadcastLinks);
 
-    const auto addQualities = [&add](const std::string& name,
-        const crazyflie_interfaces::msg::CrazyflieLinkQualityArray& qualities) {
-        if (qualities.link_qualities.empty()) {
+    const auto addQualities = [&add, &links](const std::string& name,
+        double LinkStatistics::* field) {
+        if (links.empty()) {
             add("Average " + name + " (%)", "N/A");
             add("Worst " + name + " (%)", "N/A");
             add("Best " + name + " (%)", "N/A");
@@ -95,24 +94,26 @@ void RadioDiagnostics::publish(
         double total = 0.0;
         double worst = 1.0;
         double best = 0.0;
-        for (const auto& quality : qualities.link_qualities) {
-            total += quality.link_quality;
-            worst = std::min(worst, static_cast<double>(quality.link_quality));
-            best = std::max(best, static_cast<double>(quality.link_quality));
+        for (const auto& link : links) {
+            const double quality = link.*field;
+            total += quality;
+            worst = std::min(worst, quality);
+            best = std::max(best, quality);
         }
-        add("Average " + name + " (%)", 100.0 * total / qualities.link_qualities.size());
+        add("Average " + name + " (%)", 100.0 * total / links.size());
         add("Worst " + name + " (%)", 100.0 * worst);
         add("Best " + name + " (%)", 100.0 * best);
         return worst;
     };
-    addQualities("crtp_quality", crtpQualities);
-    const double worstLinkQuality = addQualities("radio_quality", radioQualities);
+    addQualities("crtp_quality", &LinkStatistics::crtpQuality);
+    const double worstLinkQuality = addQualities("radio_quality", &LinkStatistics::radioQuality);
 
     double totalRssi = 0.0;
     std::optional<double> worstRssi;
     std::optional<double> bestRssi;
     size_t rssiCount = 0;
-    for (const auto& rssi : radioRssi) {
+    for (const auto& link : links) {
+        const auto& rssi = link.rssiDbm;
         if (!rssi) continue;
         totalRssi += *rssi;
         ++rssiCount;
@@ -183,6 +184,20 @@ void RadioDiagnostics::publish(
     m_previousEnqueuedPackets = container.enqueuedPackets;
     m_previousStatistics = current;
     m_lastDiagnosticsTime = now;
+}
+
+void RadioDiagnostics::publishLinkQualities(const std::vector<LinkStatistics>& links)
+{
+    crazyflie_interfaces::msg::CrazyflieLinkQualityArray qualities;
+    qualities.link_qualities.reserve(links.size());
+    for (const auto& link : links) {
+        crazyflie_interfaces::msg::CrazyflieLinkQuality quality;
+        quality.id = link.id;
+        quality.link_quality = link.radioQuality;
+        quality.rssi_dbm = link.rssiDbm.value_or(std::numeric_limits<double>::quiet_NaN());
+        qualities.link_qualities.push_back(std::move(quality));
+    }
+    m_linkQualityPub->publish(qualities);
 }
 
 void RadioDiagnostics::publishRadioStatus(

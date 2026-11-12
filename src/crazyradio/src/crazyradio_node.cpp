@@ -20,7 +20,6 @@
 #include "crtp_interfaces/srv/crtp_packet_send.hpp"
 #include "crtp_interfaces/msg/crtp_packet_send_no_response.hpp"
 #include "crtp_interfaces/msg/crtp_response.hpp"
-#include "crazyflie_interfaces/msg/crazyflie_link_quality_array.hpp"
 #include "crazyradio/radio_diagnostics.hpp"
 
 
@@ -451,9 +450,8 @@ private:
         std::vector<double> crtp_quality;
         m_links.getConnectionStats(links, crtp_quality);
 
-        crazyflie_interfaces::msg::CrazyflieLinkQualityArray crtpQualities;
-        crazyflie_interfaces::msg::CrazyflieLinkQualityArray radioQualities;
-        std::vector<std::optional<double>> radioRssi;
+        std::vector<crazyradio::LinkStatistics> statistics;
+        statistics.reserve(links.size());
         for (size_t i = 0; i < links.size(); ++i) {
             if (links[i].isBroadcast) continue;
 
@@ -464,16 +462,14 @@ private:
                     static_cast<int>(radio_quality * 100));
             }
 
-            crazyflie_interfaces::msg::CrazyflieLinkQuality quality;
-            quality.id = static_cast<uint8_t>(links[i].address & 0xFF);
-            quality.link_quality = crtp_quality[i];
-            crtpQualities.link_qualities.push_back(quality);
-            quality.link_quality = radio_quality;
-            radioQualities.link_qualities.push_back(quality);
-            radioRssi.push_back(m_radio->getLinkRssi(&links[i]));
+            statistics.push_back({
+                static_cast<uint8_t>(links[i].address & 0xFF),
+                crtp_quality[i],
+                radio_quality,
+                m_radio->getLinkRssi(&links[i])});
         }
 
-        m_diagnostics->publish(m_links.getStats(), crtpQualities, radioQualities, radioRssi);
+        m_diagnostics->publish(m_links.getStats(), statistics);
     }
 private: 
     void responseCallback(
