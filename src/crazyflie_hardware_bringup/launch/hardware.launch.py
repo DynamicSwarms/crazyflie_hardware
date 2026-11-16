@@ -66,6 +66,7 @@ def generate_launch_description():
     crazyflie_gateway = Node(
         package="crazyflie_hardware_gateway",
         executable="gateway",
+        sigterm_timeout="15.0",
         parameters=[
             LaunchConfiguration("crazyflie_types_yaml"),
             {

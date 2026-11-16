@@ -34,6 +34,14 @@ struct CrtpLinkIdentifier
     bool isBroadcast;
 };
 
+struct CrtpLinkStats
+{
+    size_t outgoingPackets{0};
+    size_t pendingResponses{0};
+    bool inBackoff{false};
+    std::optional<std::chrono::steady_clock::time_point> oldestOutgoingCreatedAt;
+};
+
 class CrtpLink
 {
     public: 
@@ -111,6 +119,8 @@ class CrtpLink
          */
         double getLinkQuality() const;
 
+        CrtpLinkStats getStats();
+
         uint8_t getChannel() const;
         uint64_t getAddress() const;
         uint8_t getDatarate() const;
@@ -152,6 +162,8 @@ class CrtpLink
             bool isPortPacket;
         };
         std::optional<CurrentOutbound> m_currentOutbound;
+        size_t m_outgoingPackets{0};
+        size_t m_pendingResponses{0};
 };
 
 } // namespace libcrtp

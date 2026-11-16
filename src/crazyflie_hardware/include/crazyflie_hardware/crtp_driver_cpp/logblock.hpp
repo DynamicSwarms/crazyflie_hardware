@@ -16,7 +16,7 @@ class LogBlock {
         const std::string block_name
     );
 
-    void m_publish_log_data(std::vector<double>& data);
+    void m_publish_log_data(const std::vector<double>& data);
 
 private:
 

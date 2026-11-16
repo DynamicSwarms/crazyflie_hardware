@@ -1,5 +1,6 @@
 #include "libcrtp/CrtpPacketQueue.hpp"
 
+#include <cstddef>
 #include <iostream>
 
 namespace libcrtp {
@@ -49,7 +50,7 @@ bool CrtpPacketQueue::releasePacket(
 
     // Shuffles through release queue until found, if found returns true and sets callback.
     // If not found returns false, callback not set. 
-    for (int i = 0; i < m_release_queue.size(); i++) {
+    for (std::size_t i = 0; i < m_release_queue.size(); i++) {
         auto pair = m_release_queue.front();
         m_release_queue.pop();
     

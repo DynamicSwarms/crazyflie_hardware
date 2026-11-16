@@ -73,73 +73,72 @@ uint32_t USBDevice::numDevices(
     return num;
 }
 
-void USBDevice::open(
-    uint32_t devid)
+std::vector<std::shared_ptr<libusb_device>> USBDevice::enumerate()
 {
     // discover devices
     libusb_device **list;
-    libusb_device *found = NULL;
-    ssize_t cnt = libusb_get_device_list(NULL, &list);
+    ssize_t cnt = libusb_get_device_list(m_ctx, &list);
     ssize_t i = 0;
-    uint32_t foundid = 0;
     int err = 0;
     if (cnt < 0) {
         throw std::runtime_error("Error during get_device_list");
     }
-    for (i = 0; i < cnt; i++) {
-        libusb_device *device = list[i];
-        libusb_device_descriptor deviceDescriptor;
-        err = libusb_get_device_descriptor(device, &deviceDescriptor);
-        if (err != LIBUSB_SUCCESS) {
-            libusb_free_device_list(list, 1);
-            throw std::runtime_error(libusb_error_name(err));
-        }
-        else if (deviceDescriptor.idVendor == m_idVendor &&
-                 deviceDescriptor.idProduct == m_idProduct) {
-            if (foundid == devid) {
-                found = device;
-                break;
+
+    std::vector<std::shared_ptr<libusb_device>> devices;
+    try {
+        for (i = 0; i < cnt; i++) {
+            libusb_device *device = list[i];
+            libusb_device_descriptor deviceDescriptor;
+            err = libusb_get_device_descriptor(device, &deviceDescriptor);
+            if (err != LIBUSB_SUCCESS) {
+                throw std::runtime_error(libusb_error_name(err));
             }
-            ++foundid;
+            else if (deviceDescriptor.idVendor == m_idVendor &&
+                     deviceDescriptor.idProduct == m_idProduct) {
+                devices.push_back(std::shared_ptr<libusb_device>(
+                    libusb_ref_device(device), libusb_unref_device));
+            }
         }
-    }
-    if (found) {
-        err = libusb_open(found, &m_handle);
-        if (err != LIBUSB_SUCCESS) {
-            libusb_free_device_list(list, 1);
-            throw std::runtime_error(libusb_error_name(err));
-        }
-        libusb_device_descriptor deviceDescriptor;
-        err = libusb_get_device_descriptor(found, &deviceDescriptor);
-        if (err != LIBUSB_SUCCESS) {
-            throw std::runtime_error(libusb_error_name(err));
-        }
-        m_versionMajor = deviceDescriptor.bcdDevice >> 8;
-        m_versionMinor = deviceDescriptor.bcdDevice & 0xFF;
+    } catch (...) {
+        libusb_free_device_list(list, 1);
+        throw;
     }
     libusb_free_device_list(list, 1);
+    return devices;
+}
+
+bool USBDevice::tryOpenAndClaim(libusb_device *device)
+{
+    libusb_device_descriptor deviceDescriptor;
+    int err = libusb_get_device_descriptor(device, &deviceDescriptor);
+    if (err != LIBUSB_SUCCESS) {
+        throw std::runtime_error(libusb_error_name(err));
+    }
+
+    libusb_device_handle *handle = NULL;
+    err = libusb_open(device, &handle);
+    if (err == LIBUSB_ERROR_BUSY) return false;
+    if (err != LIBUSB_SUCCESS) {
+        throw std::runtime_error(libusb_error_name(err));
+    }
 
     // configure
-    if (m_handle)
-    {
-        err = libusb_set_configuration(m_handle, 1);
-        if (err != LIBUSB_SUCCESS) {
-            throw std::runtime_error(libusb_error_name(err));
-        }
+    err = libusb_set_configuration(handle, 1);
+    if (err == LIBUSB_SUCCESS) {
+        err = libusb_claim_interface(handle, 0);
+    }
+    if (err != LIBUSB_SUCCESS) {
+        libusb_close(handle);
+        if (err == LIBUSB_ERROR_BUSY) return false;
+        throw std::runtime_error(libusb_error_name(err));
+    }
 
-        err = libusb_claim_interface(m_handle, 0);
-        if (err != LIBUSB_SUCCESS) {
-            throw std::runtime_error(libusb_error_name(err));
-        }
-    }
-    else
-    {
-        std::stringstream sstr;
-        sstr << "No matching USB Device with devid = " << devid << " found! Do you have a Crazyradio dongle connected?";
-        throw std::runtime_error(sstr.str());
-    }
+    m_handle = handle;
+    m_versionMajor = deviceDescriptor.bcdDevice >> 8;
+    m_versionMinor = deviceDescriptor.bcdDevice & 0xFF;
+    return true;
 }
-#include <iostream>
+
 void USBDevice::sendVendorSetup(
     uint8_t request,
     uint16_t value,

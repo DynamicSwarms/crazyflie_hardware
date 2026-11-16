@@ -23,7 +23,7 @@ LogBlock::LogBlock(
     );
 }
 
-void LogBlock::m_publish_log_data(std::vector<double>& data)
+void LogBlock::m_publish_log_data(const std::vector<double>& data)
 {
     auto log_msg = crazyflie_interfaces::msg::LogDataGeneric();
     

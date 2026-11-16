@@ -71,7 +71,7 @@ bool Localization::add_to_tracker(
         m_graph_interface,
         m_services_interface,
         "/tracker/add_object",
-        rclcpp::ServicesQoS().keep_last(1),
+        rclcpp::ServicesQoS(),
         m_callback_group);
     
     if (!client->wait_for_service(1s))
@@ -127,7 +127,7 @@ bool Localization::add_to_broadcaster(int channel, int datarate)
         m_graph_interface,
         m_services_interface,
         "/add_posi_pose_object",
-        rclcpp::ServicesQoS().keep_last(1),
+        rclcpp::ServicesQoS(),
         m_callback_group);
     
     if (!client->wait_for_service(1s))

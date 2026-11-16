@@ -2,9 +2,12 @@
 
 #include <stdint.h>
 #include <utility>
+#include <memory>
+#include <vector>
 
 // forward declarations
 struct libusb_context;
+struct libusb_device;
 struct libusb_device_handle;
 
 class USBDevice
@@ -21,7 +24,8 @@ protected:
       uint16_t idVendor,
       uint16_t idProduct);
 
-    void open(uint32_t devid);
+    std::vector<std::shared_ptr<libusb_device>> enumerate();
+    bool tryOpenAndClaim(libusb_device *device);
 
     void sendVendorSetup(
         uint8_t request,

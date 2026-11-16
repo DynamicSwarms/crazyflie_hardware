@@ -1,11 +1,9 @@
 #include <cstdio>
+#include <algorithm>
 #include "rclcpp/rclcpp.hpp"
-#include "rclcpp_lifecycle/lifecycle_node.hpp"
-#include "rclcpp/node_interfaces/node_base.hpp"
-#include "rclcpp_lifecycle/state.hpp"
-#include "lifecycle_msgs/msg/transition_event.hpp"
 
 #include "rclcpp_components/node_factory.hpp"
+#include "crazyflie_hardware_gateway/crazyflie_entry.hpp"
 
 #include "ament_index_cpp/get_resource.hpp"
 #include "rcpputils/split.hpp"
@@ -17,12 +15,15 @@
 
 #include <memory>
 #include <filesystem>
+#include <mutex>
+#include <utility>
+#include <map>
+#include <iomanip>
+#include <sstream>
 
 #include "signal.h"
+#include <pthread.h>
 
-
-std::atomic_bool sigint_received(false);
-std::atomic_bool gateway_shutdown_done(false);
 
 class GatewayException : public std::runtime_error
 {
@@ -31,21 +32,9 @@ public:
   : std::runtime_error(error_desc) {}
 };
 
-struct DedicatedExecutorWrapper
-  {
-    std::shared_ptr<rclcpp::Executor> executor;
-    std::thread thread;
-    std::atomic_bool thread_initialized;
-
-    /// Constructor for the wrapper.
-    /// This is necessary as atomic variables don't have copy/move operators
-    /// implemented so this structure is not copyable/movable by default
-    explicit DedicatedExecutorWrapper(std::shared_ptr<rclcpp::Executor> exec)
-    : executor(exec),
-      thread_initialized(false)
-    {
-    }
-  };
+using Add = crazyflie_interfaces::srv::AddCrazyflie;
+using Remove = crazyflie_interfaces::srv::RemoveCrazyflie;
+using Key = std::pair<uint8_t, uint8_t>;
 
 class CrazyflieGateway : public rclcpp::Node
 {
@@ -54,172 +43,223 @@ public:
     std::weak_ptr<rclcpp::Executor> executor,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : Node("crazyflie_hardware_gateway", options)
-  , crazyflies_()
-  , executor_(executor)
+  , m_crazyflies()
+  , m_executor(executor)
   {
+    m_diagnostics = std::make_unique<crazyflie_hardware_gateway::GatewayDiagnostics>(
+      crazyflie_hardware_gateway::DiagnosticsNodeInterfaces{
+        get_node_base_interface(), get_node_clock_interface(),
+        get_node_parameters_interface(), get_node_topics_interface()});
+
     auto service_qos = rclcpp::ServicesQoS().keep_last(100); // This way it is possible to queue up multiple add requestst
 
-    add_service_ = this->create_service<crazyflie_interfaces::srv::AddCrazyflie>(
-      "~/add_crazyflie", std::bind(&CrazyflieGateway::handle_add_crazyflie, this, std::placeholders::_1, std::placeholders::_2),
-      service_qos);
+    m_requests_group = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+    m_processing_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    m_add_service = this->create_service<crazyflie_interfaces::srv::AddCrazyflie>(
+      "~/add_crazyflie", 
+      std::bind(&CrazyflieGateway::handle_add_crazyflie, this,
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
+      service_qos,
+      m_requests_group);
 
-    remove_service_ = this->create_service<crazyflie_interfaces::srv::RemoveCrazyflie>(
-      "~/remove_crazyflie", std::bind(&CrazyflieGateway::handle_remove_crazyflie, this, std::placeholders::_1, std::placeholders::_2),
-      service_qos);
-    
-    cleanup_timer_ = this->create_wall_timer(
+    m_remove_service = this->create_service<crazyflie_interfaces::srv::RemoveCrazyflie>(
+      "~/remove_crazyflie",
+      std::bind(&CrazyflieGateway::handle_remove_crazyflie, this,
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
+      service_qos,
+      m_requests_group);
+
+    m_processing_timer = this->create_wall_timer(
       std::chrono::milliseconds(100),
-      std::bind(&CrazyflieGateway::cleanup_callback, this));
-  
-    factory_ = create_component_factory("crazyflie_hardware", "CrazyflieNode");
+      std::bind(&CrazyflieGateway::process_crazyflies, this),
+      m_processing_group);
 
+    m_diagnostics_timer = this->create_wall_timer(
+      std::chrono::seconds(1),
+      std::bind(&CrazyflieGateway::publish_diagnostics, this));
+
+    m_factory = create_component_factory("crazyflie_hardware", "CrazyflieNode");
+
+    if (!m_factory) throw GatewayException("Crazyflie component factory not found.");
     RCLCPP_INFO(get_logger(), "Crazyflie Gateway ready.");
   }
 
-private: 
-  std::pair<bool, std::string> add_crazyflie(int id, 
-    int channel, 
-    const geometry_msgs::msg::Pose & initial_pose,
-    const std::string & type)
+  void shutdown_all_crazyflies()
   {
-    RCLCPP_INFO(get_logger(), "Adding Crazyflie with Channel: %d, Id: %d", channel, id);
-    std::pair<uint8_t, uint8_t> crazyflie_key = {id, channel};
+    std::lock_guard<std::mutex> lock(m_entries_mutex);
 
-    if (crazyflies_.count(crazyflie_key))
-    {
-      return std::make_pair(false, "Crazyflie with id '" + std::to_string(id) + "' already exists.");
-    }
-
-    auto options = create_node_options(id, channel, initial_pose, type);
-    try {
-      auto node = factory_->create_node_instance(options);
-      auto exec = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
-      exec->add_node(node.get_node_base_interface());
-
-      auto entry = crazyflies_.emplace(std::make_pair(crazyflie_key, std::make_pair(node, exec)));
-
-      DedicatedExecutorWrapper & wrapper = entry.first->second.second;
-      wrapper.executor = exec;
-
-      auto & thread_initialized = wrapper.thread_initialized;
-      wrapper.thread = std::thread(
-        [exec, &thread_initialized ]() {
-          thread_initialized = true;
-          try {
-            exec->spin();
-          } catch (...) {}
-        }
-      );
-      // // Downcast to lifecycle node interface
-      auto lifecycle_node = std::static_pointer_cast<rclcpp_lifecycle::LifecycleNode>(node.get_node_instance());
-      if (!lifecycle_node) {
-         throw std::runtime_error("Failed to cast to LifecycleNodeInterface");
-       }
-      // // Transition to configure
-       auto ret = lifecycle_node.get()->configure();    
-       if (ret.id() != lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE) 
-       {
-          remove_crazyflie(id, channel);
-          return std::make_pair(false, "Configuration failed.");
-       }
-
-    } catch (const std::exception & ex) {
-      // In the case that the component constructor throws an exception,
-      // rethrow into the following catch block.
-      throw GatewayException(
-              "Component constructor threw an exception: " + std::string(ex.what()));
-    } catch (...) {
-      // In the case that the component constructor throws an exception,
-      // rethrow into the following catch block.
-      throw GatewayException("Component constructor threw an exception");
-    }
+    if (m_shutting_down) return;
+    m_shutting_down = true;
+    if (!m_crazyflies.empty()) RCLCPP_INFO(get_logger(), "Shutting down all crazyflies due to SIGINT. This might take a moment.");
     
-    return std::make_pair(true, "Success!");
+    for (auto & [key, entry] : m_crazyflies) {
+      entry->request_removal();
+    }
   }
 
-  std::pair<bool, std::string> remove_crazyflie(int id, int channel)
+  size_t remaining_crazyflies()
   {
-    RCLCPP_INFO(get_logger(), "Removing Crazyflie with Channel: %d, Id: %d", channel, id);
-    std::pair<uint8_t, uint8_t> crazyflie_key = {id, channel};
-    auto cf = crazyflies_.find(crazyflie_key);
-    if (cf == crazyflies_.end()) {
-      return std::make_pair(false,
-        "Couldn't remove Crazyflie with Channel: " + std::to_string(channel) 
-        + ", ID: " + std::to_string(id) + "; not in list.");
-    }
-    
-    if (!cf->second.second.thread_initialized)
-    {
-      rclcpp::sleep_for(std::chrono::milliseconds(1)); // This only happens when add and removed are called near simultaniously. 
-    }
-    cf->second.second.executor->cancel();
-    cf->second.second.thread.join();
-    crazyflies_.erase(cf);
-    return std::make_pair(true, "Success!");
+    std::lock_guard<std::mutex> lock(m_entries_mutex);
+    return m_crazyflies.size();
   }
 
 private:
-  void cleanup_callback()
+  void 
+  add_crazyflie(
+    int id,
+    int channel,
+    const geometry_msgs::msg::Pose & initial_pose,
+    const std::string & type,
+    CrazyflieEntry::Respond respond)
   {
-    for (auto& [key, entry] : crazyflies_ )
-    {
-      auto lifecycle_node = std::static_pointer_cast<rclcpp_lifecycle::LifecycleNode>(entry.first.get_node_instance());
-      if (lifecycle_node) 
-      {
-        if (lifecycle_node.get()->get_current_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_FINALIZED)
-        {
-          remove_crazyflie(key.first, key.second);
-          return;
-        }
+    std::lock_guard<std::mutex> lock(m_entries_mutex);
+    if (m_shutting_down) {
+      respond(false, "Gateway is shutting down; cannot add Crazyflie.");
+      return;
+    }
+
+    RCLCPP_INFO(get_logger(), "Adding Crazyflie with Channel: %d, Id: %d", channel, id);
+    Key crazyflie_key = {id, channel};
+    auto entry = std::make_shared<CrazyflieEntry>(id, respond, get_logger());
+    
+    // IDs must be unique across channels because they determine the ROS namespace.
+    const bool id_conflict = std::any_of(
+      m_crazyflies.begin(), m_crazyflies.end(),
+      [id](const auto & entry) { return entry.first.first == id; });
+    
+    if (id_conflict || !m_crazyflies.emplace(crazyflie_key, entry).second) {
+      respond(false, "Crazyflie already exists!");
+      return;
+    }
+
+    try {
+      auto options = create_node_options(id, channel, initial_pose, type);
+      const GatewayNodeInterfaces interfaces{
+        get_node_base_interface(), get_node_graph_interface(), get_node_services_interface(),
+        get_node_topics_interface()};
+      auto node = m_factory->create_node_instance(options);
+      entry->initialize(std::move(node), interfaces, m_requests_group);
+    } catch (const std::exception & ex) {
+      entry->initialization_failed(ex.what());
+    }
+  }
+
+  void 
+  remove_crazyflie(
+    int id, 
+    int channel, 
+    CrazyflieEntry::Respond respond)
+  {
+    std::lock_guard<std::mutex> lock(m_entries_mutex);
+    RCLCPP_INFO(get_logger(), "Removing Crazyflie with Channel: %d, Id: %d", channel, id);
+    Key crazyflie_key = {id, channel};
+    const auto cf = m_crazyflies.find(crazyflie_key);
+    if (cf == m_crazyflies.end()) {
+      respond(false,
+        "Couldn't remove Crazyflie with Channel: " + std::to_string(channel)
+        + ", ID: " + std::to_string(id) + "; not in list.");
+      return;
+    }
+    cf->second->request_removal(std::move(respond));
+  }
+
+private:
+  void process_crazyflies()
+  {
+    const auto started = std::chrono::steady_clock::now();
+    std::unique_lock<std::mutex> lock(m_entries_mutex);
+    for (auto it = m_crazyflies.begin(); it != m_crazyflies.end();) {
+      if (it->second->poll()) {
+        auto entry = it->second;
+        it = m_crazyflies.erase(it);
+        entry->complete_removal();
+      } else {
+        ++it;
       }
     }
+    lock.unlock();
+    m_diagnostics->record_processing(started, std::chrono::steady_clock::now());
+  }
 
-    static bool shutdown_completed = false;
-    if (sigint_received.load() && !shutdown_completed)
+  void publish_diagnostics()
+  {
+    crazyflie_hardware_gateway::GatewaySnapshot snapshot;
     {
-        shutdown_completed = true;
-        if (crazyflies_.empty()) gateway_shutdown_done.store(true);
-        else RCLCPP_INFO(this->get_logger(), "Shutting down all crazyflies due to SIGINT.");
-        std::vector<std::pair<uint8_t, uint8_t>> keys_to_remove;
-        for (const auto& [key, entry] : crazyflies_) {
-          keys_to_remove.push_back(key);
-        }
-        for (auto &key : keys_to_remove)
-        {
-          std::pair<bool, std::string> result = remove_crazyflie(key.first, key.second);
-          if (!result.first) RCLCPP_WARN(this->get_logger(), "Failed to remove crazyflie with id %d: %s", key.first, result.second.c_str());
-          else RCLCPP_INFO(this->get_logger(), "Successfully removed crazyflie with id %d.", key.first);
-        }
-        gateway_shutdown_done.store(true);
+      std::lock_guard<std::mutex> lock(m_entries_mutex);
+      const auto now = std::chrono::steady_clock::now();
+      snapshot.shutting_down = m_shutting_down;
+      for (const auto & [key, entry] : m_crazyflies) {
+        entry->append_diagnostics(snapshot, now);
+      }
     }
+    m_diagnostics->publish(snapshot);
   }
 
-  void handle_add_crazyflie(const std::shared_ptr<crazyflie_interfaces::srv::AddCrazyflie::Request> request,
-                            std::shared_ptr<crazyflie_interfaces::srv::AddCrazyflie::Response> response)
+  void handle_add_crazyflie(
+    const std::shared_ptr<rclcpp::Service<Add>> service_handle,
+    const std::shared_ptr<rmw_request_id_t> header,
+    const std::shared_ptr<Add::Request> request)
   {
     try {
       auto [id, channel] = uri_to_id_channel(request->uri);
-      auto [success, msg] = add_crazyflie(id, channel, request->initial_pose, request->type);
-      response->success = success;
-      response->msg = msg;
-    } catch (const GatewayException & ex) {
-      response->success = false;
-      response->msg = ex.what();
+      add_crazyflie(id, channel, request->initial_pose, request->type,
+        std::bind(&CrazyflieGateway::respond_add, this, service_handle, header,
+          std::placeholders::_1, std::placeholders::_2));
+    } catch (const std::exception & ex) {
+      respond_add(service_handle, header, false, ex.what());
     }
   }
 
-  void handle_remove_crazyflie(const std::shared_ptr<crazyflie_interfaces::srv::RemoveCrazyflie::Request> request,
-                               std::shared_ptr<crazyflie_interfaces::srv::RemoveCrazyflie::Response> response)
+  void handle_remove_crazyflie(
+    const std::shared_ptr<rclcpp::Service<Remove>> service_handle,
+    const std::shared_ptr<rmw_request_id_t> header,
+    const std::shared_ptr<Remove::Request> request)
   {
     try {
       auto [id, channel] = uri_to_id_channel(request->uri);
-      auto [success, msg] = remove_crazyflie(id, channel);
-      
-      response->success = success;
-      response->msg = msg;
-    } catch (const GatewayException & ex) {
-      response->success = false;
-      response->msg = ex.what();
+      remove_crazyflie(
+        id, 
+        channel,
+        std::bind(&CrazyflieGateway::respond_remove, this, service_handle, header,
+          std::placeholders::_1, std::placeholders::_2));
+    } catch (const std::exception & ex) {
+      respond_remove(service_handle, header, false, ex.what());
+    }
+  }
+
+  void respond_add(
+    const std::shared_ptr<rclcpp::Service<Add>> & service,
+    const std::shared_ptr<rmw_request_id_t> & header, 
+    bool success, 
+    const std::string & message)
+  {
+    m_diagnostics->record_add_result(success);
+    Add::Response response;
+    response.success = success;
+    response.msg = message;
+    try { 
+      service->send_response(*header, response); 
+    } catch (const std::exception & ex) {
+      m_diagnostics->record_response_failure();
+      RCLCPP_WARN(get_logger(), "Could not send add response: %s", ex.what());
+    }
+  }
+
+  void respond_remove(
+    const std::shared_ptr<rclcpp::Service<Remove>> & service,
+    const std::shared_ptr<rmw_request_id_t> & header, 
+    bool success, 
+    const std::string & message)
+  {
+    m_diagnostics->record_remove_result(success);
+    Remove::Response response;
+    response.success = success;
+    response.msg = message;
+    try { 
+      service->send_response(*header, response); 
+    } catch (const std::exception & ex) {
+      m_diagnostics->record_response_failure();
+      RCLCPP_WARN(get_logger(), "Could not send remove response: %s", ex.what());
     }
   }
 
@@ -240,8 +280,8 @@ private:
         }
 
         const int channel = std::stoi(parts[1]);
-        if (channel < 0 || channel > 255) {
-          throw GatewayException("Channel out of range [0,255]");
+        if (channel < 0 || channel > 125) {
+          throw GatewayException("Channel out of range [0,125]");
         }
 
         const std::string & address = parts[3];
@@ -267,8 +307,6 @@ private:
                       const geometry_msgs::msg::Pose & initial_pose,
                       const std::string & type)
   {
-
-
     std::vector<std::string> remap_rules;
 
     remap_rules.push_back("--ros-args");
@@ -345,14 +383,14 @@ private:
     class_loader::ClassLoader * loader;
     RCLCPP_DEBUG(get_logger(), "Load Library: %s", library_path.c_str());
     try {
-      loader_ = std::make_unique<class_loader::ClassLoader>(library_path);
+      m_loader = std::make_unique<class_loader::ClassLoader>(library_path);
     } catch (const std::exception & ex) {
       throw GatewayException("Failed to load library: " + std::string(ex.what()));
     } catch (...) {
       throw GatewayException("Failed to load library");
     }
   
-    loader = loader_.get();
+    loader = m_loader.get();
 
     auto classes = loader->getAvailableClasses<rclcpp_components::NodeFactory>();
     for (const auto & clazz : classes) {
@@ -365,48 +403,93 @@ private:
     return {};
   }
 
-  rclcpp::Service<crazyflie_interfaces::srv::AddCrazyflie>::SharedPtr add_service_;
-  rclcpp::Service<crazyflie_interfaces::srv::RemoveCrazyflie>::SharedPtr remove_service_;
-  rclcpp::TimerBase::SharedPtr cleanup_timer_;
+  rclcpp::Service<crazyflie_interfaces::srv::AddCrazyflie>::SharedPtr m_add_service;
+  rclcpp::Service<crazyflie_interfaces::srv::RemoveCrazyflie>::SharedPtr m_remove_service;
+  rclcpp::TimerBase::SharedPtr m_processing_timer;
+  std::unique_ptr<crazyflie_hardware_gateway::GatewayDiagnostics> m_diagnostics;
+  rclcpp::TimerBase::SharedPtr m_diagnostics_timer;
 
-  std::unique_ptr<class_loader::ClassLoader> loader_;
-  std::shared_ptr<rclcpp_components::NodeFactory> factory_;
-  std::map<std::pair<uint8_t, uint8_t>, std::pair<rclcpp_components::NodeInstanceWrapper, DedicatedExecutorWrapper>> crazyflies_; // id, channel
+  std::unique_ptr<class_loader::ClassLoader> m_loader;
+  std::shared_ptr<rclcpp_components::NodeFactory> m_factory;
+  rclcpp::CallbackGroup::SharedPtr m_requests_group;
+  rclcpp::CallbackGroup::SharedPtr m_processing_group;
+  std::mutex m_entries_mutex;
+  bool m_shutting_down{false};  // Protected by m_entries_mutex.
+  std::map<Key, std::shared_ptr<CrazyflieEntry>> m_crazyflies;
 
 protected:
-  std::weak_ptr<rclcpp::Executor> executor_;
+  std::weak_ptr<rclcpp::Executor> m_executor;
 };
 
-void sigint_handler(int signum)
+void signal_thread(
+    std::shared_ptr<CrazyflieGateway> gateway,
+    rclcpp::executors::MultiThreadedExecutor * executor)
 {
-    (void)signum;
-    sigint_received.store(true);
-    int safey_counter = 0;
-    while (!gateway_shutdown_done.load())
-    { 
-        safey_counter++;
-        if (safey_counter > 500) break;// 3 seconds timeout
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGINT);
+
+  int sig;
+  sigwait(&set, &sig);
+
+  gateway->shutdown_all_crazyflies();
+  int safety_counter = 0;
+  size_t last_remaining = gateway->remaining_crazyflies();
+  auto start_time = std::chrono::steady_clock::now();
+  while (gateway->remaining_crazyflies() != 0)
+  {
+    size_t remaining = gateway->remaining_crazyflies();
+    if (remaining != last_remaining) safety_counter = 0; // reset counter if there is progress
+    last_remaining = remaining;
+
+    if (start_time + std::chrono::milliseconds(500) < std::chrono::steady_clock::now()) {
+      RCLCPP_INFO(gateway->get_logger(),
+        "Waiting for gateway to shut down cleanly after SIGINT. Remaining crazyflies: %zu", remaining);
+      start_time = std::chrono::steady_clock::now();
     }
-    if (gateway_shutdown_done.load()) std::cerr << "Gateway shut down cleanly after SIGINT." << std::endl;
-    else std::cerr << "Gateway shutdown after SIGINT timed out." << std::endl;
+
+    safety_counter++;
+    if (safety_counter > 300) break; // 3 seconds without progress
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  if (gateway->remaining_crazyflies() != 0) {
+    RCLCPP_ERROR(gateway->get_logger(), "Gateway shutdown after SIGINT timed out.");
+  }
+
+  else {
+    RCLCPP_INFO(gateway->get_logger(), "Gateway shut down cleanly after SIGINT.");
+  }
+
+  executor->cancel();
 }
 
+void block_sigint()
+{
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGINT);
+  pthread_sigmask(SIG_BLOCK, &set, nullptr);
+}
 
 int main(int argc, char ** argv)
 {
-  signal(SIGINT, sigint_handler);
-  // Install before rclcpp this way rclcpp will store it as a "old" handler and execute it before its own shutdown
-
+  block_sigint();
 
   rclcpp::init(argc, argv);
   auto exec = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
   auto options = rclcpp::NodeOptions();
   options.automatically_declare_parameters_from_overrides(true);
   auto node = std::make_shared<CrazyflieGateway>(exec, options);
+  std::thread sig_thread(signal_thread, node, exec.get());
+
   exec->add_node(node);
   exec->spin();
+
+  sig_thread.join();
+
   exec->remove_node(node);
+  node.reset();
+  exec.reset();
   rclcpp::shutdown();
   return 0;
 }

@@ -175,6 +175,7 @@ void RosLink::close_link()
 
 void RosLink::add_callback(uint8_t port, const CrtpCallbackType &callback)
 {
+    std::lock_guard<std::mutex> lock(callbacks_mutex);
     callbacks[port].push_back(callback);
 }
 
@@ -194,12 +195,13 @@ void RosLink::crtp_response_callback(const crtp_interfaces::msg::CrtpResponse::S
 {
     if (msg->channel == channel && msg->address == address)
     {
+        std::lock_guard<std::mutex> lock(callbacks_mutex);
         auto it = callbacks.find(msg->packet.port);
         if (it != callbacks.end())
         {
+            CrtpPacket crtp_packet = ros_packet_to_packet(msg->packet);
             for (const auto &callback : it->second)
             {
-                CrtpPacket crtp_packet = ros_packet_to_packet(msg->packet);
                 callback(crtp_packet);
             }
         }

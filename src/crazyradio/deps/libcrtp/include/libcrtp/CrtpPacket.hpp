@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <functional>
+#include <chrono>
 
 namespace libcrtp {
     enum CrtpPort {
@@ -28,6 +29,8 @@ namespace libcrtp {
         bool expectsResponse;
         uint8_t matchingBytes;
         bool obeysOrdering;
+
+        std::chrono::steady_clock::time_point createdAt{};
     };
 
     inline const CrtpPacket nullPacket = {
